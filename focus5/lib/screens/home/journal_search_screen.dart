@@ -83,7 +83,7 @@ class _JournalSearchScreenState extends State<JournalSearchScreen> {
     } else if (widget.searchMood != null) {
       // Search by mood
       results = journalProvider.entries.where((entry) => 
-        entry.mood == widget.searchMood
+        entry is JournalEntry && entry.mood == widget.searchMood
       ).toList();
       
     } else if (widget.isTagSearch && _searchQuery.isNotEmpty) {

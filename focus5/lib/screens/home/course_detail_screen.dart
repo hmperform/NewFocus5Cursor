@@ -4,7 +4,9 @@ import 'package:transparent_image/transparent_image.dart';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
+import '../../utils/image_utils.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -50,12 +52,19 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: const Color(0xFF121212),
-        body: const Center(
+        backgroundColor: backgroundColor,
+        body: Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+            valueColor: AlwaysStoppedAnimation<Color>(accentColor),
           ),
         ),
       );
@@ -63,12 +72,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
     if (_course == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: backgroundColor,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: Icon(Icons.arrow_back, color: textColor),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -76,7 +85,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.error_outline,
                 color: Colors.orange,
                 size: 64,
@@ -84,11 +93,19 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               const SizedBox(height: 16),
               Text(
                 'Course not found',
-                style: Theme.of(context).textTheme.headlineMedium,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: themeProvider.accentTextColor,
+                ),
                 child: const Text('Go Back'),
               ),
             ],
@@ -100,622 +117,809 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
-        backgroundColor: const Color(0xFF121212),
-        body: CustomScrollView(
-          slivers: [
-            // App Bar with course image and back button
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              expandedHeight: 450,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Course image
-                    FadeInImage.memoryNetwork(
-                      placeholder: kTransparentImage,
-                      image: _course!.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      imageErrorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[900],
-                          child: const Center(
-                            child: Icon(
-                              Icons.image_not_supported,
-                              color: Colors.white54,
-                              size: 48,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    // Gradient overlay for text visibility
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.5),
-                            Colors.black,
-                          ],
-                          stops: const [0.4, 0.75, 1.0],
-                        ),
-                      ),
-                    ),
-                    // Course title and instructor at the bottom
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      bottom: 80,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _course!.creatorName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _course!.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              leading: Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black38,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-              actions: [
-                Container(
-                  margin: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black38,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.bookmark_border, color: Colors.white),
-                    onPressed: () {
-                      // Bookmark functionality
-                    },
-                  ),
-                ),
-              ],
-            ),
-            
-            // Action buttons (START CLASS, TRAILER)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    // Start Class button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Play first module
-                          if (_course!.modules.isNotEmpty) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => VideoPlayerScreen(
-                                  module: _course!.modules.first,
-                                  courseId: widget.courseId,
-                                  courseTitle: _course!.title,
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFB4FF00),
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'START CLASS',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Trailer and My List buttons
-                    Row(
-                      children: [
-                        // Trailer button
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // Play trailer
-                            },
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('TRAILER'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white38),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // My List button
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // Add to my list
-                            },
-                            icon: const Icon(Icons.add),
-                            label: const Text('MY LIST'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white38),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Course Info
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        _buildInfoItem(Icons.access_time, '${_course!.durationMinutes ~/ 60}h ${_course!.durationMinutes % 60}m'),
-                        const SizedBox(width: 24),
-                        _buildInfoItem(Icons.star, '${_course!.xpReward} XP'),
-                        const SizedBox(width: 24),
-                        _buildInfoItem(Icons.calendar_today, _getRelativeTime(_course!.createdAt)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _course!.tags.map((tag) => _buildTagChip(tag)).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Tab Bar
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Colors.white12),
-                      ),
-                    ),
-                    child: TabBar(
-                      tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
-                      isScrollable: false,
-                      indicatorColor: const Color(0xFFB4FF00),
-                      indicatorWeight: 3,
-                      labelColor: const Color(0xFFB4FF00),
-                      unselectedLabelColor: Colors.white70,
-                      onTap: (index) {
-                        setState(() {
-                          _selectedTabIndex = index;
-                        });
-                      },
-                    ),
-                  ),
-                  
-                  // Tab Content
-                  IndexedStack(
-                    index: _selectedTabIndex,
-                    children: [
-                      _buildLessonsTab(),
-                      _buildOverviewTab(),
-                      _buildResourcesTab(),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildInfoItem(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          color: Colors.grey,
-          size: 16,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 14,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildTagChip(String tag) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        tag,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-  
-  String _getRelativeTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-    
-    if (difference.inDays > 365) {
-      return '${(difference.inDays / 365).floor()} year${(difference.inDays / 365).floor() == 1 ? '' : 's'} ago';
-    } else if (difference.inDays > 30) {
-      return '${(difference.inDays / 30).floor()} month${(difference.inDays / 30).floor() == 1 ? '' : 's'} ago';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
-  Widget _buildLessonsTab() {
-    return Container(
-      color: Colors.black,
-      child: ListView.builder(
-        padding: EdgeInsets.zero,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _course!.modules.length,
-        itemBuilder: (context, index) {
-          final module = _course!.modules[index];
-          return LessonListItem(
-            index: index + 1,
-            title: module.title,
-            duration: '${module.durationMinutes} min',
-            description: module.description,
-            thumbnailUrl: _course!.thumbnailUrl, // Ideally each module would have its own thumbnail
-            onTap: () {
+        backgroundColor: backgroundColor,
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () {
+            // Start the course
+            // Navigate to first module
+            if (_course!.modules.isNotEmpty) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
-                    module: module,
+                    module: _course!.modules[0],
                     courseId: widget.courseId,
                     courseTitle: _course!.title,
                   ),
                 ),
               );
-            },
+            }
+          },
+          backgroundColor: accentColor,
+          foregroundColor: themeProvider.accentTextColor,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Start Course'),
+        ),
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              // App Bar with course image and back button
+              SliverAppBar(
+                backgroundColor: surfaceColor,
+                expandedHeight: 400,
+                pinned: true,
+                stretch: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Course image
+                      Hero(
+                        tag: 'course-image-${_course!.id}',
+                        child: ImageUtils.networkImageWithFallback(
+                          imageUrl: _course!.thumbnailUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      ),
+                      
+                      // Gradient overlay for text visibility
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.1),
+                              Colors.black.withOpacity(0.5),
+                              Colors.black.withOpacity(0.8),
+                            ],
+                            stops: const [0.3, 0.65, 1.0],
+                          ),
+                        ),
+                      ),
+                      
+                      // Course info at the bottom
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 80,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Course tags
+                            Wrap(
+                              spacing: 8,
+                              children: _course!.tags.take(3).map((tag) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: TextStyle(
+                                      color: themeProvider.accentTextColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            
+                            const SizedBox(height: 16),
+                            
+                            // Course title
+                            Text(
+                              _course!.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 8),
+                            
+                            // Creator info
+                            Row(
+                              children: [
+                                ImageUtils.avatarWithFallback(
+                                  imageUrl: _course!.creatorImageUrl,
+                                  radius: 14,
+                                  name: _course!.creatorName,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _course!.creatorName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                leading: Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                actions: [
+                  Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                      onPressed: () {
+                        // TODO: Save course to bookmarks
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Course saved!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Course stats row
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatItem(Icons.access_time, '${_course!.durationMinutes ~/ 60}h ${_course!.durationMinutes % 60}m', 'Duration'),
+                      _buildStatItem(Icons.menu_book, '${_course!.modules.length}', 'Lessons'),
+                      _buildStatItem(Icons.bolt, '${_course!.xpReward}', 'XP'),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Tab bar
+              SliverPersistentHeader(
+                delegate: _SliverAppBarDelegate(
+                  TabBar(
+                    tabs: _tabs.map((String name) => Tab(text: name)).toList(),
+                    labelColor: accentColor,
+                    unselectedLabelColor: secondaryTextColor,
+                    indicatorColor: accentColor,
+                    indicatorWeight: 3,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+                  ),
+                ),
+                pinned: true,
+              ),
+            ];
+          },
+          // Use TabBarView with scrollable tabs for each tab's content
+          body: TabBarView(
+            children: [
+              _buildScrollableTab(_buildLessonsTab()),
+              _buildScrollableTab(_buildOverviewTab()),
+              _buildScrollableTab(_buildResourcesTab()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScrollableTab(Widget content) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 100), // Extra bottom padding for FAB
+      child: content,
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String value, String label) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
+    return Column(
+      children: [
+        Icon(icon, color: secondaryTextColor),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            color: secondaryTextColor,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLessonsTab() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+
+    return Container(
+      color: backgroundColor,
+      child: ListView.builder(
+        padding: EdgeInsets.zero, // No bottom padding needed here
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(), // Disable scrolling since parent handles it
+        itemCount: _course!.modules.length,
+        itemBuilder: (context, index) {
+          final module = _course!.modules[index];
+          // Enhanced lesson item
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VideoPlayerScreen(
+                        module: module,
+                        courseId: widget.courseId,
+                        courseTitle: _course!.title,
+                      ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Lesson number in circle
+                      Container(
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            color: themeProvider.accentTextColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Lesson details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              module.title,
+                              style: TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              module.description,
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 14,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            // Lesson duration
+                            Row(
+                              children: [
+                                Icon(
+                                  _getModuleTypeIcon(module.type),
+                                  color: secondaryTextColor,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _getModuleTypeText(module.type),
+                                  style: TextStyle(
+                                    color: secondaryTextColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Icon(
+                                  Icons.access_time,
+                                  color: secondaryTextColor,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${module.durationMinutes} min',
+                                  style: TextStyle(
+                                    color: secondaryTextColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Play button
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: accentColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: accentColor,
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
         },
       ),
     );
   }
+  
+  IconData _getModuleTypeIcon(ModuleType type) {
+    switch (type) {
+      case ModuleType.video:
+        return Icons.videocam;
+      case ModuleType.audio:
+        return Icons.headset;
+      case ModuleType.text:
+        return Icons.description;
+      case ModuleType.quiz:
+        return Icons.quiz;
+    }
+  }
+  
+  String _getModuleTypeText(ModuleType type) {
+    switch (type) {
+      case ModuleType.video:
+        return 'Video';
+      case ModuleType.audio:
+        return 'Audio';
+      case ModuleType.text:
+        return 'Reading';
+      case ModuleType.quiz:
+        return 'Quiz';
+    }
+  }
 
   Widget _buildOverviewTab() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+
     return Container(
-      color: Colors.black,
-      padding: const EdgeInsets.all(16.0),
+      color: backgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          // About this course section
+          Text(
             'About this course',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
+              color: textColor,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             _course!.description,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: secondaryTextColor,
               fontSize: 16,
-              height: 1.5,
+              height: 1.6,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           
-          // Instructor info
-          const Text(
-            'Your Instructor',
+          // What you'll learn section
+          Text(
+            'What you\'ll learn',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
+              color: textColor,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundImage: NetworkImage(_course!.creatorImageUrl),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          _buildLearningPoint('Build mental toughness for high-pressure situations'),
+          _buildLearningPoint('Learn techniques to maintain focus during competition'),
+          _buildLearningPoint('Develop pre-performance routines for peak mental state'),
+          _buildLearningPoint('Apply visualization techniques used by elite athletes'),
+          const SizedBox(height: 32),
+          
+          // Focus areas
+          Text(
+            'Focus Areas',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _course!.focusAreas.map((area) {
+              return Chip(
+                label: Text(area),
+                backgroundColor: surfaceColor,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                labelStyle: TextStyle(color: secondaryTextColor),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 32),
+          
+          // Instructor info with card
+          Text(
+            'Your Instructor',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    Text(
-                      _course!.creatorName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    ImageUtils.avatarWithFallback(
+                      imageUrl: _course!.creatorImageUrl,
+                      radius: 36,
+                      name: _course!.creatorName,
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Mental Performance Coach',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _course!.creatorName,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.verified, size: 16, color: accentColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Mental Performance Coach',
+                                style: TextStyle(
+                                  color: secondaryTextColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                Text(
+                  'Expert in mental resilience and high-performance mindset. Helping individuals break barriers and achieve their full potential for over a decade.',
+                  style: TextStyle(
+                    color: secondaryTextColor,
+                    fontSize: 14,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildInstructorStat('10+', 'Years Experience'),
+                    _buildInstructorStat('5', 'Courses'),
+                    _buildInstructorStat('4.9', 'Rating'),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 100), // Bottom padding for scrolling
         ],
       ),
     );
   }
-  
+
+  Widget _buildLearningPoint(String text) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final accentColor = themeProvider.accentColor;
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle, color: accentColor, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 15,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructorStat(String value, String label) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: secondaryTextColor,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildResourcesTab() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+
     return Container(
-      color: Colors.black,
-      padding: const EdgeInsets.all(16.0),
+      color: backgroundColor,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Course Resources',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
+              color: textColor,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 16),
-          _buildResourceItem('Class Guide', Icons.book),
-          _buildResourceItem('Course Workbook', Icons.description),
-          _buildResourceItem('Additional Reading', Icons.menu_book),
-          const SizedBox(height: 100), // Bottom padding for scrolling
+          const SizedBox(height: 24),
+          _buildResourceItem(
+            'Course Workbook.pdf',
+            'Comprehensive workbook with exercises',
+            Icons.description,
+            accentColor,
+          ),
+          _buildResourceItem(
+            'Mental Focus Guide.pdf',
+            'Step-by-step guide to improve focus',
+            Icons.menu_book,
+            Colors.green,
+          ),
+          _buildResourceItem(
+            'Visualization Techniques.mp3',
+            'Audio guide for visualization practice',
+            Icons.headset,
+            Colors.orange,
+          ),
+          _buildResourceItem(
+            'Mindfulness Scripts.pdf',
+            'Collection of mindfulness exercises',
+            Icons.spa,
+            Colors.purple,
+          ),
         ],
       ),
     );
   }
-  
-  Widget _buildResourceItem(String title, IconData icon) {
+
+  Widget _buildResourceItem(String title, String description, IconData icon, Color iconColor) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: const Color(0xFFB4FF00),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-        trailing: const Icon(
-          Icons.download_outlined,
-          color: Colors.white70,
-        ),
-        onTap: () {
-          // Download resource
-        },
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: iconColor,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: secondaryTextColor,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              Icons.download,
+              color: secondaryTextColor,
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Downloading $title'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
-class LessonListItem extends StatelessWidget {
-  final int index;
-  final String title;
-  final String duration;
-  final String description;
-  final String thumbnailUrl;
-  final VoidCallback onTap;
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
 
-  const LessonListItem({
-    Key? key,
-    required this.index,
-    required this.title,
-    required this.duration,
-    required this.description,
-    required this.thumbnailUrl,
-    required this.onTap,
-  }) : super(key: key);
+  _SliverAppBarDelegate(this._tabBar);
 
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Lesson number
-            Container(
-              width: 24,
-              height: 24,
-              alignment: Alignment.center,
-              margin: const EdgeInsets.only(right: 16, top: 4),
-              child: Text(
-                '$index',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            
-            // Lesson details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        duration,
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            
-            // Thumbnail
-            Container(
-              width: 100,
-              height: 60,
-              margin: const EdgeInsets.only(left: 16),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: FadeInImage.memoryNetwork(
-                      placeholder: kTransparentImage,
-                      image: thumbnailUrl,
-                      fit: BoxFit.cover,
-                      imageErrorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[900],
-                          child: const Icon(
-                            Icons.play_circle_outline,
-                            color: Colors.white54,
-                            size: 32,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  // Play icon overlay
-                  Center(
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+
+    return Container(
+      color: backgroundColor,
+      child: _tabBar,
     );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
   }
 }
 

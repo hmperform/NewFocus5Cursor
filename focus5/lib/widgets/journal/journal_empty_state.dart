@@ -1,54 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../screens/home/journal_entry_screen.dart';
+import '../../providers/theme_provider.dart';
 
 class JournalEmptyState extends StatelessWidget {
   const JournalEmptyState({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/journal_empty.png',
-              height: 200,
-              width: 200,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 150,
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.book_outlined,
-                    size: 80,
-                    color: Color(0xFFB4FF00),
-                  ),
-                );
-              },
+            Icon(
+              Icons.book_outlined,
+              size: 120,
+              color: secondaryTextColor,
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Your Journal is Empty',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: textColor,
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Start journaling to track your thoughts, feelings, and progress on your mental fitness journey.',
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Start writing your thoughts and reflections to track your mental wellness journey.',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey,
+                color: secondaryTextColor,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
@@ -62,8 +54,8 @@ class JournalEmptyState extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB4FF00),
-                foregroundColor: Colors.black,
+                backgroundColor: themeProvider.accentColor,
+                foregroundColor: themeProvider.accentTextColor,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),

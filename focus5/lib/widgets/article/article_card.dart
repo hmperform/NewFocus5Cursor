@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:transparent_image/transparent_image.dart';
 import '../../models/content_models.dart';
 import '../../screens/home/article_detail_screen.dart';
+import '../../utils/image_utils.dart';
+import '../../services/paywall_service.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
@@ -17,13 +19,23 @@ class ArticleCard extends StatelessWidget {
     final formattedDate = DateFormat('MMM d, yyyy').format(article.publishedDate);
     
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        // Check if user has access or show paywall
+        final paywallService = PaywallService();
+        final hasAccess = await paywallService.showPaywallIfNeeded(
           context,
-          MaterialPageRoute(
-            builder: (context) => ArticleDetailScreen(articleId: article.id),
-          ),
+          source: 'article',
         );
+        
+        // If user has access, navigate to article
+        if (hasAccess && context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ArticleDetailScreen(articleId: article.id),
+            ),
+          );
+        }
       },
       child: Container(
         width: 280,
@@ -42,24 +54,13 @@ class ArticleCard extends StatelessWidget {
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
               ),
-              child: FadeInImage.memoryNetwork(
-                placeholder: kTransparentImage,
-                image: article.thumbnailUrl,
+              child: ImageUtils.networkImageWithFallback(
+                imageUrl: article.thumbnailUrl,
+                width: 280,
                 height: 140,
-                width: double.infinity,
                 fit: BoxFit.cover,
-                imageErrorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 140,
-                    width: double.infinity,
-                    color: const Color(0xFF2A2A2A),
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      color: Colors.white54,
-                      size: 36,
-                    ),
-                  );
-                },
+                backgroundColor: const Color(0xFF2A2A2A),
+                errorColor: Colors.white54,
               ),
             ),
             
@@ -87,12 +88,10 @@ class ArticleCard extends StatelessWidget {
                     // Author and date
                     Row(
                       children: [
-                        CircleAvatar(
+                        ImageUtils.avatarWithFallback(
+                          imageUrl: article.authorImageUrl,
                           radius: 14,
-                          backgroundImage: NetworkImage(article.authorImageUrl),
-                          onBackgroundImageError: (exception, stackTrace) {
-                            debugPrint('Failed to load author image: $exception');
-                          },
+                          name: article.authorName,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -163,13 +162,23 @@ class ArticleListCard extends StatelessWidget {
     final formattedDate = DateFormat('MMM d, yyyy').format(article.publishedDate);
     
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        // Check if user has access or show paywall
+        final paywallService = PaywallService();
+        final hasAccess = await paywallService.showPaywallIfNeeded(
           context,
-          MaterialPageRoute(
-            builder: (context) => ArticleDetailScreen(articleId: article.id),
-          ),
+          source: 'article',
         );
+        
+        // If user has access, navigate to article
+        if (hasAccess && context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ArticleDetailScreen(articleId: article.id),
+            ),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -186,23 +195,13 @@ class ArticleListCard extends StatelessWidget {
                 topLeft: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
               ),
-              child: FadeInImage.memoryNetwork(
-                placeholder: kTransparentImage,
-                image: article.thumbnailUrl,
+              child: ImageUtils.networkImageWithFallback(
+                imageUrl: article.thumbnailUrl,
                 width: 100,
                 height: 100,
                 fit: BoxFit.cover,
-                imageErrorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 100,
-                    height: 100,
-                    color: const Color(0xFF2A2A2A),
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      color: Colors.white54,
-                    ),
-                  );
-                },
+                backgroundColor: const Color(0xFF2A2A2A),
+                errorColor: Colors.white54,
               ),
             ),
             
@@ -230,9 +229,10 @@ class ArticleListCard extends StatelessWidget {
                     // Author
                     Row(
                       children: [
-                        CircleAvatar(
+                        ImageUtils.avatarWithFallback(
+                          imageUrl: article.authorImageUrl,
                           radius: 12,
-                          backgroundImage: NetworkImage(article.authorImageUrl),
+                          name: article.authorName,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -262,7 +262,7 @@ class ArticleListCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Icon(
                           Icons.access_time,
-                          size: 14,
+                          size: 12,
                           color: Colors.grey[400],
                         ),
                         const SizedBox(width: 4),

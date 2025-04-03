@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/theme_provider.dart';
 import 'concentration_grid_game.dart';
 
 class GamesScreen extends StatelessWidget {
@@ -6,10 +8,12 @@ class GamesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // App color scheme
-    final backgroundColor = Colors.black;
-    final cardBackgroundColor = const Color(0xFF1A1A1A);
-    final accentColor = const Color(0xFFB4FF00);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
 
     final List<Map<String, dynamic>> games = [
       {
@@ -81,16 +85,16 @@ class GamesScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: backgroundColor,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Mental Training Games',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -102,7 +106,7 @@ class GamesScreen extends StatelessWidget {
             Text(
               'Train your mental skills through these interactive games',
               style: TextStyle(
-                color: Colors.grey[300],
+                color: secondaryTextColor,
                 fontSize: 16,
               ),
             ),
@@ -122,6 +126,7 @@ class GamesScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final game = games[index];
                 return _buildGameCard(
+                  context: context,
                   title: game['title'],
                   description: game['description'],
                   icon: game['icon'],
@@ -190,10 +195,10 @@ class GamesScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Text(
+                      Text(
                         'Daily Challenge',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: textColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
                         ),
@@ -254,26 +259,32 @@ class GamesScreen extends StatelessWidget {
   }
 
   Widget _buildGameCard({
+    required BuildContext context,
     required String title,
     required String description,
     required IconData icon,
-    required Color color,
+    required Color? color,
     required String difficulty,
     required String timeEstimate,
     required Color accentColor,
     required bool isAvailable,
     required VoidCallback onTap,
   }) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
+          color: surfaceColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 5,
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -281,51 +292,20 @@ class GamesScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Game icon header
             Container(
               height: 100,
-              width: double.infinity,
               decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
+                color: color?.withOpacity(0.2),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 48,
+                  color: color,
                 ),
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      icon,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                  ),
-                  if (!isAvailable)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'COMING SOON',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
             ),
-            
-            // Game details
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -333,53 +313,55 @@ class GamesScreen extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: textColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     description,
                     style: TextStyle(
-                      color: Colors.grey[400],
+                      color: secondaryTextColor,
                       fontSize: 12,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accentColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          difficulty,
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      Icon(
+                        Icons.timer,
+                        size: 14,
+                        color: secondaryTextColor,
                       ),
+                      const SizedBox(width: 4),
                       Text(
                         timeEstimate,
                         style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 10,
+                          color: secondaryTextColor,
+                          fontSize: 12,
                         ),
                       ),
+                      const Spacer(),
+                      if (!isAvailable)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Soon',
+                            style: TextStyle(
+                              color: secondaryTextColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ],

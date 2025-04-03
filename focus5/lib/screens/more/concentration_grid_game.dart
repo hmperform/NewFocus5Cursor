@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:provider/provider.dart';
+import '../../providers/theme_provider.dart';
 
 class ConcentrationGridGame extends StatefulWidget {
   const ConcentrationGridGame({Key? key}) : super(key: key);
@@ -332,155 +334,184 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = const Color(0xFFB4FF00);
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text(
-          'Concentration Grid',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+
+    return WillPopScope(
+      onWillPop: () async {
+        if (gameOver) {
+          return true;
+        } else {
+          _showExitConfirmationDialog();
+          return false;
+        }
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          backgroundColor: backgroundColor,
+          elevation: 0,
+          title: Text(
+            'Concentration Grid',
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: textColor),
+            onPressed: () {
+              if (gameOver) {
+                Navigator.of(context).pop();
+              } else {
+                _showExitConfirmationDialog();
+              }
+            },
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.help_outline, color: textColor),
+              onPressed: _showInstructions,
+            ),
+          ],
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Mode selection buttons
-                if (gameOver)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => startGame(false, false),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text('Start (Easy)', 
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () => startGame(true, false),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text('Hard Mode', 
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      if (hyperUnlocked) ...[
-                        const SizedBox(width: 12),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Mode selection buttons
+                  if (gameOver)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                         ElevatedButton(
-                          onPressed: () => startGame(false, true),
+                          onPressed: () => startGame(false, false),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
+                            backgroundColor: Colors.green,
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          child: const Text('Hyper Mode', 
+                          child: const Text('Start (Easy)', 
                             style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
-                      ],
-                    ],
-                  ),
-                
-                // Game info
-                if (!gameOver) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A1A),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Time left: $timeLeft seconds',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: () => startGame(true, false),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            Text(
-                              'Next: ${nextNumber.toString().padLeft(2, '0')}',
-                              style: TextStyle(
-                                color: accentColor,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Your best: ${isHyperMode ? hyperHighScore : (isHardMode ? hardHighScore : highScore)} numbers, in ${isHyperMode ? hyperBestTime : (isHardMode ? hardBestTime : bestTime)} s',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
                           ),
+                          child: const Text('Hard Mode', 
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
+                        if (hyperUnlocked) ...[
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: () => startGame(false, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text('Hyper Mode', 
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ],
                     ),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-                
-                // Grid
-                buildGrid(),
-                
-                const SizedBox(height: 20),
-                
-                // Message
-                if (currentMessage.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A1A1A),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: accentColor, width: 1),
-                    ),
-                    child: Text(
-                      currentMessage,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  
+                  // Game info
+                  if (!gameOver) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      textAlign: TextAlign.center,
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Time left: $timeLeft seconds',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Next: ${nextNumber.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  color: accentColor,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Your best: ${isHyperMode ? hyperHighScore : (isHardMode ? hardHighScore : highScore)} numbers, in ${isHyperMode ? hyperBestTime : (isHardMode ? hardBestTime : bestTime)} s',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                
-                const SizedBox(height: 24),
-                
-                // Leaderboards
-                if (gameOver) buildLeaderboards(),
-              ],
+                  ],
+
+                  const SizedBox(height: 24),
+                  
+                  // Grid
+                  buildGrid(),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Message
+                  if (currentMessage.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: accentColor, width: 1),
+                      ),
+                      child: Text(
+                        currentMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Leaderboards
+                  if (gameOver) buildLeaderboards(),
+                ],
+              ),
             ),
           ),
         ),
@@ -744,6 +775,139 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
             );
           }),
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  void _showInstructions() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        title: Text(
+          'How to Play',
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '1. Click "Start Game" to begin',
+              style: TextStyle(color: textColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '2. Find and tap numbers in sequence from 0 to 99',
+              style: TextStyle(color: textColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '3. The current number to find is shown at the top',
+              style: TextStyle(color: textColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '4. Try to complete the grid as fast as possible',
+              style: TextStyle(color: textColor),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'This game helps improve:',
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildBenefitRow(context, Icons.visibility, 'Visual scanning'),
+            const SizedBox(height: 4),
+            _buildBenefitRow(context, Icons.speed, 'Processing speed'),
+            const SizedBox(height: 4),
+            _buildBenefitRow(context, Icons.psychology, 'Concentration'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Got it',
+              style: TextStyle(
+                color: themeProvider.accentColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBenefitRow(BuildContext context, IconData icon, String text) {
+    final secondaryTextColor = Provider.of<ThemeProvider>(context).secondaryTextColor;
+    
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: secondaryTextColor),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: TextStyle(color: secondaryTextColor),
+        ),
+      ],
+    );
+  }
+
+  void _showExitConfirmationDialog() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        title: Text(
+          'Exit Game?',
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to exit? Your progress will be lost.',
+          style: TextStyle(color: textColor),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: themeProvider.secondaryTextColor,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pop(); // Exit game
+            },
+            child: Text(
+              'Exit',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );

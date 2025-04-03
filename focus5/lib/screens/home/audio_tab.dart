@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../providers/content_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import 'audio_player_screen.dart';
 
@@ -62,13 +64,23 @@ class _AudioTabState extends State<AudioTab> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+        ),
       );
     }
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,6 +91,7 @@ class _AudioTabState extends State<AudioTab> {
                 'Daily Audio',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
               ),
             ),
@@ -88,7 +101,7 @@ class _AudioTabState extends State<AudioTab> {
               child: Text(
                 'Mental training sessions to enhance your focus',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
+                  color: secondaryTextColor,
                 ),
               ),
             ),
@@ -106,7 +119,7 @@ class _AudioTabState extends State<AudioTab> {
                 ? Center(
                     child: Text(
                       'No audio sessions found',
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: TextStyle(color: secondaryTextColor),
                     ),
                   )
                 : ListView.builder(
@@ -126,6 +139,8 @@ class _AudioTabState extends State<AudioTab> {
 
   Widget _buildCategoryFilters() {
     final categories = ['All', 'Focus', 'Breathing', 'Visualization', 'Completed'];
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
     
     return SizedBox(
       height: 40,
@@ -143,12 +158,14 @@ class _AudioTabState extends State<AudioTab> {
               label: Text(category),
               selected: isSelected,
               onSelected: (_) => _filterByCategory(category),
-              backgroundColor: Colors.grey[200],
-              selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+              backgroundColor: themeProvider.isDarkMode 
+                ? Theme.of(context).colorScheme.surface 
+                : Colors.grey[200],
+              selectedColor: accentColor.withOpacity(0.2),
               labelStyle: TextStyle(
                 color: isSelected 
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.black,
+                  ? accentColor
+                  : Theme.of(context).colorScheme.onBackground,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
               shape: RoundedRectangleBorder(
@@ -168,6 +185,10 @@ class _AudioTabState extends State<AudioTab> {
       orElse: () => _audioSessions.first,
     );
     
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final accentTextColor = themeProvider.accentTextColor;
+    
     return Padding(
       padding: const EdgeInsets.all(20),
       child: GestureDetector(
@@ -178,8 +199,8 @@ class _AudioTabState extends State<AudioTab> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.secondary,
+                accentColor,
+                accentColor.withOpacity(0.7),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -194,7 +215,7 @@ class _AudioTabState extends State<AudioTab> {
                 child: Icon(
                   Icons.headphones,
                   size: 150,
-                  color: Colors.white.withOpacity(0.2),
+                  color: accentTextColor.withOpacity(0.2),
                 ),
               ),
               Padding(
@@ -207,13 +228,13 @@ class _AudioTabState extends State<AudioTab> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: accentTextColor.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Featured',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: accentTextColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -225,8 +246,8 @@ class _AudioTabState extends State<AudioTab> {
                       children: [
                         Text(
                           featuredAudio.title,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: accentTextColor,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -235,7 +256,7 @@ class _AudioTabState extends State<AudioTab> {
                         Text(
                           '${featuredAudio.durationMinutes} min • ${featuredAudio.category}',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
+                            color: accentTextColor.withOpacity(0.9),
                             fontSize: 14,
                           ),
                         ),
@@ -249,12 +270,12 @@ class _AudioTabState extends State<AudioTab> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: accentTextColor,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.play_arrow,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: accentColor,
                           ),
                         ),
                       ],
@@ -271,7 +292,12 @@ class _AudioTabState extends State<AudioTab> {
 
   Widget _buildAudioListItem(DailyAudio audio) {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final isCompleted = userProvider.hasCompletedAudio(audio.id);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -281,7 +307,7 @@ class _AudioTabState extends State<AudioTab> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -311,16 +337,17 @@ class _AudioTabState extends State<AudioTab> {
                   children: [
                     Text(
                       audio.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        color: textColor,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${audio.durationMinutes} min • ${DateFormat.MMMd().format(audio.datePublished)}',
                       style: TextStyle(
-                        color: Colors.grey[600],
+                        color: secondaryTextColor,
                         fontSize: 14,
                       ),
                     ),
@@ -346,12 +373,12 @@ class _AudioTabState extends State<AudioTab> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: accentColor.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.play_arrow,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: accentColor,
                     size: 16,
                   ),
                 ),

@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../models/user_model.dart';
+import '../../constants/theme.dart';
+import '../../utils/image_utils.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -101,12 +104,19 @@ class _ProfileTabState extends State<ProfileTab> {
     
     // For now, use the dummy data
     final user = _dummyUser;
+    final themeProvider = Provider.of<ThemeProvider>(context);
     
-    final accentColor = const Color(0xFFB4FF00);
-    final backgroundColor = const Color(0xFF121212);
+    // Use theme-aware colors
+    final accentColor = themeProvider.isDarkMode 
+        ? AppColors.accentDark 
+        : AppColors.accentLight;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.isDarkMode 
+        ? Colors.grey[400] 
+        : Colors.grey[700];  // Darker in light mode for better contrast
     
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: null,
       body: SafeArea(
         child: RefreshIndicator(
@@ -131,36 +141,24 @@ class _ProfileTabState extends State<ProfileTab> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white30,
+                            color: themeProvider.isDarkMode 
+                                ? Colors.white30
+                                : Colors.black26,
                             width: 2,
                           ),
                         ),
                         child: ClipOval(
-                          child: user.profileImageUrl != null
-                              ? Image.network(
-                                  user.profileImageUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 120,
-                                    height: 120,
-                                    color: Colors.grey[800],
-                                    child: const Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: Colors.white54,
-                                    ),
-                                  ),
-                                )
-                              : Container(
-                                  width: 120,
-                                  height: 120,
-                                  color: Colors.grey[800],
-                                  child: const Icon(
-                                    Icons.person,
-                                    size: 60,
-                                    color: Colors.white54,
-                                  ),
-                                ),
+                          child: ImageUtils.avatarWithFallback(
+                            imageUrl: user.profileImageUrl,
+                            radius: 60,
+                            name: user.fullName,
+                            backgroundColor: themeProvider.isDarkMode 
+                                ? Colors.grey[800]!
+                                : Colors.grey[300]!,
+                            textColor: themeProvider.isDarkMode 
+                                ? Colors.white54
+                                : Colors.black38,
+                          ),
                         ),
                       ),
                       Positioned(
@@ -172,9 +170,9 @@ class _ProfileTabState extends State<ProfileTab> {
                             color: accentColor,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.diamond_outlined,
-                            color: Colors.black,
+                            color: themeProvider.isDarkMode ? Colors.black : Colors.white,
                             size: 24,
                           ),
                         ),
@@ -188,10 +186,10 @@ class _ProfileTabState extends State<ProfileTab> {
                 // User name and email
                 Text(
                   user.fullName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: textColor,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -199,7 +197,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   user.email,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey[400],
+                    color: secondaryTextColor,
                   ),
                 ),
                 
@@ -213,8 +211,64 @@ class _ProfileTabState extends State<ProfileTab> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[300],
+                      color: themeProvider.isDarkMode 
+                          ? Colors.grey[300]
+                          : Colors.grey[800],
                       height: 1.4,
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Theme toggle switch
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20, 
+                        vertical: 12
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                themeProvider.isDarkMode 
+                                  ? Icons.dark_mode 
+                                  : Icons.light_mode,
+                                color: accentColor,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                themeProvider.isDarkMode
+                                  ? "Dark Mode"
+                                  : "Light Mode",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: themeProvider.isDarkMode,
+                            onChanged: (_) {
+                              themeProvider.toggleTheme();
+                            },
+                            activeColor: accentColor,
+                            activeTrackColor: accentColor.withOpacity(0.3),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -239,10 +293,10 @@ class _ProfileTabState extends State<ProfileTab> {
                           ),
                           Text(
                             "$_maxXP XP",
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: textColor,
                             ),
                           ),
                         ],
@@ -251,7 +305,9 @@ class _ProfileTabState extends State<ProfileTab> {
                       LinearPercentIndicator(
                         lineHeight: 8,
                         percent: user.xp / _maxXP,
-                        backgroundColor: Colors.grey[800],
+                        backgroundColor: themeProvider.isDarkMode 
+                            ? Colors.grey[800]
+                            : Colors.grey[300],
                         progressColor: accentColor,
                         barRadius: const Radius.circular(4),
                         padding: EdgeInsets.zero,
@@ -261,7 +317,7 @@ class _ProfileTabState extends State<ProfileTab> {
                         "Earn 10 XP per minute in the app. Unlock courses with 2000 XP.",
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[500],
+                          color: secondaryTextColor,
                         ),
                       ),
                     ],
@@ -292,7 +348,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   margin: const EdgeInsets.symmetric(horizontal: 24),
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
+                    color: Theme.of(context).cardTheme.color,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -301,7 +357,9 @@ class _ProfileTabState extends State<ProfileTab> {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: Colors.grey[850],
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey[850]
+                              : Colors.grey[200],
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -311,21 +369,23 @@ class _ProfileTabState extends State<ProfileTab> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Text(
+                      Text(
                         "Need Guidance?",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
+                      Text(
                         "Book a call with one of our mental performance coaches",
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.white70,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white70
+                              : Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -337,13 +397,13 @@ class _ProfileTabState extends State<ProfileTab> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accentColor,
-                            foregroundColor: Colors.black,
+                            foregroundColor: themeProvider.isDarkMode ? Colors.black : Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             "SCHEDULE CALL",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
@@ -366,6 +426,12 @@ class _ProfileTabState extends State<ProfileTab> {
   }
   
   Widget _buildStatCircle(String value, String label, BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.isDarkMode 
+        ? Colors.grey[400] 
+        : Colors.grey[700];
+  
     return Column(
       children: [
         Container(
@@ -375,15 +441,15 @@ class _ProfileTabState extends State<ProfileTab> {
             color: Colors.transparent,
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white24,
+              color: themeProvider.isDarkMode ? Colors.white24 : Colors.black12,
               width: 2,
             ),
           ),
           child: Center(
             child: Text(
               value,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: textColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
@@ -395,7 +461,7 @@ class _ProfileTabState extends State<ProfileTab> {
           label,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.grey[400],
+            color: secondaryTextColor,
             fontSize: 12,
           ),
         ),

@@ -5,6 +5,7 @@ import '../../providers/content_provider.dart';
 import '../../models/content_models.dart';
 import '../../widgets/article/article_card.dart';
 import 'articles_list_screen.dart';
+import '../../utils/image_utils.dart';
 
 class CoachProfileScreen extends StatefulWidget {
   final Map<String, dynamic> coach;

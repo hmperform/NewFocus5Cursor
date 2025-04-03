@@ -93,17 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 90,
                     width: 90,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFB4FF00),
+                      color: const Color(0xFF121212),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Center(
-                      child: Text(
-                        "F5",
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset(
+                        'assets/images/logos/just_focus5_head.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),

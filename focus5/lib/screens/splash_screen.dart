@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import '../constants/theme.dart';
 import 'auth/login_screen.dart';
 import 'onboarding/onboarding_screen.dart';
 import 'home/home_screen.dart';
@@ -56,6 +58,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    // Use the appropriate accent color based on theme mode
+    final Color accentColor = themeProvider.isDarkMode
+        ? AppColors.accentDark
+        : AppColors.accentLight;
+    
+    // Use appropriate contrasting text color based on theme mode
+    final Color textColor = themeProvider.isDarkMode ? Colors.black : Colors.white;
+    
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -64,8 +75,8 @@ class _SplashScreenState extends State<SplashScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withOpacity(0.8),
+              accentColor,
+              accentColor.withOpacity(0.8),
             ],
           ),
         ),
@@ -76,20 +87,17 @@ class _SplashScreenState extends State<SplashScreen> {
               const Spacer(),
               // Logo
               Container(
-                height: 120,
-                width: 120,
+                height: 160,
+                width: 160,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(30),
                 ),
-                child: Center(
-                  child: Text(
-                    "F5",
-                    style: TextStyle(
-                      fontSize: 60,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Image.asset(
+                    'assets/images/logos/just_focus5_head.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
               )
@@ -105,7 +113,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                   letterSpacing: 2,
                 ),
               )
@@ -119,7 +127,8 @@ class _SplashScreenState extends State<SplashScreen> {
                 "Mental Training for Athletes",
                 style: TextStyle(
                   fontSize: 16,
-                  color: Colors.white.withOpacity(0.9),
+                  color: textColor.withOpacity(0.9),
+                  fontWeight: FontWeight.w500,
                 ),
               )
               .animate()
@@ -129,7 +138,7 @@ class _SplashScreenState extends State<SplashScreen> {
               
               // Loading indicator
               CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                valueColor: AlwaysStoppedAnimation<Color>(textColor),
               )
               .animate()
               .fadeIn(delay: 800.ms, duration: 500.ms),

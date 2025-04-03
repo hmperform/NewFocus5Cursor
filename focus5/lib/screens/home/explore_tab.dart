@@ -4,12 +4,16 @@ import 'package:transparent_image/transparent_image.dart';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import '../../constants/dummy_data.dart';
 import '../../widgets/article/article_card.dart';
 import 'course_detail_screen.dart';
 import 'coach_profile_screen.dart';
 import 'articles_list_screen.dart';
+import '../../services/paywall_service.dart';
+import 'article_detail_screen.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -45,6 +49,17 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         _selectedTabIndex = _tabController.index;
       });
     });
+    
+    // Initialize content with dummy data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+      if (contentProvider.courses.isEmpty) {
+        contentProvider.initContent(null);
+      }
+      if (contentProvider.articles.isEmpty) {
+        contentProvider.loadArticles();
+      }
+    });
   }
 
   @override
@@ -62,13 +77,22 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final secondaryTextColor = themeProvider.isDarkMode 
+        ? Colors.grey 
+        : Colors.grey.shade700;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       body: CustomScrollView(
         slivers: [
           // App bar with search
           SliverAppBar(
-            backgroundColor: const Color(0xFF121212),
+            backgroundColor: backgroundColor,
             expandedHeight: 120,
             floating: true,
             pinned: true,
@@ -80,7 +104,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   'Explore',
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: textColor,
                   ),
                 ),
               ),
@@ -92,17 +116,17 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2A),
+                    color: surfaceColor,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: textColor),
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Search topics, coaches, modules...',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                      hintStyle: TextStyle(color: secondaryTextColor),
+                      prefixIcon: Icon(Icons.search, color: secondaryTextColor),
                       contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                     onChanged: _handleSearch,
@@ -142,6 +166,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildCoachesSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -150,23 +178,23 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Coaches',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
               ),
               TextButton(
                 onPressed: () {
                   // Navigate to all coaches
                 },
-                child: const Text(
+                child: Text(
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: secondaryTextColor,
                   ),
                 ),
               ),
@@ -190,6 +218,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildCoachCard(Map<String, dynamic> coach) {
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -260,10 +290,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               padding: const EdgeInsets.only(top: 12, left: 4),
               child: Text(
                 coach['name'],
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -276,6 +306,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildModulesSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -284,23 +318,23 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Modules',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
               ),
               TextButton(
                 onPressed: () {
                   // Navigate to all modules
                 },
-                child: const Text(
+                child: Text(
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: secondaryTextColor,
                   ),
                 ),
               ),
@@ -313,9 +347,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
             children: [
-              _buildModuleCard('Mind Mastery', Colors.blue.shade700),
-              _buildModuleCard('Growth Path', Colors.green.shade700),
-              _buildModuleCard('Mental Edge', Colors.purple.shade700),
+              _buildModuleCard('Mental Toughness', Colors.blue.shade700),
+              _buildModuleCard('Motivation Mastery', Colors.green.shade700),
+              _buildModuleCard('Focus Training', Colors.purple.shade700),
+              _buildModuleCard('Team Leadership', Colors.orange.shade700),
             ],
           ),
         ),
@@ -324,62 +359,103 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildModuleCard(String title, Color color) {
-    return Container(
-      width: 220,
-      margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+    return GestureDetector(
+      onTap: () {
+        // Find a course related to this module
+        final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+        
+        // Make sure courses are loaded
+        if (contentProvider.courses.isEmpty) {
+          contentProvider.initContent(null);
+        }
+        
+        // Find a course that matches this module's topic
+        final relatedCourses = contentProvider.courses.where((course) {
+          return course.title.contains(title) || 
+                 course.focusAreas.any((area) => area.contains(title)) ||
+                 title.contains(course.title);
+        }).toList();
+        
+        if (relatedCourses.isNotEmpty) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CourseDetailScreen(
+                courseId: relatedCourses.first.id,
+              ),
+            ),
+          );
+        } else {
+          // Fallback to showing a message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No modules available for $title yet. Check back soon!'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: 220,
+        margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
+                ],
+              ),
+            ),
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
                 ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 16,
-            right: 16,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_forward,
-                color: Colors.white,
-                size: 20,
+                child: const Icon(
+                  Icons.arrow_forward,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
   
   Widget _buildCourseTopicsSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -388,23 +464,23 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Course Topics',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
               ),
               TextButton(
                 onPressed: () {
                   // Navigate to all course topics
                 },
-                child: const Text(
+                child: Text(
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: secondaryTextColor,
                   ),
                 ),
               ),
@@ -417,9 +493,11 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
             children: [
-              _buildTopicCard('Mental Edge', Colors.teal.shade600),
+              _buildTopicCard('Mental Toughness', Colors.teal.shade600),
               _buildTopicCard('Power Mindset', Colors.green.shade600),
               _buildTopicCard('Focus Training', Colors.blue.shade600),
+              _buildTopicCard('Team Dynamics', Colors.orange.shade600),
+              _buildTopicCard('Motivation', Colors.purple.shade600),
             ],
           ),
         ),
@@ -433,8 +511,15 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       onTap: () {
         // Navigate to filtered courses
         final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+        
+        // Make sure we have content initialized
+        if (contentProvider.courses.isEmpty) {
+          contentProvider.initContent(null);
+        }
+        
         final courses = contentProvider.getCoursesForFocusArea(topic);
         
+        // Check if we found courses for this topic
         if (courses.isNotEmpty) {
           Navigator.push(
             context,
@@ -442,6 +527,14 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               builder: (context) => CourseDetailScreen(
                 courseId: courses.first.id,
               ),
+            ),
+          );
+        } else {
+          // Show a message if no courses found for this topic
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No courses found for $topic yet. Check back soon!'),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -454,14 +547,17 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
-        child: Text(
-          topic,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            topic,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -469,6 +565,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   
   Widget _buildFeaturedCoursesSection() {
     final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
     final courses = contentProvider.courses;
     
     if (courses.isEmpty) {
@@ -483,12 +583,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Featured Courses',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
               ),
               TextButton(
@@ -496,11 +596,11 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   // Navigate to courses tab
                   DefaultTabController.of(context)?.animateTo(2);
                 },
-                child: const Text(
+                child: Text(
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: secondaryTextColor,
                   ),
                 ),
               ),
@@ -531,7 +631,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   margin: const EdgeInsets.only(right: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFF1E1E1E),
+                    color: surfaceColor,
                   ),
                   clipBehavior: Clip.hardEdge,
                   child: Column(
@@ -547,10 +647,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                           fit: BoxFit.cover,
                           imageErrorBuilder: (context, error, stackTrace) {
                             return Container(
-                              color: Colors.grey[900],
-                              child: const Icon(
+                              color: Theme.of(context).colorScheme.surfaceVariant,
+                              child: Icon(
                                 Icons.image_not_supported,
-                                color: Colors.white54,
+                                color: secondaryTextColor,
                                 size: 48,
                               ),
                             );
@@ -565,8 +665,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                           children: [
                             Text(
                               course.title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: textColor,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
@@ -576,8 +676,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                             const SizedBox(height: 4),
                             Text(
                               course.creatorName,
-                              style: const TextStyle(
-                                color: Colors.grey,
+                              style: TextStyle(
+                                color: secondaryTextColor,
                                 fontSize: 12,
                               ),
                               maxLines: 1,
@@ -599,6 +699,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   
   Widget _buildArticlesSection() {
     final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
     final featuredArticles = contentProvider.getFeaturedArticles();
     
     if (featuredArticles.isEmpty) {
@@ -613,12 +716,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Articles',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: textColor,
                 ),
               ),
               TextButton(
@@ -630,11 +733,11 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                     ),
                   );
                 },
-                child: const Text(
+                child: Text(
                   'See all',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: secondaryTextColor,
                   ),
                 ),
               ),
@@ -649,7 +752,30 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             scrollDirection: Axis.horizontal,
             itemCount: featuredArticles.length,
             itemBuilder: (context, index) {
-              return ArticleCard(article: featuredArticles[index]);
+              final article = featuredArticles[index];
+              return GestureDetector(
+                onTap: () async {
+                  // Check if user has access or show paywall
+                  final paywallService = PaywallService();
+                  final hasAccess = await paywallService.showPaywallIfNeeded(
+                    context,
+                    source: 'article',
+                  );
+                  
+                  // If user has access, navigate to article
+                  if (hasAccess && context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ArticleDetailScreen(
+                          articleId: article.id,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: ArticleCard(article: article),
+              );
             },
           ),
         ),

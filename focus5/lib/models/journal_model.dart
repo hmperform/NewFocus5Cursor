@@ -51,6 +51,7 @@ class JournalEntry {
   final List<String> tags;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isFavorite;
 
   JournalEntry({
     required this.id,
@@ -62,6 +63,7 @@ class JournalEntry {
     this.tags = const [],
     required this.createdAt,
     required this.updatedAt,
+    this.isFavorite = false,
   });
 
   // Format the date in different ways
@@ -82,6 +84,7 @@ class JournalEntry {
       tags: List<String>.from(map['tags']),
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
+      isFavorite: map['isFavorite'] ?? false,
     );
   }
 
@@ -97,6 +100,7 @@ class JournalEntry {
       'tags': tags,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'isFavorite': isFavorite,
     };
   }
 
@@ -111,6 +115,7 @@ class JournalEntry {
     List<String>? tags,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isFavorite,
   }) {
     return JournalEntry(
       id: id ?? this.id,
@@ -122,6 +127,7 @@ class JournalEntry {
       tags: tags ?? this.tags,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 }

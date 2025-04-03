@@ -22,6 +22,58 @@ class AppColors {
   static const Color error = Color(0xFFE53935);
   static const Color warning = Color(0xFFFFB74D);
   static const Color info = Color(0xFF29B6F6);
+  
+  // Custom app accent colors
+  static const Color accentDark = Color(0xFFB4FF00);  // Neon green for dark mode
+  static const Color accentLight = Color(0xFF268623); // Green for light mode
+  
+  // Material color swatches for the accent colors
+  static final MaterialColor accentDarkSwatch = MaterialColor(
+    0xFFB4FF00,
+    <int, Color>{
+      50: Color(0xFFF7FFCC),
+      100: Color(0xFFEEFF99),
+      200: Color(0xFFE3FF66),
+      300: Color(0xFFD6FF33),
+      400: Color(0xFFC9FF00),
+      500: accentDark,
+      600: Color(0xFF9FE600),
+      700: Color(0xFF8ACC00),
+      800: Color(0xFF75B300),
+      900: Color(0xFF609900),
+    },
+  );
+  
+  static final MaterialColor accentLightSwatch = MaterialColor(
+    0xFF268623,
+    <int, Color>{
+      50: Color(0xFFE8F5E9),
+      100: Color(0xFFC8E6C9),
+      200: Color(0xFFA5D6A7),
+      300: Color(0xFF81C784),
+      400: Color(0xFF66BB6A),
+      500: accentLight,
+      600: Color(0xFF227A1F),
+      700: Color(0xFF1B691A),
+      800: Color(0xFF155915),
+      900: Color(0xFF0F480F),
+    },
+  );
+  
+  // Helper method to get the correct accent color based on brightness
+  static Color getAccentColor(Brightness brightness) {
+    return brightness == Brightness.dark ? accentDark : accentLight;
+  }
+  
+  // Helper method to get the appropriate foreground color for accent buttons
+  static Color getAccentTextColor(Brightness brightness) {
+    return brightness == Brightness.dark ? Colors.black : Colors.white;
+  }
+  
+  // Helper method to get the appropriate accent swatch based on brightness
+  static MaterialColor getAccentSwatch(Brightness brightness) {
+    return brightness == Brightness.dark ? accentDarkSwatch : accentLightSwatch;
+  }
 }
 
 class AppTheme {
@@ -56,8 +108,8 @@ class AppTheme {
       bodyMedium: TextStyle(color: AppColors.textPrimaryLight, fontSize: 14),
       bodySmall: TextStyle(color: AppColors.textSecondaryLight, fontSize: 12),
     ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.primaryLight,
+    appBarTheme: AppBarTheme(
+      backgroundColor: AppColors.accentLight,
       foregroundColor: Colors.white,
       elevation: 0,
     ),
@@ -152,9 +204,9 @@ class AppTheme {
       bodyMedium: TextStyle(color: AppColors.textPrimaryDark, fontSize: 14),
       bodySmall: TextStyle(color: AppColors.textSecondaryDark, fontSize: 12),
     ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.primaryDark,
-      foregroundColor: Colors.white,
+    appBarTheme: AppBarTheme(
+      backgroundColor: AppColors.accentDark,
+      foregroundColor: Colors.black,
       elevation: 0,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(

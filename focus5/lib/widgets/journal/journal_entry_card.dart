@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/journal_model.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 
 class JournalEntryCard extends StatelessWidget {
   final JournalEntry entry;
@@ -17,6 +20,15 @@ class JournalEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.isDarkMode 
+        ? Colors.white70 
+        : Colors.black87;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    
     // Prepare content preview with trimming
     String contentPreview = entry.content;
     if (contentPreview.length > 100) {
@@ -29,12 +41,12 @@ class JournalEntryCard extends StatelessWidget {
       contentWidget = _buildHighlightedText(
         contentPreview, 
         highlightText!,
-        const TextStyle(
-          color: Colors.white70,
+        TextStyle(
+          color: secondaryTextColor,
           fontSize: 14,
         ),
-        const TextStyle(
-          color: Color(0xFFB4FF00),
+        TextStyle(
+          color: accentColor,
           fontSize: 14,
           fontWeight: FontWeight.bold,
         ),
@@ -42,8 +54,8 @@ class JournalEntryCard extends StatelessWidget {
     } else {
       contentWidget = Text(
         contentPreview,
-        style: const TextStyle(
-          color: Colors.white70,
+        style: TextStyle(
+          color: secondaryTextColor,
           fontSize: 14,
         ),
         maxLines: 2,
@@ -57,7 +69,7 @@ class JournalEntryCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      color: const Color(0xFF1E1E1E),
+      color: surfaceColor,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
@@ -74,7 +86,9 @@ class JournalEntryCard extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2A2A2A),
+                      color: themeProvider.isDarkMode 
+                          ? const Color(0xFF2A2A2A) 
+                          : Colors.grey[200],
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -82,16 +96,16 @@ class JournalEntryCard extends StatelessWidget {
                       children: [
                         Text(
                           DateFormat('d').format(entry.date),
-                          style: const TextStyle(
-                            color: Color(0xFFB4FF00),
+                          style: TextStyle(
+                            color: accentColor,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
                           DateFormat('MMM').format(entry.date),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: textColor,
                             fontSize: 12,
                           ),
                         ),
@@ -108,8 +122,8 @@ class JournalEntryCard extends StatelessWidget {
                           children: [
                             Text(
                               DateFormat('EEEE').format(entry.date),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: textColor,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
@@ -126,8 +140,8 @@ class JournalEntryCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           entry.prompt,
-                          style: const TextStyle(
-                            color: Color(0xFFB4FF00),
+                          style: TextStyle(
+                            color: accentColor,
                             fontSize: 14,
                             fontStyle: FontStyle.italic,
                           ),
@@ -147,7 +161,7 @@ class JournalEntryCard extends StatelessWidget {
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: entry.tags.map((tag) => _buildTagChip(tag)).toList(),
+                    children: entry.tags.map((tag) => _buildTagChip(tag, context)).toList(),
                   ),
                 ),
             ],
@@ -157,17 +171,22 @@ class JournalEntryCard extends StatelessWidget {
     );
   }
   
-  Widget _buildTagChip(String tag) {
+  Widget _buildTagChip(String tag, BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final accentColor = themeProvider.accentColor;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
+        color: themeProvider.isDarkMode 
+            ? const Color(0xFF2A2A2A) 
+            : Colors.grey[200],
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         '#$tag',
-        style: const TextStyle(
-          color: Color(0xFFB4FF00),
+        style: TextStyle(
+          color: accentColor,
           fontSize: 12,
         ),
       ),

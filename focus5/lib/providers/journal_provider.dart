@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/material.dart';
 
 import '../models/journal_model.dart';
 
@@ -237,5 +238,34 @@ class JournalProvider with ChangeNotifier {
     // In a real app with backend, we'd fetch from API here
     // For now, we'll just notify listeners to refresh UI
     notifyListeners();
+  }
+
+  List<JournalEntry> get recentEntries => 
+      [..._entries]..sort((a, b) => b.date.compareTo(a.date));
+  
+  void toggleFavorite(String id) {
+    final index = _entries.indexWhere((entry) => entry.id == id);
+    if (index >= 0) {
+      final entry = _entries[index];
+      _entries[index] = entry.copyWith(isFavorite: !entry.isFavorite);
+      notifyListeners();
+    }
+  }
+  
+  JournalEntry? getEntryById(String id) {
+    try {
+      return _entries.firstWhere((entry) => entry.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  List<JournalEntry> getEntriesByMood(MoodLevel mood) {
+    return _entries.where((entry) {
+      if (entry is JournalEntry) {
+        return entry.mood == mood;
+      }
+      return false;
+    }).toList().cast<JournalEntry>();
   }
 } 

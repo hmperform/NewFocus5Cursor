@@ -31,12 +31,13 @@ class ContentProvider with ChangeNotifier {
 
     try {
       // In a real app, this would fetch from API
-      await Future.delayed(const Duration(milliseconds: 1500));
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // For demo purposes, using dummy data
+      // Immediately load data from DummyData
       _courses = DummyData.dummyCourses;
       _audioModules = DummyData.dummyAudioModules;
       _articles = DummyData.dummyArticles;
+      _coaches = DummyData.dummyCoaches;
       
       // Filter content based on university access if applicable
       if (universityCode != null) {
@@ -56,15 +57,12 @@ class ContentProvider with ChangeNotifier {
         ).toList();
       }
       
-      await loadCourses();
-      await loadAudioModules();
-      await loadCoaches();
-      
       _isLoading = false;
       _errorMessage = null;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'Failed to load content';
+      _errorMessage = 'Failed to load content: ${e.toString()}';
+      print('Error in initContent: ${e.toString()}');
     }
     
     notifyListeners();
@@ -124,6 +122,35 @@ class ContentProvider with ChangeNotifier {
     }
   }
   
+  Future<void> loadArticles() async {
+    try {
+      // In a real app, fetch from backend with proper filtering
+      _articles = DummyData.dummyArticles.where((article) {
+        // If article is not university exclusive, it's available to everyone
+        if (!article.universityExclusive) return true;
+        
+        // If article is university exclusive, check if user has access
+        if (_universityCode != null && 
+            article.universityAccess != null && 
+            article.universityAccess!.contains(_universityCode)) {
+          return true;
+        }
+        
+        return false;
+      }).toList();
+      
+      // Make sure we have articles
+      if (_articles.isEmpty) {
+        _articles = DummyData.dummyArticles;
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to load articles';
+      notifyListeners();
+    }
+  }
+  
   Future<void> loadCoaches() async {
     try {
       // In a real app, fetch from backend with proper filtering
@@ -144,7 +171,18 @@ class ContentProvider with ChangeNotifier {
   }
   
   List<Course> getCoursesForFocusArea(String focusArea) {
-    return _courses.where((course) => course.focusAreas.contains(focusArea)).toList();
+    // If we don't have courses loaded yet, load them
+    if (_courses.isEmpty) {
+      loadCoursesSync();
+    }
+    
+    // More flexible matching - check if the focus area is contained in or contains any of the course's focus areas
+    return _courses.where((course) {
+      return course.focusAreas.any((area) => 
+        area.toLowerCase().contains(focusArea.toLowerCase()) || 
+        focusArea.toLowerCase().contains(area.toLowerCase())
+      );
+    }).toList();
   }
   
   List<Course> searchCourses(String query) {
@@ -274,5 +312,26 @@ class ContentProvider with ChangeNotifier {
     final articles = List<Article>.from(_articles);
     articles.sort((a, b) => b.publishedDate.compareTo(a.publishedDate));
     return articles.take(limit).toList();
+  }
+
+  // Synchronous version of loadCourses for immediate use
+  void loadCoursesSync() {
+    _courses = DummyData.dummyCourses;
+    
+    // Filter based on university access if needed
+    if (_universityCode != null) {
+      _courses = _courses.where((course) {
+        // If course is not university exclusive, it's available to everyone
+        if (!course.universityExclusive) return true;
+        
+        // If course is university exclusive, check if user has access
+        if (course.universityAccess != null && 
+            course.universityAccess!.contains(_universityCode)) {
+          return true;
+        }
+        
+        return false;
+      }).toList();
+    }
   }
 } 

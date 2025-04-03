@@ -6,6 +6,8 @@ import 'package:transparent_image/transparent_image.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
@@ -21,30 +23,48 @@ class _DashboardTabState extends State<DashboardTab> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+      if (contentProvider.courses.isEmpty) {
+        contentProvider.initContent(null);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
     final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final user = userProvider.user;
+    
+    // Get theme-aware colors
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
 
     if (user == null) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       body: _isLoading
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
               ),
             )
           : RefreshIndicator(
-              color: const Color(0xFFB4FF00),
-              backgroundColor: const Color(0xFF1E1E1E),
+              color: accentColor,
+              backgroundColor: surfaceColor,
               onRefresh: () async {
                 setState(() {
                   _isLoading = true;
@@ -74,6 +94,10 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildDayStreak() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: SingleChildScrollView(
@@ -97,14 +121,14 @@ class _DashboardTabState extends State<DashboardTab> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: isActive ? const Color(0xFFB4FF00) : const Color(0xFF2A2A2A),
+                      color: isActive ? accentColor : surfaceColor,
                       shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: Text(
                         day,
                         style: TextStyle(
-                          color: isActive ? Colors.black : Colors.grey,
+                          color: isActive ? themeProvider.accentTextColor : Colors.grey,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -113,7 +137,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   ),
                   const SizedBox(height: 4),
                   isActive 
-                    ? const Icon(Icons.check_circle, color: Color(0xFFB4FF00), size: 14)
+                    ? Icon(Icons.check_circle, color: accentColor, size: 14)
                     : const SizedBox(height: 14),
                 ],
               ),
@@ -125,28 +149,90 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildFocusAreas() {
-    final focusAreas = ['Mental toughness', 'Discipline', 'Responsibility'];
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final secondaryTextColor = themeProvider.isDarkMode 
+        ? Colors.white70 
+        : Colors.black87;
     
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Wrap(
-        spacing: 8,
-        children: focusAreas.map((area) => Chip(
-          label: Text(
-            area,
-            style: const TextStyle(color: Colors.white70),
+    // Expanded list of focus areas
+    final focusAreas = [
+      'Mental toughness', 
+      'Discipline', 
+      'Responsibility', 
+      'Visualization', 
+      'Concentration', 
+      'Goal setting', 
+      'Resilience', 
+      'Mindfulness', 
+      'Flow state', 
+      'Leadership'
+    ];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            'Focus Areas',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
-          backgroundColor: const Color(0xFF2A2A2A),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+        ),
+        SizedBox(
+          height: 50,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: focusAreas.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Chip(
+                  label: Text(
+                    focusAreas[index],
+                    style: TextStyle(color: secondaryTextColor),
+                  ),
+                  backgroundColor: surfaceColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              );
+            },
           ),
-        )).toList(),
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildFeaturedCourses(BuildContext context) {
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    
+    // If courses are empty, show loading indicator
+    if (contentProvider.courses.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        height: 240,
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+          ),
+        ),
+      );
+    }
+    
+    // Get the first two courses
+    final courses = contentProvider.courses.take(2).toList();
+    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -158,40 +244,40 @@ class _DashboardTabState extends State<DashboardTab> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                CourseCard(
-                  title: 'Mental Fortitude in High Pressure Situations',
-                  sport: 'All Sports',
-                  level: 'Intermediate',
-                  duration: '2h 15m',
+                if (courses.isNotEmpty) CourseCard(
+                  title: courses[0].title,
+                  sport: courses[0].focusAreas.isNotEmpty ? courses[0].focusAreas.first : 'All Sports',
+                  level: courses[0].tags.isNotEmpty ? courses[0].tags.first : 'Intermediate',
+                  duration: '${courses[0].durationMinutes ~/ 60}h ${courses[0].durationMinutes % 60}m',
                   progress: 0.3,
-                  imageUrl: 'https://picsum.photos/800/600?random=10',
+                  imageUrl: courses[0].thumbnailUrl,
                   onTap: () {
                     // Navigate to course details
                     Navigator.push(
                       context, 
                       MaterialPageRoute(
                         builder: (context) => CourseDetailScreen(
-                          courseId: 'course1',
+                          courseId: courses[0].id,
                         ),
                       ),
                     );
                   },
                 ),
                 const SizedBox(width: 16),
-                CourseCard(
-                  title: 'Visualization Techniques for Peak Performance',
-                  sport: 'Basketball',
-                  level: 'Advanced',
-                  duration: '1h 45m',
+                if (courses.length > 1) CourseCard(
+                  title: courses[1].title,
+                  sport: courses[1].focusAreas.isNotEmpty ? courses[1].focusAreas.first : 'Basketball',
+                  level: courses[1].tags.isNotEmpty ? courses[1].tags.first : 'Advanced',
+                  duration: '${courses[1].durationMinutes ~/ 60}h ${courses[1].durationMinutes % 60}m',
                   progress: 0.6,
-                  imageUrl: 'https://picsum.photos/800/600?random=11',
+                  imageUrl: courses[1].thumbnailUrl,
                   onTap: () {
                     // Navigate to course details
                     Navigator.push(
                       context, 
                       MaterialPageRoute(
                         builder: (context) => CourseDetailScreen(
-                          courseId: 'course3',
+                          courseId: courses[1].id,
                         ),
                       ),
                     );
@@ -335,17 +421,21 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildStartYourDay(BuildContext context) {
-    final size = MediaQuery.of(context).size.width - 32; // Full width minus padding
+    final containerWidth = MediaQuery.of(context).size.width - 32; // Full width minus padding
+    final containerHeight = containerWidth * 0.6; // Make height 60% of width instead of 1:1 ratio
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
     
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Start Your Day',
             style: TextStyle(
-              color: Colors.white,
+              color: textColor,
               fontWeight: FontWeight.bold,
               fontSize: 20,
             ),
@@ -367,13 +457,13 @@ class _DashboardTabState extends State<DashboardTab> {
               );
             },
             child: Container(
-              width: size,
-              height: size,
+              width: containerWidth,
+              height: containerHeight, // Using the new proportional height
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E1E),
                 borderRadius: BorderRadius.circular(16),
                 image: const DecorationImage(
-                  image: NetworkImage('https://picsum.photos/800/800?random=50'),
+                  image: NetworkImage('https://picsum.photos/800/500?random=50'),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -403,10 +493,10 @@ class _DashboardTabState extends State<DashboardTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           'Daily Focus Session',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: textColor,
                             fontWeight: FontWeight.bold,
                             fontSize: 22,
                           ),
@@ -415,7 +505,7 @@ class _DashboardTabState extends State<DashboardTab> {
                         Text(
                           'Morning Mental Preparation • 10 min',
                           style: TextStyle(
-                            color: Colors.grey[300],
+                            color: secondaryTextColor,
                             fontSize: 14,
                           ),
                         ),
@@ -468,6 +558,8 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
             ),
           ),
+          // Add bottom padding to ensure no overflow at the end of the screen
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -558,20 +650,34 @@ class CourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor; 
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 280,
-        height: 290, // Increased height for better spacing
+        height: 220, // Reduced height to fix overflow
         margin: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
-          color: Colors.grey[900],
+          color: surfaceColor,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Course image with gradient overlay
+            // Course image
             Stack(
               children: [
                 ClipRRect(
@@ -579,43 +685,64 @@ class CourseCard extends StatelessWidget {
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
                   ),
-                  child: Image.network(
-                    imageUrl,
+                  child: FadeInImage.memoryNetwork(
+                    placeholder: kTransparentImage,
+                    image: imageUrl,
                     width: 280,
                     height: 140,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
+                    imageErrorBuilder: (context, error, stackTrace) {
                       return Container(
                         width: 280,
                         height: 140,
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Icons.image,
-                          color: Colors.white54,
+                        color: surfaceColor,
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color: secondaryTextColor,
                           size: 48,
                         ),
                       );
                     },
                   ),
                 ),
+                
+                // Level badge
                 Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
+                  top: 12,
+                  left: 12,
                   child: Container(
-                    height: 140,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      level,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.4),
-                          Colors.transparent,
-                        ],
+                    ),
+                  ),
+                ),
+
+                // Duration badge
+                Positioned(
+                  bottom: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      duration,
+                      style: TextStyle(
+                        color: themeProvider.accentTextColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -623,78 +750,41 @@ class CourseCard extends StatelessWidget {
               ],
             ),
             
-            // Course details
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+            // Course info
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.fitness_center, color: secondaryTextColor, size: 14),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          sport,
+                          style: TextStyle(
+                            color: secondaryTextColor,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    
-                    // Sport and level
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              sport,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.white70,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              level,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.white70,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    
-                    // Progress bar only (duration removed)
-                    LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: Colors.grey[800],
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blueAccent),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],

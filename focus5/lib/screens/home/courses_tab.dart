@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 import '../../providers/content_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 
@@ -15,7 +17,7 @@ class CoursesTab extends StatefulWidget {
 
 class _CoursesTabState extends State<CoursesTab> {
   String _selectedCategory = 'All';
-  final List<String> _categories = ['All', 'Focus', 'Visualization', 'Mindfulness', 'Recovery', 'Leadership'];
+  final List<String> _categories = ['All', 'Mental Toughness', 'Focus Training', 'Motivation', 'Team Dynamics', 'Leadership'];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   
@@ -26,16 +28,38 @@ class _CoursesTabState extends State<CoursesTab> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+      if (contentProvider.courses.isEmpty) {
+        contentProvider.initContent(null);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final courses = contentProvider.courses;
     final isLoading = contentProvider.isLoading;
+    
+    // Get theme-aware colors
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
     
     // Filter courses based on selected category and search query
     List<Course> filteredCourses = courses;
     if (_selectedCategory != 'All') {
       filteredCourses = filteredCourses.where(
-        (course) => course.focusAreas.contains(_selectedCategory)
+        (course) => course.focusAreas.any((area) => 
+          area.toLowerCase().contains(_selectedCategory.toLowerCase()) ||
+          _selectedCategory.toLowerCase().contains(area.toLowerCase())
+        )
       ).toList();
     }
     
@@ -51,28 +75,28 @@ class _CoursesTabState extends State<CoursesTab> {
     }
     
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: _searchQuery.isEmpty ? 
-          const Text(
+          Text(
             'Courses',
             style: TextStyle(
-              color: Colors.white,
+              color: textColor,
               fontWeight: FontWeight.bold,
               fontSize: 24,
             ),
           ) :
           TextField(
             controller: _searchController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: textColor),
             decoration: InputDecoration(
               hintText: 'Search courses...',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              hintStyle: TextStyle(color: secondaryTextColor),
               border: InputBorder.none,
               suffixIcon: IconButton(
-                icon: const Icon(Icons.clear, color: Colors.white70),
+                icon: Icon(Icons.clear, color: secondaryTextColor),
                 onPressed: () {
                   _searchController.clear();
                   setState(() {
@@ -92,7 +116,7 @@ class _CoursesTabState extends State<CoursesTab> {
           IconButton(
             icon: Icon(
               _searchQuery.isEmpty ? Icons.search : Icons.cancel,
-              color: Colors.white,
+              color: textColor,
             ),
             onPressed: () {
               setState(() {
@@ -134,14 +158,14 @@ class _CoursesTabState extends State<CoursesTab> {
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFB4FF00) : const Color(0xFF1E1E1E),
+                      color: isSelected ? accentColor : surfaceColor,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       category,
                       style: TextStyle(
-                        color: isSelected ? Colors.black : Colors.white,
+                        color: isSelected ? themeProvider.accentTextColor : textColor,
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -156,9 +180,9 @@ class _CoursesTabState extends State<CoursesTab> {
           // Courses grid
           Expanded(
             child: isLoading 
-              ? const Center(
+              ? Center(
                   child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
                   ),
                 )
               : filteredCourses.isEmpty
@@ -186,25 +210,34 @@ class _CoursesTabState extends State<CoursesTab> {
   }
   
   Widget _buildEmptyState() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     if (_searchQuery.isNotEmpty || _selectedCategory != 'All') {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.search_off,
-              color: Color(0xFFB4FF00),
+              color: accentColor,
               size: 64,
             ),
             const SizedBox(height: 16),
             Text(
               'No courses found',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: textColor,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Try adjusting your filters',
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: secondaryTextColor,
+              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -215,6 +248,10 @@ class _CoursesTabState extends State<CoursesTab> {
                   _searchController.clear();
                 });
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: themeProvider.accentTextColor,
+              ),
               child: const Text('Reset Filters'),
             ),
           ],
@@ -229,13 +266,14 @@ class _CoursesTabState extends State<CoursesTab> {
           Icon(
             Icons.school,
             size: 100,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            color: accentColor.withOpacity(0.5),
           ),
           const SizedBox(height: 20),
           Text(
             'Courses Coming Soon',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
           ),
           const SizedBox(height: 10),
@@ -245,7 +283,7 @@ class _CoursesTabState extends State<CoursesTab> {
               'Access video courses from mental performance experts to improve your game',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.grey[600],
+                color: secondaryTextColor,
               ),
             ),
           ),
@@ -255,6 +293,10 @@ class _CoursesTabState extends State<CoursesTab> {
   }
   
   Widget _buildCourseCard(BuildContext context, Course course) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -268,112 +310,90 @@ class _CoursesTabState extends State<CoursesTab> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Course thumbnail
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-              child: Stack(
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: FadeInImage.memoryNetwork(
-                      placeholder: kTransparentImage,
-                      image: course.thumbnailUrl,
-                      fit: BoxFit.cover,
-                      imageErrorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: const Color(0xFF333333),
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            color: Colors.grey,
-                            size: 48,
-                          ),
-                        );
-                      },
-                    ),
+            Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: FadeInImage.memoryNetwork(
+                    placeholder: kTransparentImage,
+                    image: course.thumbnailUrl,
+                    fit: BoxFit.cover,
+                    imageErrorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color: secondaryTextColor,
+                          size: 48,
+                        ),
+                      );
+                    },
                   ),
-                  // XP reward badge
+                ),
+                
+                // Course level/tag badge
+                if (course.tags.isNotEmpty)
                   Positioned(
                     top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFB4FF00),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.bolt,
-                            color: Colors.black,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${course.xpReward} XP',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Duration badge
-                  Positioned(
-                    bottom: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.7),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.access_time,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${course.durationMinutes ~/ 60}h ${course.durationMinutes % 60}m',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        course.tags.first,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                
+                // Creator badge
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: FadeInImage.memoryNetwork(
+                        placeholder: kTransparentImage,
+                        image: course.creatorImageUrl,
+                        fit: BoxFit.cover,
+                        imageErrorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.person,
+                            color: secondaryTextColor,
+                            size: 18,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             
             // Course info
@@ -382,10 +402,11 @@ class _CoursesTabState extends State<CoursesTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Title
                   Text(
                     course.title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: textColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -393,39 +414,36 @@ class _CoursesTabState extends State<CoursesTab> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
+                  
+                  // Creator name
                   Text(
                     course.creatorName,
-                    style: const TextStyle(
-                      color: Colors.grey,
+                    style: TextStyle(
+                      color: secondaryTextColor,
                       fontSize: 12,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
-                  // Tags
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: course.tags.take(2).map((tag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
+                  
+                  // Duration
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        color: secondaryTextColor,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${course.durationMinutes ~/ 60}h ${course.durationMinutes % 60}m',
+                        style: TextStyle(
+                          color: secondaryTextColor,
+                          fontSize: 12,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A2A2A),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          tag,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../models/journal_model.dart';
 import '../../providers/journal_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/theme.dart';
 import '../../widgets/journal/journal_entry_card.dart';
 import '../../widgets/journal/journal_empty_state.dart';
 import 'journal_entry_screen.dart';
@@ -43,21 +45,28 @@ class _JournalTabState extends State<JournalTab> {
   @override
   Widget build(BuildContext context) {
     final journalProvider = Provider.of<JournalProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     final entries = journalProvider.entries;
     final isLoading = journalProvider.isLoading;
     final error = journalProvider.error;
+    
+    // Get theme-aware colors
+    final accentColor = themeProvider.accentColor;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       appBar: null,
       body: RefreshIndicator(
         onRefresh: () => journalProvider.refreshEntries(),
-        color: const Color(0xFFB4FF00),
-        backgroundColor: const Color(0xFF1E1E1E),
+        color: accentColor,
+        backgroundColor: surfaceColor,
         child: isLoading && entries.isEmpty
-            ? const Center(
+            ? Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
                 ),
               )
             : error != null && entries.isEmpty
@@ -95,16 +104,19 @@ class _JournalTabState extends State<JournalTab> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _navigateToNewEntry(context),
-        backgroundColor: const Color(0xFFB4FF00),
-        child: const Icon(
+        backgroundColor: accentColor,
+        child: Icon(
           Icons.add,
-          color: Colors.black,
+          color: themeProvider.accentTextColor,
         ),
       ),
     );
   }
 
   Widget _buildJournalList(List<JournalEntry> entries, BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final accentColor = themeProvider.accentColor;
+    
     // Group entries by month
     final groupedEntries = <String, List<JournalEntry>>{};
     
@@ -140,10 +152,10 @@ class _JournalTabState extends State<JournalTab> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 monthYear,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFB4FF00),
+                  color: accentColor,
                 ),
               ),
             ),
@@ -186,9 +198,12 @@ class _JournalTabState extends State<JournalTab> {
   }
 
   void _showFilterOptions(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

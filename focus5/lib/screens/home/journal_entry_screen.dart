@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../models/journal_model.dart';
 import '../../providers/journal_provider.dart';
 import '../../widgets/journal/journal_tag_selector.dart';
+import '../../providers/theme_provider.dart';
 
 class JournalEntryScreen extends StatefulWidget {
   final JournalEntry? existingEntry;
@@ -42,6 +43,9 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
       _selectedTags = List.from(widget.existingEntry!.tags);
       _prompt = widget.existingEntry!.prompt;
     } else {
+      // Initialize with current date for new entries
+      _selectedDate = DateTime.now();
+      
       // Get a random prompt for a new entry
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final journalProvider = Provider.of<JournalProvider>(context, listen: false);
@@ -60,15 +64,20 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           _isEditing ? 'Edit Journal Entry' : 'New Journal Entry',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: textColor,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -78,7 +87,7 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
             child: Text(
               'Save',
               style: TextStyle(
-                color: _isSaving ? Colors.grey : const Color(0xFFB4FF00),
+                color: _isSaving ? Colors.grey : accentColor,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
@@ -87,9 +96,9 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         ],
       ),
       body: _isSaving
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
               ),
             )
           : Form(
@@ -118,34 +127,39 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Widget _buildDateSelector() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     return GestureDetector(
       onTap: _selectDate,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
+          color: surfaceColor,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.calendar_today,
-              color: Color(0xFFB4FF00),
+              color: accentColor,
               size: 20,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 DateFormat('EEEE, MMMM d, y').format(_selectedDate),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 16,
                 ),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.arrow_drop_down,
-              color: Colors.white54,
+              color: textColor.withOpacity(0.7),
             ),
           ],
         ),
@@ -154,6 +168,11 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Future<void> _selectDate() async {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final accentColor = themeProvider.accentColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -162,12 +181,13 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFFB4FF00),
+            colorScheme: ColorScheme.dark(
+              primary: accentColor,
               onPrimary: Colors.black,
-              surface: Color(0xFF1E1E1E),
-              onSurface: Colors.white,
+              surface: surfaceColor,
+              onSurface: textColor,
             ),
+            dialogBackgroundColor: surfaceColor,
           ),
           child: child!,
         );
@@ -182,13 +202,18 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Widget _buildMoodSelector() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'How are you feeling?',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
@@ -205,17 +230,17 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFB4FF00) : const Color(0xFF2A2A2A),
+                      color: isSelected ? accentColor : surfaceColor,
                       borderRadius: BorderRadius.circular(16),
                       border: isSelected
-                          ? Border.all(color: const Color(0xFFB4FF00), width: 2)
+                          ? Border.all(color: accentColor, width: 2)
                           : null,
                     ),
                     child: Text(
                       mood.emoji,
                       style: TextStyle(
                         fontSize: 24,
-                        color: isSelected ? Colors.black : Colors.white,
+                        color: isSelected ? Colors.black : textColor,
                       ),
                     ),
                   ),
@@ -223,7 +248,7 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
                   Text(
                     mood.name,
                     style: TextStyle(
-                      color: isSelected ? const Color(0xFFB4FF00) : Colors.white,
+                      color: isSelected ? accentColor : textColor,
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
@@ -238,16 +263,21 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Widget _buildPromptSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Prompt',
               style: TextStyle(
-                color: Colors.white,
+                color: textColor,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
@@ -256,17 +286,17 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
               TextButton(
                 onPressed: _getNewPrompt,
                 child: Row(
-                  children: const [
+                  children: [
                     Icon(
                       Icons.refresh,
-                      color: Color(0xFFB4FF00),
+                      color: accentColor,
                       size: 16,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
                       'New Prompt',
                       style: TextStyle(
-                        color: Color(0xFFB4FF00),
+                        color: accentColor,
                         fontSize: 14,
                       ),
                     ),
@@ -279,13 +309,13 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2A),
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             _prompt,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: textColor,
               fontSize: 16,
               fontStyle: FontStyle.italic,
             ),
@@ -303,13 +333,17 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Widget _buildContentEditor() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Your Journal Entry',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
@@ -317,14 +351,14 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2A),
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TextFormField(
             controller: _contentController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
+            style: TextStyle(color: textColor),
+            decoration: InputDecoration(
               hintText: 'Write your thoughts here...',
               hintStyle: TextStyle(color: Colors.grey),
               border: InputBorder.none,
@@ -373,30 +407,34 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   void _confirmDelete() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text(
+        backgroundColor: surfaceColor,
+        title: Text(
           'Delete Journal Entry',
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        content: const Text(
+        content: Text(
           'Are you sure you want to delete this journal entry? This action cannot be undone.',
           style: TextStyle(
-            color: Colors.white70,
+            color: textColor.withOpacity(0.7),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(
-                color: Colors.white,
+                color: textColor,
               ),
             ),
           ),
@@ -457,6 +495,8 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
     });
     
     final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
     final content = _contentController.text.trim();
     
     bool success = false;
@@ -489,9 +529,9 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
       if (success) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Journal entry saved'),
-            backgroundColor: Color(0xFF333333),
+            backgroundColor: surfaceColor,
           ),
         );
       } else {

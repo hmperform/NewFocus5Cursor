@@ -8,7 +8,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/content_models.dart';
 import '../../providers/content_provider.dart';
+import '../../providers/theme_provider.dart';
 import 'coach_profile_screen.dart';
+import '../../utils/image_utils.dart';
 
 class ArticleDetailScreen extends StatelessWidget {
   final String articleId;
@@ -27,20 +29,27 @@ class ArticleDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contentProvider = Provider.of<ContentProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final article = contentProvider.getArticleById(articleId);
+    
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
     
     if (article == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: backgroundColor,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
+          iconTheme: IconThemeData(color: textColor),
         ),
-        body: const Center(
+        body: Center(
           child: Text(
             'Article not found',
-            style: TextStyle(color: Colors.white),
+            style: TextStyle(color: textColor),
           ),
         ),
       );
@@ -49,7 +58,7 @@ class ArticleDetailScreen extends StatelessWidget {
     final formattedDate = DateFormat('MMMM d, yyyy').format(article.publishedDate);
     
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: backgroundColor,
       body: CustomScrollView(
         slivers: [
           // App bar with image
@@ -57,26 +66,32 @@ class ArticleDetailScreen extends StatelessWidget {
             expandedHeight: 240,
             floating: false,
             pinned: true,
-            backgroundColor: const Color(0xFF1A1A1A),
+            backgroundColor: surfaceColor,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
                   // Article image
-                  FadeInImage.memoryNetwork(
-                    placeholder: kTransparentImage,
-                    image: article.thumbnailUrl,
-                    fit: BoxFit.cover,
-                    imageErrorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: const Color(0xFF2A2A2A),
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          color: Colors.white54,
-                          size: 48,
-                        ),
-                      );
-                    },
+                  SizedBox(
+                    height: MediaQuery.of(context).size.width * 0.7,
+                    width: double.infinity,
+                    child: article.thumbnailUrl.isNotEmpty
+                        ? ImageUtils.networkImageWithFallback(
+                            imageUrl: article.thumbnailUrl,
+                            width: double.infinity,
+                            height: MediaQuery.of(context).size.width * 0.7,
+                            fit: BoxFit.cover,
+                            backgroundColor: const Color(0xFF2A2A2A),
+                            errorColor: Colors.white54,
+                          )
+                        : Container(
+                            color: const Color(0xFF2A2A2A),
+                            child: const Icon(
+                              Icons.image_not_supported,
+                              color: Colors.white54,
+                              size: 50,
+                            ),
+                          ),
                   ),
                   // Gradient overlay for better visibility of title
                   Container(
@@ -98,12 +113,11 @@ class ArticleDetailScreen extends StatelessWidget {
             leading: Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: surfaceColor.withOpacity(0.5),
                 shape: BoxShape.circle,
               ),
               child: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                color: Colors.white,
+                icon: Icon(Icons.arrow_back, color: textColor),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -111,12 +125,11 @@ class ArticleDetailScreen extends StatelessWidget {
               Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: surfaceColor.withOpacity(0.5),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.share),
-                  color: Colors.white,
+                  icon: Icon(Icons.share, color: textColor),
                   onPressed: () => _shareArticle(context, article),
                 ),
               ),
@@ -136,73 +149,75 @@ class ArticleDetailScreen extends StatelessWidget {
                     children: [
                       Text(
                         article.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                           height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Author info and date
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CoachProfileScreen(
+                                coach: {
+                                  'id': article.authorId,
+                                  'name': article.authorName,
+                                  'imageUrl': article.authorImageUrl,
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        child: Row(
+                          children: [
+                            ImageUtils.avatarWithFallback(
+                              imageUrl: article.authorImageUrl,
+                              radius: 20,
+                              name: article.authorName,
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  article.authorName,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                ),
+                                Text(
+                                  formattedDate,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: secondaryTextColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => CoachProfileScreen(
-                                    coach: {
-                                      'id': article.authorId,
-                                      'name': article.authorName,
-                                      'imageUrl': article.authorImageUrl,
-                                    },
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundImage: NetworkImage(article.authorImageUrl),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  article.authorName,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            formattedDate,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
                           Icon(
                             Icons.access_time,
                             size: 16,
-                            color: Colors.grey[400],
+                            color: secondaryTextColor,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             '${article.readTimeMinutes} min read',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[400],
+                              color: secondaryTextColor,
                             ),
                           ),
                         ],
@@ -215,21 +230,21 @@ class ArticleDetailScreen extends StatelessWidget {
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2A),
+                              color: surfaceColor,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
                               tag,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFFB4FF00),
+                                color: accentColor,
                               ),
                             ),
                           );
                         }).toList(),
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFF2A2A2A)),
+                      Divider(color: surfaceColor),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -241,87 +256,91 @@ class ArticleDetailScreen extends StatelessWidget {
                   child: MarkdownBody(
                     data: article.content,
                     styleSheet: MarkdownStyleSheet(
-                      h1: const TextStyle(
+                      h1: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                         height: 1.4,
                       ),
-                      h2: const TextStyle(
+                      h2: TextStyle(
                         fontSize: 20, 
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                         height: 1.4,
                       ),
-                      h3: const TextStyle(
+                      h3: TextStyle(
                         fontSize: 18, 
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                         height: 1.4,
                       ),
-                      p: const TextStyle(
+                      p: TextStyle(
                         fontSize: 16,
-                        color: Colors.white,
+                        color: textColor,
                         height: 1.6,
                       ),
-                      strong: const TextStyle(
+                      strong: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: textColor,
                       ),
                       em: TextStyle(
                         fontStyle: FontStyle.italic,
-                        color: Colors.grey[300],
+                        color: secondaryTextColor,
                       ),
                       blockquote: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey[400],
+                        color: secondaryTextColor,
                         fontStyle: FontStyle.italic,
                       ),
-                      blockquoteDecoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(
-                            color: Colors.grey[700]!,
-                            width: 4,
-                          ),
-                        ),
+                      a: TextStyle(
+                        color: accentColor,
+                        decoration: TextDecoration.underline,
                       ),
-                      blockquotePadding: const EdgeInsets.only(left: 16),
-                      listBullet: const TextStyle(
-                        color: Color(0xFFB4FF00),
-                        fontSize: 16,
+                      code: TextStyle(
+                        backgroundColor: surfaceColor,
+                        color: accentColor,
+                        fontSize: 14,
                       ),
-                      listIndent: 24,
+                      codeblockPadding: const EdgeInsets.all(16),
+                      codeblockDecoration: BoxDecoration(
+                        color: surfaceColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    onTapLink: (text, href, title) {
+                    onTapLink: (text, href, title) async {
                       if (href != null) {
-                        launchUrl(Uri.parse(href));
+                        final url = Uri.parse(href);
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url);
+                        }
                       }
                     },
                   ),
                 ),
                 
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
                 
-                // More from author section
+                // Related articles
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'More from this author',
+                      Text(
+                        'More from ${article.authorName}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 16),
                       _buildRelatedArticles(context, contentProvider, article),
-                      const SizedBox(height: 80),
                     ],
                   ),
                 ),
+                
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -329,8 +348,13 @@ class ArticleDetailScreen extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildRelatedArticles(BuildContext context, ContentProvider contentProvider, Article currentArticle) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
     final relatedArticles = contentProvider.getArticlesByAuthor(currentArticle.authorId)
         .where((article) => article.id != currentArticle.id)
         .toList();
@@ -340,7 +364,7 @@ class ArticleDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Text(
           'No other articles from this author yet.',
-          style: TextStyle(color: Colors.grey[400]),
+          style: TextStyle(color: secondaryTextColor),
         ),
       );
     }
@@ -366,7 +390,7 @@ class ArticleDetailScreen extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
+              color: surfaceColor,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -384,10 +408,10 @@ class ArticleDetailScreen extends StatelessWidget {
                       return Container(
                         width: 80,
                         height: 80,
-                        color: const Color(0xFF2A2A2A),
-                        child: const Icon(
+                        color: surfaceColor,
+                        child: Icon(
                           Icons.image_not_supported,
-                          color: Colors.white54,
+                          color: secondaryTextColor,
                         ),
                       );
                     },
@@ -402,10 +426,10 @@ class ArticleDetailScreen extends StatelessWidget {
                         article.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -413,7 +437,7 @@ class ArticleDetailScreen extends StatelessWidget {
                         formattedDate,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[400],
+                          color: secondaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -421,7 +445,7 @@ class ArticleDetailScreen extends StatelessWidget {
                         '${article.readTimeMinutes} min read',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[400],
+                          color: secondaryTextColor,
                         ),
                       ),
                     ],
