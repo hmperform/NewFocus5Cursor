@@ -92,8 +92,13 @@ class AudioProvider extends ChangeNotifier {
       
       _isInitialized = true;
       notifyListeners();
+      
+      return Future.value(); // Ensure we complete the Future
     } catch (e) {
       debugPrint('Error initializing audio: $e');
+      _isInitialized = true; // Set to initialized even on error to prevent retries
+      notifyListeners();
+      return Future.value(); // Complete the Future even on error
     }
   }
   
@@ -140,6 +145,10 @@ class AudioProvider extends ChangeNotifier {
     
     if (audioData != null) {
       _currentAudio = audioData;
+      // Set duration from the model if available
+      if (audioData.durationMinutes > 0) {
+        _totalDuration = audioData.durationMinutes * 60.0;
+      }
     }
     
     // Cache the current audio data
@@ -273,21 +282,4 @@ class AudioProvider extends ChangeNotifier {
       notifyListeners();
     });
   }
-}
-
-// Simple model class for DailyAudio to support typescript in this file
-class DailyAudio {
-  final String id;
-  final String title;
-  final String description;
-  final String audioUrl;
-  final String imageUrl;
-  
-  DailyAudio({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.audioUrl,
-    required this.imageUrl,
-  });
 } 

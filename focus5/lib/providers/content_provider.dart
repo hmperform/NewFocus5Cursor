@@ -31,13 +31,22 @@ class ContentProvider with ChangeNotifier {
 
     try {
       // In a real app, this would fetch from API
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Use a shorter delay to improve loading time
+      await Future.delayed(const Duration(milliseconds: 300));
       
       // Immediately load data from DummyData
       _courses = DummyData.dummyCourses;
       _audioModules = DummyData.dummyAudioModules;
       _articles = DummyData.dummyArticles;
       _coaches = DummyData.dummyCoaches;
+      
+      // Set today's audio
+      _todayAudio = _audioModules.isNotEmpty 
+        ? _audioModules.firstWhere(
+            (audio) => audio.datePublished.day == DateTime.now().day,
+            orElse: () => _audioModules.first,
+          )
+        : null;
       
       // Filter content based on university access if applicable
       if (universityCode != null) {
@@ -63,9 +72,16 @@ class ContentProvider with ChangeNotifier {
       _isLoading = false;
       _errorMessage = 'Failed to load content: ${e.toString()}';
       print('Error in initContent: ${e.toString()}');
+      
+      // In case of error, make sure we have at least some data
+      if (_courses.isEmpty) _courses = DummyData.dummyCourses;
+      if (_audioModules.isEmpty) _audioModules = DummyData.dummyAudioModules;
+      if (_articles.isEmpty) _articles = DummyData.dummyArticles;
+      if (_coaches.isEmpty) _coaches = DummyData.dummyCoaches;
     }
     
     notifyListeners();
+    return Future.value(); // Explicitly complete the Future
   }
 
   Future<void> loadCourses() async {
@@ -314,24 +330,16 @@ class ContentProvider with ChangeNotifier {
     return articles.take(limit).toList();
   }
 
-  // Synchronous version of loadCourses for immediate use
+  // Synchronous method to load courses immediately
   void loadCoursesSync() {
     _courses = DummyData.dummyCourses;
     
     // Filter based on university access if needed
     if (_universityCode != null) {
-      _courses = _courses.where((course) {
-        // If course is not university exclusive, it's available to everyone
-        if (!course.universityExclusive) return true;
-        
-        // If course is university exclusive, check if user has access
-        if (course.universityAccess != null && 
-            course.universityAccess!.contains(_universityCode)) {
-          return true;
-        }
-        
-        return false;
-      }).toList();
+      _courses = _courses.where((course) => 
+        !course.universityExclusive || 
+        (course.universityAccess?.contains(_universityCode) ?? false)
+      ).toList();
     }
   }
 } 

@@ -4,6 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/onboarding/mindset_assessment_screen.dart';
+import 'screens/onboarding/sport_selection_screen.dart';
+import 'screens/onboarding/profile_setup_screen.dart';
+import 'screens/onboarding/mental_fitness_questionnaire.dart';
+import 'screens/onboarding/mental_fitness_results.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -152,6 +156,9 @@ class Focus5App extends StatelessWidget {
         '/signup': (context) => const SignupScreen(),
         '/home': (context) => const HomeScreen(),
         '/assessment': (context) => const MindsetAssessmentScreen(),
+        '/sport_selection': (context) => const SportSelectionScreen(),
+        '/profile_setup': (context) => const ProfileSetupScreen(),
+        '/mental_fitness_questionnaire': (context) => const MentalFitnessQuestionnaire(),
         '/journal_entry': (context) => const JournalEntryScreen(),
         '/journal': (context) => const JournalScreen(),
         '/paywall': (context) => const PaywallScreen(),
@@ -168,6 +175,28 @@ class Focus5App extends StatelessWidget {
             ),
           );
         }
+        
+        if (settings.name == '/mental_fitness_results') {
+          final args = settings.arguments as Map<String, dynamic>? ?? {
+            'goals': <String>[],
+            'personalityType': 'Balanced',
+            'stressScore': 0.5,
+            'pressureResponse': '',
+            'learningPreferences': <String>[],
+          };
+          
+          return MaterialPageRoute(
+            builder: (context) => MentalFitnessResults(
+              goals: args['goals'] as List<String>,
+              customGoal: args['customGoal'] as String?,
+              personalityType: args['personalityType'] as String,
+              stressScore: args['stressScore'] as double,
+              pressureResponse: args['pressureResponse'] as String,
+              learningPreferences: args['learningPreferences'] as List<String>,
+            ),
+          );
+        }
+        
         return null;
       },
     );

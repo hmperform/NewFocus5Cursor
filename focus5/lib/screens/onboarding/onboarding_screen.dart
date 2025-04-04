@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../constants/dummy_data.dart';
 import '../auth/signup_screen.dart';
 import 'mindset_assessment_screen.dart';
+import 'sport_selection_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -305,10 +306,10 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
     
     if (!mounted) return;
     
-    // Navigate to mindset assessment instead of directly to signup
+    // Navigate to sport selection screen first
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const MindsetAssessmentScreen(),
+        builder: (context) => const SportSelectionScreen(),
       ),
     );
   }

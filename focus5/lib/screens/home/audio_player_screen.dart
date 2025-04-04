@@ -4,6 +4,7 @@ import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'dart:async';
 
 import '../../providers/audio_provider.dart';
+import '../../models/content_models.dart';
 import 'package:provider/provider.dart';
 
 class AudioPlayerScreen extends StatefulWidget {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:transparent_image/transparent_image.dart';
+import 'dart:async';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
@@ -26,21 +27,86 @@ class _DashboardTabState extends State<DashboardTab> {
   @override
   void initState() {
     super.initState();
+    
+    // Wait until build completes before loading content
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-      if (contentProvider.courses.isEmpty) {
-        contentProvider.initContent(null);
-      }
-      
-      // Reset scroll position to top
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      _safeLoadContent();
+    });
+  }
+
+  Future<void> _safeLoadContent() {
+    if (!mounted) return Future.value();
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
+    // Create a completer to track when loading is complete
+    final completer = Completer<void>();
+    
+    // Safe load with timeout
+    Future.delayed(Duration.zero, () async {
+      try {
+        await _loadDashboardContent();
+        completer.complete();
+      } catch (e) {
+        print('Error loading dashboard: $e');
+        completer.complete(); // Complete the future even on error
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     });
+    
+    // Safety timeout
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _isLoading) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }
+    });
+    
+    return completer.future;
+  }
+
+  // Load content in a separate method
+  Future<void> _loadDashboardContent() async {
+    try {
+      // Get providers safely
+      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      if (contentProvider.courses.isEmpty) {
+        final userId = authProvider.currentUser?.id;
+        // Load content here
+        try {
+          await Future.microtask(() => null); // Delay to prevent build conflicts
+          if (mounted) {
+            await contentProvider.initContent(userId);
+          }
+        } catch (e) {
+          print('Content initialization error: $e');
+        }
+      }
+      
+      // Refresh today's audio if needed
+      try {
+        if (mounted) {
+          await contentProvider.refreshTodayAudio();
+        }
+      } catch (e) {
+        print('Audio refresh error: $e');
+      }
+    } catch (e) {
+      print('Dashboard loading error: $e');
+    }
   }
 
   @override
@@ -54,7 +120,6 @@ class _DashboardTabState extends State<DashboardTab> {
     final userProvider = Provider.of<UserProvider>(context);
     final contentProvider = Provider.of<ContentProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final user = userProvider.user;
     
     // Get theme-aware colors
     final accentColor = themeProvider.accentColor;
@@ -62,55 +127,49 @@ class _DashboardTabState extends State<DashboardTab> {
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
     final surfaceColor = Theme.of(context).colorScheme.surface;
 
-    if (user == null) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-        ),
-      );
-    }
-
+    // Simplified build with overlay for loading
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-              ),
-            )
-          : RefreshIndicator(
-              color: accentColor,
-              backgroundColor: surfaceColor,
-              onRefresh: () async {
-                setState(() {
-                  _isLoading = true;
-                });
-                
-                // Refresh content
-                await contentProvider.refreshTodayAudio();
-                
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8), // Add space at the top
-                      _buildDayStreak(),
-                      _buildFocusAreas(),
-                      _buildFeaturedCourses(context),
-                      _buildStartYourDay(context),
-                      const SizedBox(height: 24), // Add space at the bottom for better UX
-                    ],
-                  ),
+      body: RefreshIndicator(
+        color: accentColor,
+        backgroundColor: surfaceColor,
+        onRefresh: () {
+          return _safeLoadContent();
+        },
+        child: Stack(
+          children: [
+            // Always show content, even if loading
+            SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    _buildDayStreak(),
+                    _buildFocusAreas(),
+                    _buildFeaturedCourses(context),
+                    _buildStartYourDay(context),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
             ),
+            
+            // Loading indicator overlay
+            if (_isLoading)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 

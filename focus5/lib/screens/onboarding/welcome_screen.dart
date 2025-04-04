@@ -3,19 +3,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   final String userName;
   
   const WelcomeScreen({
     Key? key, 
-    this.userName = 'Jen',
+    this.userName = 'Athlete',
   }) : super(key: key);
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  String? _selectedSport;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSelections();
+  }
+  
+  Future<void> _loadUserSelections() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _selectedSport = prefs.getString('selected_sport');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final accentColor = themeProvider.accentColor;
     final textColor = Colors.white;
+    
+    // Simplified welcome text
+    String welcomeText = 'Welcome aboard, ${widget.userName}!';
+    
+    // Optional sport-specific tagline
+    String tagline = _selectedSport != null && _selectedSport != 'Other'
+        ? "Mental Training for $_selectedSport Athletes"
+        : "Mental Training for Athletes";
     
     return Scaffold(
       backgroundColor: const Color(0xFF4527A0), // Deep purple background
@@ -34,7 +62,7 @@ class WelcomeScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            'Welcome aboard, $userName!',
+                            welcomeText,
                             style: const TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
@@ -163,49 +191,43 @@ class WelcomeScreen extends StatelessWidget {
                     const SizedBox(height: 60),
                     
                     // Tagline
-                    const Text(
-                      "Mental Training for Athletes",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                    Text(
+                      tagline,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white70,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
             ),
             
-            // Bottom button
+            // Get started button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-              child: Container(
+              padding: const EdgeInsets.all(24.0),
+              child: SizedBox(
                 width: double.infinity,
                 height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFB4FF00),
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFB4FF00).withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: TextButton(
-                  onPressed: () => _navigateToHome(context),
-                  style: TextButton.styleFrom(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacementNamed('/home');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB4FF00),
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    elevation: 4,
                   ),
                   child: const Text(
-                    'Let\'s go',
+                    'LET\'S GO',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF121212),
                     ),
                   ),
                 ),
@@ -219,12 +241,12 @@ class WelcomeScreen extends StatelessWidget {
   
   Widget _buildLightRay(double length, double angle) {
     return Transform.rotate(
-      angle: angle * 3.14 / 180,
+      angle: angle * 3.14159 / 180,
       child: Container(
         width: 4,
         height: length,
         decoration: BoxDecoration(
-          color: const Color(0xFFB4FF00),
+          color: const Color(0xFFB4FF00).withOpacity(0.7),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -233,28 +255,23 @@ class WelcomeScreen extends StatelessWidget {
   
   Widget _buildThoughtBubble(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.2),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        border: Border.all(
+          color: color.withOpacity(0.5),
+          width: 1,
+        ),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
           fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: color,
         ),
       ),
     );
-  }
-  
-  void _navigateToHome(BuildContext context) async {
-    // Mark onboarding as completed
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_first_launch', false);
-    
-    Navigator.of(context).pushReplacementNamed('/home');
   }
 } 
