@@ -137,6 +137,36 @@ Where `<device>` can be:
 - Device ID for physical devices
 - Emulator name for Android/iOS emulators
 
+### Running with Microsoft Edge
+
+To run the application specifically in Microsoft Edge browser (recommended for Windows users):
+
+```bash
+# Navigate to the project directory
+cd focus5
+
+# Run the app in Edge
+flutter run -d edge
+```
+
+If you encounter any issues, you can try the following troubleshooting steps:
+
+1. Ensure Edge is installed and is the default browser or is running
+2. Verify that the Flutter web platform is enabled:
+   ```bash
+   flutter config --enable-web
+   ```
+3. If you receive an error about multiple devices, specify Edge explicitly:
+   ```bash
+   flutter devices  # List all available devices
+   flutter run -d edge  # Target Edge specifically
+   ```
+4. For hot reloading while the app is running, press `r` in the terminal
+5. For a complete restart, press `R` (capital R) in the terminal
+6. To quit the running app, press `q` in the terminal
+
+Note: The first launch in Edge may take some time as Flutter compiles the Dart code to JavaScript and initializes the web environment.
+
 ## Future Enhancements
 
 Planned features and improvements include:
