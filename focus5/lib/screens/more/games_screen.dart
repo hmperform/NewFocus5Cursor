@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import 'concentration_grid_game.dart';
+import 'word_search_game.dart';
 
 class GamesScreen extends StatelessWidget {
   const GamesScreen({Key? key}) : super(key: key);
@@ -29,6 +30,23 @@ class GamesScreen extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (context) => const ConcentrationGridGame(),
+            ),
+          );
+        },
+      },
+      {
+        'title': 'Word Search',
+        'description': 'Find hidden words in a letter grid',
+        'icon': Icons.search,
+        'color': Colors.teal[700],
+        'difficulty': 'Easy',
+        'timeEstimate': '3-8 min',
+        'isAvailable': true,
+        'navigate': () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const WordSearchGame(),
             ),
           );
         },
