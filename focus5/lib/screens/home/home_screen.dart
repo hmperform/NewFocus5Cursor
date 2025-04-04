@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/content_provider.dart';
@@ -23,26 +24,34 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   int _currentIndex = 0;
   bool _isInitialized = false;
   bool _isLoading = true;
+  bool _isCriticalDataLoaded = false;
+  DateTime? _lastContentRefresh;
   
-  final List<Widget> _tabs = [
-    const DashboardTab(),
-    const ExploreTab(),
-    const DMsTab(),
-    const ProfileTab(),
-    const MoreTab(),
-  ];
+  final List<Widget> _tabs = [];
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _initializeTabs();
     // Schedule initialization after the first frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
+  }
+
+  void _initializeTabs() {
+    _tabs.add(const DashboardTab());
+    _tabs.add(const ExploreTab());
+    _tabs.add(const DMsTab());
+    _tabs.add(const ProfileTab());
+    _tabs.add(const MoreTab());
   }
 
   Future<void> _initializeData() async {
@@ -59,32 +68,84 @@ class _HomeScreenState extends State<HomeScreen> {
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    // For now, we'll assume the user is logged in since we haven't implemented auth yet
-    // if (!authProvider.isLoggedIn) {
-    //   Navigator.of(context).pushReplacement(
-    //     MaterialPageRoute(builder: (context) => const LoginScreen()),
-    //   );
-    //   return;
-    // }
+    // Check when we last refreshed content
+    final prefs = await SharedPreferences.getInstance();
+    final lastRefreshStr = prefs.getString('last_content_refresh');
+    if (lastRefreshStr != null) {
+      _lastContentRefresh = DateTime.parse(lastRefreshStr);
+    }
 
-    // Initialize data
+    // Initialize critical data first
     try {
-      // For now, we'll skip initialization since we haven't implemented these methods yet
-      // await Future.wait([
-      //   userProvider.initializeUser(),
-      //   contentProvider.initializeContent(),
-      //   audioProvider.initializeAudio(),
-      // ]);
+      // Load cached user data if available
+      final cachedUserData = prefs.getString('cached_user_data');
+      if (cachedUserData != null) {
+        // Parse and set cached user data
+        // In a real app, you would deserialize the JSON data
+        // For now, we'll use the demo implementation
+      }
+      
+      // Load cached content data if available
+      final cachedContentData = prefs.getString('cached_content_data');
+      if (cachedContentData != null && !_shouldRefreshContent()) {
+        // Parse and set cached content data
+        // In a real app, you would deserialize the JSON data
+      } else {
+        // Initialize only essential content for immediate display
+        await contentProvider.initContent(null);
+        
+        // Save the refresh timestamp
+        await prefs.setString('last_content_refresh', DateTime.now().toIso8601String());
+        
+        // Cache the content data
+        // In a real app, you would serialize the data to JSON
+        // await prefs.setString('cached_content_data', serializedContentData);
+      }
 
       setState(() {
-        _isInitialized = true;
+        _isCriticalDataLoaded = true;
         _isLoading = false;
       });
+
+      // Load non-critical data in the background
+      _loadRemainingDataInBackground();
     } catch (e) {
       // Handle initialization error
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  bool _shouldRefreshContent() {
+    if (_lastContentRefresh == null) return true;
+    
+    // Refresh content if it's been more than 6 hours
+    final now = DateTime.now();
+    final difference = now.difference(_lastContentRefresh!);
+    return difference.inHours > 6;
+  }
+
+  Future<void> _loadRemainingDataInBackground() async {
+    // Load non-essential data that doesn't block UI
+    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    
+    try {
+      // Load articles, coaches, etc.
+      await contentProvider.loadArticles();
+      await contentProvider.loadCoaches();
+      
+      // Initialize audio content
+      if (audioProvider.currentAudio == null) {
+        await audioProvider.initializeAudio();
+      }
+      
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (e) {
+      print('Error loading background data: ${e.toString()}');
     }
   }
 
@@ -96,132 +157,75 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onBackground;
     final accentColor = themeProvider.accentColor;
 
-    return WillPopScope(
-      onWillPop: () async => false,
-      child: Scaffold(
+    if (_isLoading && !_isCriticalDataLoaded) {
+      return Scaffold(
         backgroundColor: backgroundColor,
-        appBar: _currentIndex == 0 
-            ? AppBar(
-                automaticallyImplyLeading: false,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                title: IconButton(
-                  icon: Icon(
-                    Icons.settings,
-                    color: textColor,
-                  ),
-                  onPressed: () {
-                    // Settings functionality
-                  },
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Loading your experience...",
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-                actions: [
-                  IconButton(
-                    icon: Icon(Icons.search, color: textColor),
-                    onPressed: () {
-                      setState(() {
-                        _currentIndex = 1;
-                      });
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.notifications_none, color: textColor),
-                    onPressed: () {
-                      // Notifications
-                    },
-                  ),
-                  Container(
-                    margin: const EdgeInsets.only(right: 16.0),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Stack(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.local_fire_department, color: accentColor),
-                          onPressed: () {
-                            // Streak/fire functionality
-                          },
-                        ),
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '1',
-                              style: TextStyle(
-                                color: themeProvider.accentTextColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              )
-            : _currentIndex == 1 || _currentIndex == 4
-                ? null
-                : AppBar(
-                    automaticallyImplyLeading: false,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    title: Text(
-                      _currentIndex == 2 ? 'Messages' : 'Profile',
-                      style: TextStyle(
-                        color: textColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _tabs[_currentIndex],
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _onNavTapped,
-          backgroundColor: surfaceColor,
-          destinations: [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Explore',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.chat_outlined),
-              selectedIcon: Icon(Icons.chat),
-              label: 'DMs',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.more_horiz),
-              selectedIcon: Icon(Icons.more_horiz),
-              label: 'More',
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _tabs,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: _onNavTapped,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: surfaceColor,
+        selectedItemColor: accentColor,
+        unselectedItemColor: textColor.withOpacity(0.5),
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore_rounded),
+            label: 'Explore',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.forum_rounded),
+            label: 'DMs',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
+            label: 'Profile',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.more_horiz_rounded),
+            label: 'More',
+          ),
+        ],
       ),
     );
   }

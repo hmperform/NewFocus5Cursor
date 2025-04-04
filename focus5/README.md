@@ -89,6 +89,12 @@ focus5/
 ### Feature Additions
 - Added date selection feature to journal entries
 - Improved visibility of chat reactions
+- Added interactive mindset assessment to the onboarding flow with the following features:
+  - Stress management check with emoji slider and haptic feedback
+  - Focus under pressure scenario with thought bubble options
+  - Confidence reflection with visual milestone slider
+  - Resilience assessment with expandable pro tips
+  - Motivation ranking with drag-and-drop prioritization
 - Added Word Search game with the following capabilities:
   - 12x12 grid with words hidden in various directions
   - Tap-based selection (first letter then last letter)

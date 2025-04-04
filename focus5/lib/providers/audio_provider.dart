@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/content_models.dart';
 
 class AudioProvider extends ChangeNotifier {
   // Audio player instance
@@ -16,6 +18,7 @@ class AudioProvider extends ChangeNotifier {
   bool _isFullScreenPlayerOpen = false;
   double _currentPosition = 0;
   double _totalDuration = 179; // Default to 2:59 in seconds
+  bool _isInitialized = false;
   
   // Timer for simulated playback
   Timer? _playbackTimer;
@@ -31,6 +34,11 @@ class AudioProvider extends ChangeNotifier {
   double get currentPosition => _currentPosition;
   double get totalDuration => _totalDuration;
   AudioPlayer get audioPlayer => _audioPlayer;
+  bool get isInitialized => _isInitialized;
+  DailyAudio? get currentAudio => _currentAudio;
+  
+  // Reference to last played audio for resuming
+  DailyAudio? _currentAudio;
 
   AudioProvider() {
     _initAudioPlayer();
@@ -53,6 +61,40 @@ class AudioProvider extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  // Initialize audio with cached data if available
+  Future<void> initializeAudio() async {
+    if (_isInitialized) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Try to load cached audio state
+      final cachedTitle = prefs.getString('audio_title');
+      final cachedSubtitle = prefs.getString('audio_subtitle');
+      final cachedUrl = prefs.getString('audio_url');
+      final cachedImageUrl = prefs.getString('audio_image_url');
+      final cachedPosition = prefs.getDouble('audio_position') ?? 0.0;
+      
+      // If we have cached audio data, restore it
+      if (cachedTitle != null && cachedUrl != null) {
+        _title = cachedTitle;
+        _subtitle = cachedSubtitle;
+        _audioUrl = cachedUrl;
+        _imageUrl = cachedImageUrl;
+        _currentPosition = cachedPosition;
+        
+        // Don't auto-play, just prepare the player
+        _isPlaying = false;
+        _showMiniPlayer = false;
+      }
+      
+      _isInitialized = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error initializing audio: $e');
+    }
   }
   
   // Start simulated playback timer
@@ -84,8 +126,9 @@ class AudioProvider extends ChangeNotifier {
     String title,
     String subtitle,
     String audioUrl,
-    String imageUrl,
-  ) async {
+    String imageUrl, {
+    DailyAudio? audioData,
+  }) async {
     if (_disposed) return;
     
     _title = title;
@@ -94,6 +137,13 @@ class AudioProvider extends ChangeNotifier {
     _imageUrl = imageUrl;
     _isPlaying = true;
     _showMiniPlayer = !_isFullScreenPlayerOpen;
+    
+    if (audioData != null) {
+      _currentAudio = audioData;
+    }
+    
+    // Cache the current audio data
+    _cacheAudioData();
     
     // Start simulated playback
     _startPlaybackSimulation();
@@ -104,12 +154,30 @@ class AudioProvider extends ChangeNotifier {
     });
   }
 
+  // Cache current audio data for persistence
+  Future<void> _cacheAudioData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      if (_title != null) prefs.setString('audio_title', _title!);
+      if (_subtitle != null) prefs.setString('audio_subtitle', _subtitle!);
+      if (_audioUrl != null) prefs.setString('audio_url', _audioUrl!);
+      if (_imageUrl != null) prefs.setString('audio_image_url', _imageUrl!);
+      prefs.setDouble('audio_position', _currentPosition);
+    } catch (e) {
+      debugPrint('Error caching audio data: $e');
+    }
+  }
+
   // Pause the current audio
   void pauseAudio() {
     if (_disposed) return;
     
     _isPlaying = false;
     // _audioPlayer.pause();
+    
+    // Cache current position
+    _cacheAudioData();
     
     // Use microtask to avoid calling during widget tree build/disposal
     Future.microtask(() {
@@ -168,6 +236,10 @@ class AudioProvider extends ChangeNotifier {
     
     // _audioPlayer.seek(Duration(seconds: seconds.toInt()));
     _currentPosition = seconds;
+    
+    // Cache updated position
+    _cacheAudioData();
+    
     notifyListeners();
   }
 
@@ -201,4 +273,21 @@ class AudioProvider extends ChangeNotifier {
       notifyListeners();
     });
   }
+}
+
+// Simple model class for DailyAudio to support typescript in this file
+class DailyAudio {
+  final String id;
+  final String title;
+  final String description;
+  final String audioUrl;
+  final String imageUrl;
+  
+  DailyAudio({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.audioUrl,
+    required this.imageUrl,
+  });
 } 

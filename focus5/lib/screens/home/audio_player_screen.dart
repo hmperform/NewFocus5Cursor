@@ -11,6 +11,7 @@ class AudioPlayerScreen extends StatefulWidget {
   final String subtitle;
   final String audioUrl;
   final String? imageUrl;
+  final DailyAudio? audioData;
 
   const AudioPlayerScreen({
     Key? key,
@@ -18,6 +19,7 @@ class AudioPlayerScreen extends StatefulWidget {
     required this.subtitle,
     this.audioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
     this.imageUrl,
+    this.audioData,
   }) : super(key: key);
 
   @override
@@ -125,6 +127,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
             widget.subtitle, 
             widget.audioUrl,
             widget.imageUrl ?? 'https://picsum.photos/800/800?random=42',
+            audioData: widget.audioData,
           );
           
           // Start playback simulation

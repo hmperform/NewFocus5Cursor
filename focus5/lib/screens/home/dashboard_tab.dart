@@ -21,6 +21,7 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   bool _isLoading = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -30,7 +31,22 @@ class _DashboardTabState extends State<DashboardTab> {
       if (contentProvider.courses.isEmpty) {
         contentProvider.initContent(null);
       }
+      
+      // Reset scroll position to top
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -78,15 +94,20 @@ class _DashboardTabState extends State<DashboardTab> {
                 });
               },
               child: SingleChildScrollView(
+                controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDayStreak(),
-                    _buildFocusAreas(),
-                    _buildFeaturedCourses(context),
-                    _buildStartYourDay(context),
-                  ],
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8), // Add space at the top
+                      _buildDayStreak(),
+                      _buildFocusAreas(),
+                      _buildFeaturedCourses(context),
+                      _buildStartYourDay(context),
+                      const SizedBox(height: 24), // Add space at the bottom for better UX
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -100,50 +121,66 @@ class _DashboardTabState extends State<DashboardTab> {
     
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: List.generate(7, (index) {
-            final bool isActive = index == 0;
-            final String day = index == 0 ? 'MO' : 
-                              index == 1 ? 'TU' : 
-                              index == 2 ? 'WE' : 
-                              index == 3 ? 'TH' : 
-                              index == 4 ? 'FR' :
-                              index == 5 ? 'SA' : 'SU';
-            
-            return Container(
-              margin: const EdgeInsets.only(right: 16),
-              child: Column(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isActive ? accentColor : surfaceColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: TextStyle(
-                          color: isActive ? themeProvider.accentTextColor : Colors.grey,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Daily Streak',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onBackground,
+              ),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: List.generate(7, (index) {
+                final bool isActive = index == 0;
+                final String day = index == 0 ? 'MO' : 
+                                index == 1 ? 'TU' : 
+                                index == 2 ? 'WE' : 
+                                index == 3 ? 'TH' : 
+                                index == 4 ? 'FR' :
+                                index == 5 ? 'SA' : 'SU';
+                
+                return Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isActive ? accentColor : surfaceColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            day,
+                            style: TextStyle(
+                              color: isActive ? themeProvider.accentTextColor : Colors.grey,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      isActive 
+                        ? Icon(Icons.check_circle, color: accentColor, size: 14)
+                        : const SizedBox(height: 14),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  isActive 
-                    ? Icon(Icons.check_circle, color: accentColor, size: 14)
-                    : const SizedBox(height: 14),
-                ],
-              ),
-            );
-          }),
-        ),
+                );
+              }),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -422,7 +459,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Widget _buildStartYourDay(BuildContext context) {
     final containerWidth = MediaQuery.of(context).size.width - 32; // Full width minus padding
-    final containerHeight = containerWidth * 0.6; // Make height 60% of width instead of 1:1 ratio
+    final containerHeight = containerWidth * 0.5; // Make height 50% of width for a better aspect ratio
     final themeProvider = Provider.of<ThemeProvider>(context);
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
@@ -440,7 +477,7 @@ class _DashboardTabState extends State<DashboardTab> {
               fontSize: 20,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
               final imageUrl = 'https://picsum.photos/800/800?random=50';
@@ -456,110 +493,154 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               );
             },
-            child: Container(
-              width: containerWidth,
-              height: containerHeight, // Using the new proportional height
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(16),
-                image: const DecorationImage(
-                  image: NetworkImage('https://picsum.photos/800/500?random=50'),
-                  fit: BoxFit.cover,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: containerWidth,
+                height: containerHeight,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E1E1E),
                 ),
-              ),
-              child: Stack(
-                children: [
-                  // Gradient overlay
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7),
-                          Colors.black.withOpacity(0.9),
-                        ],
-                        stops: const [0.6, 0.85, 1.0],
+                child: Stack(
+                  children: [
+                    // Background image with fade-in effect
+                    Positioned.fill(
+                      child: FadeInImage.memoryNetwork(
+                        placeholder: kTransparentImage,
+                        image: 'https://picsum.photos/800/400?random=50',
+                        fit: BoxFit.cover,
+                        fadeInDuration: const Duration(milliseconds: 300),
                       ),
                     ),
-                  ),
-                  
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Daily Focus Session',
-                          style: TextStyle(
-                            color: textColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
+                    
+                    // Gradient overlay for better text readability
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.6),
+                              Colors.black.withOpacity(0.9),
+                            ],
+                            stops: const [0.5, 0.8, 1.0],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Morning Mental Preparation • 10 min',
-                          style: TextStyle(
-                            color: secondaryTextColor,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
+                      ),
+                    ),
+                    
+                    // Content overlay
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFB4FF00),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                children: const [
-                                  Icon(
-                                    Icons.play_arrow,
-                                    color: Colors.black,
-                                    size: 18,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Play',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              'Daily Focus Session',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
+                            const SizedBox(height: 4),
+                            Text(
+                              'Morning Mental Preparation • 10 min',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
                               ),
-                              child: const Icon(
-                                Icons.bookmark_border,
-                                color: Colors.white,
-                                size: 18,
-                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                // Play button
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFB4FF00),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFB4FF00).withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(
+                                        Icons.play_arrow,
+                                        color: Colors.black,
+                                        size: 18,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Play',
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Bookmark button
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.bookmark_border,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    
+                    // Session type indicator
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFB4FF00), width: 1),
+                        ),
+                        child: const Text(
+                          'Today',
+                          style: TextStyle(
+                            color: Color(0xFFB4FF00),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          // Add bottom padding to ensure no overflow at the end of the screen
-          const SizedBox(height: 16),
         ],
       ),
     );

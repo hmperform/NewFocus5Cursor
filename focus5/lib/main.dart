@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/onboarding/mindset_assessment_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/home_screen.dart';
@@ -150,6 +151,7 @@ class Focus5App extends StatelessWidget {
         '/login': (context) => LoginScreen(),
         '/signup': (context) => const SignupScreen(),
         '/home': (context) => const HomeScreen(),
+        '/assessment': (context) => const MindsetAssessmentScreen(),
         '/journal_entry': (context) => const JournalEntryScreen(),
         '/journal': (context) => const JournalScreen(),
         '/paywall': (context) => const PaywallScreen(),
