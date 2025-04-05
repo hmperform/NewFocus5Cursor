@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "557447830332",
+    "project_id": "focus-5-app",
+    "storage_bucket": "focus-5-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:557447830332:android:5ede81ffc6863ec12c9c39",
+        "android_client_info": {
+          "package_name": "com.example.focus5"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWK3eFOZHOAEtMziYINApteZ1BiG87BFk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

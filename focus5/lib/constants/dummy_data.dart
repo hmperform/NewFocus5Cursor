@@ -1068,14 +1068,14 @@ By following this framework and adapting it to your individual needs, you create
   static final List<MediaItem> dummyMediaItems = [
     MediaItem(
       id: 'video1',
-      title: 'Bounce-Back Ability Training',
-      description: 'Learn essential techniques to build mental resilience and bounce back from setbacks',
+      title: 'Is All Self-Criticism Bad?',
+      description: 'Learn essential techniques to manage self-criticism and build mental resilience',
       mediaType: MediaType.video,
-      mediaUrl: 'assets/videos/bounce_back_training.mp4',
+      mediaUrl: 'gs://focus-5-app.firebasestorage.app/modules/day3bouncebackcourse.mp4',
       imageUrl: 'https://picsum.photos/500/300?random=1',
       creatorId: 'coach5',
       creatorName: 'Morgan Taylor',
-      durationMinutes: 12,
+      durationMinutes: 5,
       focusAreas: [focusAreas[5], focusAreas[9]],
       xpReward: 30,
       datePublished: DateTime.now().subtract(const Duration(days: 1)),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/onboarding/mindset_assessment_screen.dart';
@@ -35,10 +37,10 @@ void main() async {
   final themeProvider = ThemeProvider();
   await themeProvider.loadThemePreference();
   
-  // TODO: Initialize Firebase when ready
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   
   runApp(
     MultiProvider(

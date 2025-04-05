@@ -36,7 +36,42 @@ class _DashboardTabState extends State<DashboardTab> {
     // Wait until build completes before loading content
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _safeLoadContent();
+      
+      // Preload daily videos in the background
+      _preloadFeaturedVideos();
     });
+  }
+
+  Future<void> _preloadFeaturedVideos() async {
+    try {
+      // Get the featured video URL from 'Is All Self-Criticism Bad?'
+      final featuredVideoUrl = 'gs://focus-5-app.firebasestorage.app/modules/day3bouncebackcourse.mp4';
+      
+      // Also preload a couple of videos from DummyData for Media tab
+      final List<String> additionalVideos = [];
+      if (DummyData.dummyMediaItems.isNotEmpty) {
+        for (var item in DummyData.dummyMediaItems) {
+          if (item.mediaType == MediaType.video && 
+              additionalVideos.length < 2 && // Limit to 2 additional videos
+              !additionalVideos.contains(item.mediaUrl)) {
+            additionalVideos.add(item.mediaUrl);
+          }
+        }
+      }
+      
+      // Create combined list with featured video first
+      final videosToPreload = [featuredVideoUrl, ...additionalVideos];
+      
+      // Preload all videos
+      await BasicVideoHelper.preloadVideos(
+        context: context,
+        videoUrls: videosToPreload,
+      );
+      
+      debugPrint('Preloaded ${videosToPreload.length} videos successfully');
+    } catch (e) {
+      debugPrint('Error preloading videos: $e');
+    }
   }
 
   Future<void> _safeLoadContent() {
@@ -721,18 +756,18 @@ class _DashboardTabState extends State<DashboardTab> {
     final accentColor = themeProvider.accentColor;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     
-    // Get the featured video - use a network video for web, asset for native
+    // Get the featured video - now using Firebase Storage URL
     final featuredVideo = MediaItem(
       id: 'bounce_back_video',
-      title: 'Bounce-Back Ability Training',
-      description: 'Learn essential techniques to build mental resilience and bounce back from setbacks',
+      title: 'Is All Self-Criticism Bad?',
+      description: 'Learn essential techniques to manage self-criticism and build mental resilience',
       mediaType: MediaType.video,
-      // Always use the local asset video regardless of platform
-      mediaUrl: 'assets/videos/bounce_back_training.mp4',
+      // Firebase Storage URL
+      mediaUrl: 'gs://focus-5-app.firebasestorage.app/modules/day3bouncebackcourse.mp4',
       imageUrl: 'https://picsum.photos/500/300?random=42',
       creatorId: 'coach5',
       creatorName: 'Morgan Taylor',
-      durationMinutes: 12,
+      durationMinutes: 5,
       focusAreas: ['Resilience', 'Mental Toughness'],
       xpReward: 30,
       datePublished: DateTime.now().subtract(const Duration(days: 1)),

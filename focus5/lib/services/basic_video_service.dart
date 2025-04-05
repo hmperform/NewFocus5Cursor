@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/content_models.dart';
+import '../services/firebase_storage_service.dart';
 
 /// A service class that manages video playback using only the core video_player package
 class BasicVideoService with ChangeNotifier {
   // Video player controller
   VideoPlayerController? _videoController;
+  
+  // Cache for preloaded controllers
+  final Map<String, VideoPlayerController> _preloadedControllers = {};
   
   // Video metadata
   String _title = '';
@@ -40,16 +44,111 @@ class BasicVideoService with ChangeNotifier {
   Duration get duration => _videoController?.value.duration ?? Duration.zero;
   double get aspectRatio => _videoController?.value.aspectRatio ?? 16/9;
   
+  // Check if a video is already preloaded
+  bool isVideoPreloaded(String videoUrl) {
+    return _preloadedControllers.containsKey(videoUrl);
+  }
+  
+  // Explicitly set mini player visibility
+  void setMiniPlayerVisibility(bool show) {
+    _showMiniPlayer = show;
+    notifyListeners();
+  }
+
   // Dispose method for cleanup
   @override
   void dispose() {
     _closePositionTimer();
     _disposeController();
+    
+    // Clean up all preloaded controllers
+    for (final controller in _preloadedControllers.values) {
+      controller.dispose();
+    }
+    _preloadedControllers.clear();
+    
     _positionStreamController.close();
     super.dispose();
   }
 
-  // Initialize with video URL
+  // Preload a video without playing it
+  Future<void> preloadVideo(String videoUrl) async {
+    if (_preloadedControllers.containsKey(videoUrl)) {
+      // Already preloaded
+      return;
+    }
+    
+    try {
+      debugPrint('Preloading video: $videoUrl');
+      VideoPlayerController controller;
+      
+      if (videoUrl.startsWith('http')) {
+        controller = VideoPlayerController.networkUrl(
+          Uri.parse(videoUrl),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
+      } else if (videoUrl.startsWith('asset')) {
+        controller = VideoPlayerController.asset(
+          videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
+      } else if (videoUrl.startsWith('gs://')) {
+        // Handle Firebase Storage URLs
+        try {
+          final firebaseStorageService = FirebaseStorageService();
+          final downloadUrl = await firebaseStorageService.getVideoUrl(videoUrl);
+          if (downloadUrl.isNotEmpty) {
+            controller = VideoPlayerController.networkUrl(
+              Uri.parse(downloadUrl),
+              videoPlayerOptions: VideoPlayerOptions(
+                mixWithOthers: false,
+                allowBackgroundPlayback: false,
+              ),
+            );
+          } else {
+            throw Exception('Failed to get download URL for Firebase Storage video');
+          }
+        } catch (e) {
+          debugPrint('Error getting Firebase Storage URL: $e');
+          return; // Skip preloading on error
+        }
+      } else {
+        // Default to file
+        controller = VideoPlayerController.asset(
+          videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
+      }
+      
+      // Initialize controller without playing
+      await controller.initialize();
+      
+      // Store in preloaded controllers
+      _preloadedControllers[videoUrl] = controller;
+      
+      debugPrint('Video preloaded successfully: $videoUrl');
+    } catch (e) {
+      debugPrint('Error preloading video: $e');
+    }
+  }
+  
+  // Preload a set of videos (for batch preloading)
+  Future<void> preloadVideos(List<String> videoUrls) async {
+    for (final url in videoUrls) {
+      await preloadVideo(url);
+    }
+  }
+
+  // Initialize with video URL, using preloaded controller if available
   Future<void> initializePlayer({
     required String videoUrl,
     required String title,
@@ -68,21 +167,86 @@ class BasicVideoService with ChangeNotifier {
     _currentMediaItem = mediaItem;
     
     try {
-      // Create video controller
+      // Check if we have a preloaded controller
+      if (_preloadedControllers.containsKey(videoUrl)) {
+        debugPrint('Using preloaded controller for: $videoUrl');
+        _videoController = _preloadedControllers.remove(videoUrl);
+        
+        // Set volume and create position listener
+        await _videoController!.setVolume(1.0);
+        _startPositionTimer();
+        
+        // Set initial position if provided
+        if (startPosition != null && startPosition > Duration.zero) {
+          await _videoController!.seekTo(startPosition);
+        }
+        
+        // Start playback
+        await _videoController!.play();
+        _isPlaying = true;
+        _showMiniPlayer = true;
+        
+        // Cache video data
+        _cacheVideoData();
+        
+        notifyListeners();
+        return;
+      }
+      
+      // No preloaded controller, create a new one
+      // Rest of the existing code for creating a new controller
       if (videoUrl.startsWith('http')) {
-        _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+        _videoController = VideoPlayerController.networkUrl(
+          Uri.parse(videoUrl),
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
       } else if (videoUrl.startsWith('asset')) {
-        _videoController = VideoPlayerController.asset(videoUrl);
+        _videoController = VideoPlayerController.asset(
+          videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
+      } else if (videoUrl.startsWith('gs://')) {
+        // Handle Firebase Storage URLs
+        try {
+          final firebaseStorageService = FirebaseStorageService();
+          final downloadUrl = await firebaseStorageService.getVideoUrl(videoUrl);
+          if (downloadUrl.isNotEmpty) {
+            _videoController = VideoPlayerController.networkUrl(
+              Uri.parse(downloadUrl),
+              videoPlayerOptions: VideoPlayerOptions(
+                mixWithOthers: false,
+                allowBackgroundPlayback: false,
+              ),
+            );
+          } else {
+            throw Exception('Failed to get download URL for Firebase Storage video');
+          }
+        } catch (e) {
+          debugPrint('Error getting Firebase Storage URL: $e');
+          _videoController = VideoPlayerController.asset('assets/videos/placeholder.mp4');
+        }
       } else {
         // Default to file
-        _videoController = VideoPlayerController.asset(videoUrl);
+        _videoController = VideoPlayerController.asset(
+          videoUrl,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
       }
       
       // Initialize video controller
       await _videoController!.initialize();
       
       // Set volume and create position listener
-      await _videoController!.setVolume(1.0);
+      await _videoController!.setVolume(1.0); // Standard volume to avoid distortion
       _startPositionTimer();
       
       // Set initial position if provided
@@ -101,7 +265,23 @@ class BasicVideoService with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error initializing video: $e');
-      await _disposeController();
+      // Attempt to create a fallback controller with a default asset if available
+      try {
+        _videoController = VideoPlayerController.asset(
+          'assets/videos/error_video.mp4',
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: false,
+            allowBackgroundPlayback: false,
+          ),
+        );
+        await _videoController!.initialize();
+        await _videoController!.setVolume(1.0);
+        _startPositionTimer();
+        notifyListeners();
+      } catch (fallbackError) {
+        debugPrint('Error creating fallback video: $fallbackError');
+        await _disposeController();
+      }
       rethrow;
     }
   }
@@ -183,35 +363,15 @@ class BasicVideoService with ChangeNotifier {
     
     debugPrint('SEEK: Attempting to seek to ${position.inSeconds}.${position.inMilliseconds % 1000}s');
     
-    // Save current playback state
-    final wasPlaying = _videoController!.value.isPlaying;
-    
     try {
-      // Pause before seeking for better accuracy
-      if (wasPlaying) {
-        await _videoController!.pause();
-      }
-      
-      // Perform seek
+      // Perform seek directly without pausing first
       await _videoController!.seekTo(position);
       
-      // Small delay to let seek complete
-      await Future.delayed(const Duration(milliseconds: 100));
-      
-      // Resume if it was playing
-      if (wasPlaying) {
-        await _videoController!.play();
-      }
-      
       // Notify position update
-      _positionStreamController.add(_videoController!.value.position);
-      _cacheVideoData();
+      _positionStreamController.add(position);
       
     } catch (e) {
       debugPrint('Error during seek: $e');
-      if (wasPlaying) {
-        _videoController?.play();
-      }
     }
   }
 

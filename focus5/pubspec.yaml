@@ -34,7 +34,7 @@ dependencies:
     sdk: flutter
 
   # Core Firebase
-  firebase_core: ^2.24.0
+  firebase_core: ^2.32.0
 
   # Authentication
   firebase_auth: ^4.15.0
@@ -82,6 +82,7 @@ dependencies:
 
   # RevenueCat (Optional - if implementing subscriptions)
   purchases_flutter: ^6.9.2
+  firebase_storage: ^11.6.5
 
 dev_dependencies:
   flutter_test:
