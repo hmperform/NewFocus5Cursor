@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../more/games_screen.dart';
 import '../more/journal_screen.dart';
 import '../more/settings_screen.dart';
+import 'media_tab.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
 
@@ -49,35 +50,68 @@ class MoreTab extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  _buildCategoryCard(
+                  // Games
+                  _buildMenuItem(
+                    context,
+                    'Mind Games',
+                    Icons.games,
+                    Colors.blue.shade300,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GamesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  
+                  // Journal
+                  _buildMenuItem(
+                    context,
                     'Journal',
-                    Colors.purple[600]!,
                     Icons.book,
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const JournalScreen()),
-                    ),
+                    Colors.orange.shade300,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const JournalScreen(),
+                        ),
+                      );
+                    },
                   ),
-                  _buildCategoryCard(
-                    'Mental Games',
-                    Colors.blue[600]!,
-                    Icons.gamepad,
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const GamesScreen()),
-                    ),
+                  
+                  // Media Library
+                  _buildMenuItem(
+                    context,
+                    'Media Library',
+                    Icons.headphones,
+                    Colors.green.shade300,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MediaTab(),
+                        ),
+                      );
+                    },
                   ),
-                  _buildCategoryCard(
-                    'Meditate',
-                    Colors.orange[600]!,
-                    Icons.self_improvement,
-                    () {},
-                  ),
-                  _buildCategoryCard(
-                    'Sleep',
-                    Colors.deepPurple[600]!,
-                    Icons.nightlight_round,
-                    () {},
+                  
+                  // Settings
+                  _buildMenuItem(
+                    context,
+                    'Settings',
+                    Icons.settings,
+                    Colors.purple.shade300,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -112,45 +146,68 @@ class MoreTab extends StatelessWidget {
               const SizedBox(height: 32),
 
               // Content Database section
-              Container(
-                width: double.infinity,
-                height: 100,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: Colors.green[500],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: 16,
-                      top: 20,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.book,
-                          size: 30,
-                          color: Colors.white,
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MediaTab(),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  height: 100,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.green[500],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: 16,
+                        top: 20,
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.headphones,
+                            size: 30,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Text(
-                        'Content Database',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Media Library',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Browse audio and video content',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 
@@ -163,69 +220,27 @@ class MoreTab extends StatelessWidget {
     );
   }
 
-  Widget _buildCategoryCard(String title, Color color, IconData icon, VoidCallback onTap) {
+  Widget _buildMenuItem(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color,
-              color.withOpacity(0.8),
-            ],
-          ),
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: 2),
         ),
-        child: Stack(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Background design elements
-            Positioned(
-              top: -20,
-              right: -20,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -20,
-              left: -20,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            // Content
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    color: Colors.white,
-                    size: 40,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+            Icon(icon, color: color, size: 40),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onBackground,
               ),
             ),
           ],

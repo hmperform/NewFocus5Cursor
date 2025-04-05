@@ -3,15 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
+import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
+import '../../constants/dummy_data.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
+import 'media_player_screen.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({Key? key}) : super(key: key);
@@ -148,6 +152,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   children: [
                     const SizedBox(height: 8),
                     _buildDayStreak(),
+                    _buildDailyVideo(context),
                     _buildFocusAreas(),
                     _buildFeaturedCourses(context),
                     _buildStartYourDay(context),
@@ -702,6 +707,236 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
         ],
       ),
+    );
+  }
+
+  // Daily video section
+  Widget _buildDailyVideo(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final accentColor = themeProvider.accentColor;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    
+    // Get the featured video - use a network video for web, asset for native
+    final featuredVideo = MediaItem(
+      id: 'bounce_back_video',
+      title: 'Bounce-Back Ability Training',
+      description: 'Learn essential techniques to build mental resilience and bounce back from setbacks',
+      mediaType: MediaType.video,
+      // Use a compatible video URL for web browsers
+      mediaUrl: kIsWeb 
+          ? 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4'
+          : 'assets/videos/day 3- bounce-back ability (1).mp4.9.x.16.protrait.mp4',
+      imageUrl: 'https://picsum.photos/500/300?random=42',
+      creatorId: 'coach5',
+      creatorName: 'Morgan Taylor',
+      durationMinutes: 12,
+      focusAreas: ['Resilience', 'Mental Toughness'],
+      xpReward: 30,
+      datePublished: DateTime.now().subtract(const Duration(days: 1)),
+      universityExclusive: false,
+      universityAccess: null,
+      category: 'Resilience',
+    );
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Today's Video",
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Video card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MediaPlayerScreen(
+                    title: featuredVideo.title,
+                    subtitle: featuredVideo.description,
+                    mediaUrl: featuredVideo.mediaUrl,
+                    mediaType: featuredVideo.mediaType,
+                    imageUrl: featuredVideo.imageUrl,
+                    mediaItem: featuredVideo,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Video thumbnail
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                        child: AspectRatio(
+                          aspectRatio: 16/9,
+                          child: Image.network(
+                            featuredVideo.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[800],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.videocam,
+                                    color: Colors.white54,
+                                    size: 40,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      
+                      // Play button overlay
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accentColor.withOpacity(0.8),
+                        ),
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: themeProvider.accentTextColor,
+                          size: 32,
+                        ),
+                      ),
+                      
+                      // Duration badge
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${featuredVideo.durationMinutes} min',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Video details
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title
+                        Text(
+                          featuredVideo.title,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        // Description
+                        Text(
+                          featuredVideo.description,
+                          style: TextStyle(
+                            color: secondaryTextColor,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        
+                        // Coach info and XP reward
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 16,
+                              color: secondaryTextColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              featuredVideo.creatorName,
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.star_outline,
+                              size: 16,
+                              color: accentColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${featuredVideo.xpReward} XP',
+                              style: TextStyle(
+                                color: accentColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

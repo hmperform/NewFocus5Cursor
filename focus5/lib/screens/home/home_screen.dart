@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/audio_provider.dart';
+import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../constants/theme.dart';
@@ -14,7 +14,9 @@ import 'explore_tab.dart';
 import 'dms_tab.dart';
 import 'profile_tab.dart';
 import 'more_tab.dart';
+import 'media_tab.dart';
 import 'journal_search_screen.dart';
+import '../../widgets/mini_player.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -66,20 +68,49 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
     
-    // Initialize tab controller with 5 tabs for the More tab
-    _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _currentIndex = _tabController.index;
-        });
-      }
-    });
-    
-    // Schedule initialization AFTER the first frame renders
+    // Initialize content and media providers
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Let the dashboard tab handle its own content loading
+      if (!mounted) return;
+      
+      try {
+        final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+        final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+        
+        setState(() {
+          _isInitializing = true;
+        });
+        
+        // Initialize content
+        contentProvider.initContent(null).then((_) {
+          // Initialize media with cached state
+          return mediaProvider.initializeMedia();
+        }).then((_) {
+          if (mounted) {
+            setState(() {
+              _isInitializing = false;
+              _hasError = false;
+            });
+          }
+        }).catchError((error) {
+          debugPrint('Error initializing data: $error');
+          if (mounted) {
+            setState(() {
+              _isInitializing = false;
+              _hasError = true;
+            });
+          }
+        });
+      } catch (e) {
+        debugPrint('Error in initialization: $e');
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _hasError = true;
+          });
+        }
+      }
     });
   }
   
@@ -91,53 +122,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Simple scaffold with bottom navigation - no complex state management
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        bottom: false,
-        child: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
-        ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Stack(
+        children: [
+          // Tab content
+          IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
+          ),
+          
+          // Mini player
+          Consumer<MediaProvider>(
+            builder: (context, mediaProvider, _) {
+              if (mediaProvider.showMiniPlayer) {
+                return const MiniPlayer();
+              } else {
+                return const SizedBox.shrink();
+              }
+            },
+          ),
+        ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              spreadRadius: 2,
-            ),
-          ],
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) {
-                setState(() {
-                  _currentIndex = index;
-                  _tabController.animateTo(index);
-                });
-              },
-              backgroundColor: Colors.transparent,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: const Color(0xFFB4FF00),
-              unselectedItemColor: Colors.grey,
-              showUnselectedLabels: true,
-              elevation: 0,
-              items: _bottomNavItems,
-            ),
-          ),
-        ),
+      
+      // Bottom navigation
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: themeProvider.isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+        selectedItemColor: themeProvider.accentColor,
+        unselectedItemColor: themeProvider.isDarkMode ? Colors.white54 : Colors.black54,
+        items: _bottomNavItems,
       ),
     );
   }

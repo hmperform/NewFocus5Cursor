@@ -51,7 +51,7 @@ dependencies:
   image_picker: ^1.0.7
   url_launcher: ^6.1.12
   flutter_animate: ^4.4.0
-  audio_video_progress_bar: ^2.0.1
+  audio_video_progress_bar: ^2.0.3
   just_audio: ^0.9.34
   transparent_image: ^2.0.1
   uuid: ^4.2.2
@@ -92,6 +92,7 @@ flutter:
     - assets/images/
     - assets/images/logos/
     - assets/audio/
+    - assets/videos/
     - assets/icons/
     - assets/images/logo.png
     - assets/images/avatars/coach1.jpg

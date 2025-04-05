@@ -209,6 +209,108 @@ class DailyAudio {
   }
 }
 
+// New class to handle both audio and video content
+enum MediaType { audio, video }
+
+class MediaItem {
+  final String id;
+  final String title;
+  final String description;
+  final MediaType mediaType;
+  final String mediaUrl; // Can be audio or video URL
+  final String imageUrl; 
+  final String creatorId;
+  final String creatorName;
+  final int durationMinutes;
+  final List<String> focusAreas;
+  final int xpReward;
+  final DateTime datePublished;
+  final bool universityExclusive;
+  final List<String>? universityAccess;
+  final String category;
+
+  MediaItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.mediaType,
+    required this.mediaUrl,
+    required this.imageUrl,
+    required this.creatorId,
+    required this.creatorName,
+    required this.durationMinutes,
+    required this.focusAreas,
+    required this.xpReward,
+    required this.datePublished,
+    required this.universityExclusive,
+    this.universityAccess,
+    required this.category,
+  });
+
+  // Create a MediaItem from a DailyAudio object
+  factory MediaItem.fromDailyAudio(DailyAudio audio) {
+    return MediaItem(
+      id: audio.id,
+      title: audio.title,
+      description: audio.description,
+      mediaType: MediaType.audio,
+      mediaUrl: audio.audioUrl,
+      imageUrl: audio.imageUrl,
+      creatorId: audio.creatorId,
+      creatorName: audio.creatorName,
+      durationMinutes: audio.durationMinutes,
+      focusAreas: audio.focusAreas,
+      xpReward: audio.xpReward,
+      datePublished: audio.datePublished,
+      universityExclusive: audio.universityExclusive,
+      universityAccess: audio.universityAccess,
+      category: audio.category,
+    );
+  }
+
+  factory MediaItem.fromJson(Map<String, dynamic> json) {
+    return MediaItem(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String,
+      mediaType: json['mediaType'] == 'video' ? MediaType.video : MediaType.audio,
+      mediaUrl: json['mediaUrl'] as String,
+      imageUrl: json['imageUrl'] as String,
+      creatorId: json['creatorId'] as String,
+      creatorName: json['creatorName'] as String,
+      durationMinutes: json['durationMinutes'] as int,
+      focusAreas: (json['focusAreas'] as List<dynamic>).map((e) => e as String).toList(),
+      xpReward: json['xpReward'] as int,
+      datePublished: DateTime.parse(json['datePublished'] as String),
+      universityExclusive: json['universityExclusive'] as bool,
+      universityAccess: json['universityAccess'] != null
+          ? (json['universityAccess'] as List<dynamic>).map((e) => e as String).toList()
+          : null,
+      category: json['category'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'mediaType': mediaType == MediaType.video ? 'video' : 'audio',
+      'mediaUrl': mediaUrl,
+      'imageUrl': imageUrl,
+      'creatorId': creatorId,
+      'creatorName': creatorName,
+      'durationMinutes': durationMinutes,
+      'focusAreas': focusAreas,
+      'xpReward': xpReward,
+      'datePublished': datePublished.toIso8601String(),
+      'universityExclusive': universityExclusive,
+      'universityAccess': universityAccess,
+      'category': category,
+    };
+  }
+}
+
 class JournalEntry {
   final String id;
   final String userId;

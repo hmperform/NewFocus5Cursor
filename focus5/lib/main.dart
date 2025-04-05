@@ -11,14 +11,14 @@ import 'screens/onboarding/mental_fitness_results.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/home_screen.dart';
-import 'screens/home/audio_player_screen.dart';
+import 'screens/home/media_player_screen.dart';
 import 'screens/more/journal_entry_screen.dart';
 import 'screens/more/journal_screen.dart';
 import 'screens/paywall/paywall_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/content_provider.dart';
-import 'providers/audio_provider.dart';
+import 'providers/media_provider.dart';
 import 'providers/journal_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
@@ -46,7 +46,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => AuthProvider()),
         ChangeNotifierProvider(create: (context) => UserProvider()),
         ChangeNotifierProvider(create: (context) => ContentProvider()),
-        ChangeNotifierProvider(create: (context) => AudioProvider()),
+        ChangeNotifierProvider(create: (context) => MediaProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
         ChangeNotifierProvider(create: (context) => JournalProvider('default_user')),
       ],
@@ -140,8 +140,8 @@ class Focus5App extends StatelessWidget {
         return Stack(
           children: [
             child!,
-            Consumer<AudioProvider>(
-              builder: (context, audioProvider, _) {
+            Consumer<MediaProvider>(
+              builder: (context, mediaProvider, _) {
                 return const MiniPlayer();
               },
             ),
@@ -164,14 +164,16 @@ class Focus5App extends StatelessWidget {
         '/paywall': (context) => const PaywallScreen(),
       },
       onGenerateRoute: (settings) {
-        if (settings.name == '/audio_player') {
+        if (settings.name == '/media_player') {
           final args = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
-            builder: (context) => AudioPlayerScreen(
+            builder: (context) => MediaPlayerScreen(
               title: args['title'],
               subtitle: args['subtitle'],
-              audioUrl: args['audioUrl'],
+              mediaUrl: args['mediaUrl'],
+              mediaType: args['mediaType'],
               imageUrl: args['imageUrl'],
+              mediaItem: args['mediaItem'],
             ),
           );
         }
