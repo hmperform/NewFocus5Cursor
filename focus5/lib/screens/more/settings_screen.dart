@@ -143,6 +143,23 @@ class SettingsScreen extends StatelessWidget {
             
             const SizedBox(height: 24),
             
+            // Developer section (only in debug mode)
+            _buildSectionHeader(context, 'Developer'),
+            const SizedBox(height: 8),
+            _buildSettingCard(
+              context: context,
+              cardColor: cardColor,
+              textColor: textColor,
+              icon: Icons.storage,
+              title: 'Data Migration',
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pushNamed(context, '/admin/data_migration');
+              },
+            ),
+            
+            const SizedBox(height: 24),
+            
             // Logout button
             SizedBox(
               width: double.infinity,

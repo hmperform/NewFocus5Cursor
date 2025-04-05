@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/content_models.dart';
 import '../constants/dummy_data.dart';
+import '../services/firebase_content_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ContentProvider with ChangeNotifier {
   List<Course> _courses = [];
@@ -9,9 +11,13 @@ class ContentProvider with ChangeNotifier {
   List<Article> _articles = [];
   List<Map<String, dynamic>> _coaches = [];
   DailyAudio? _todayAudio;
+  Module? _dailyModule;
+  Map<String, dynamic>? _dailyModuleAssignment;
   String? _universityCode;
   bool _isLoading = false;
   String? _errorMessage;
+  
+  final FirebaseContentService _contentService = FirebaseContentService();
 
   // Getters
   List<Course> get courses => _courses;
@@ -19,6 +25,8 @@ class ContentProvider with ChangeNotifier {
   List<Article> get articles => _articles;
   List<Map<String, dynamic>> get coaches => _coaches;
   DailyAudio? get todayAudio => _todayAudio;
+  Module? get dailyModule => _dailyModule;
+  Map<String, dynamic>? get dailyModuleAssignment => _dailyModuleAssignment;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -30,41 +38,18 @@ class ContentProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // In a real app, this would fetch from API
-      // Use a shorter delay to improve loading time
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Load courses from Firebase
+      await loadCourses();
       
-      // Immediately load data from DummyData
-      _courses = DummyData.dummyCourses;
-      _audioModules = DummyData.dummyAudioModules;
+      // Load audio modules from Firebase
+      await loadAudioModules();
+      
+      // Load daily module assignment
+      await loadDailyModule();
+      
+      // For now, still use dummy data for articles and coaches
       _articles = DummyData.dummyArticles;
       _coaches = DummyData.dummyCoaches;
-      
-      // Set today's audio
-      _todayAudio = _audioModules.isNotEmpty 
-        ? _audioModules.firstWhere(
-            (audio) => audio.datePublished.day == DateTime.now().day,
-            orElse: () => _audioModules.first,
-          )
-        : null;
-      
-      // Filter content based on university access if applicable
-      if (universityCode != null) {
-        _courses = _courses.where((course) => 
-          !course.universityExclusive || 
-          (course.universityAccess?.contains(universityCode) ?? false)
-        ).toList();
-        
-        _audioModules = _audioModules.where((audio) => 
-          !audio.universityExclusive || 
-          (audio.universityAccess?.contains(universityCode) ?? false)
-        ).toList();
-        
-        _articles = _articles.where((article) => 
-          !article.universityExclusive || 
-          (article.universityAccess?.contains(universityCode) ?? false)
-        ).toList();
-      }
       
       _isLoading = false;
       _errorMessage = null;
@@ -81,101 +66,79 @@ class ContentProvider with ChangeNotifier {
     }
     
     notifyListeners();
-    return Future.value(); // Explicitly complete the Future
   }
 
   Future<void> loadCourses() async {
     try {
-      // In a real app, fetch from backend with proper filtering
-      _courses = DummyData.dummyCourses.where((course) {
-        // If course is not university exclusive, it's available to everyone
-        if (!course.universityExclusive) return true;
-        
-        // If course is university exclusive, check if user has access
-        if (_universityCode != null && 
-            course.universityAccess != null && 
-            course.universityAccess!.contains(_universityCode)) {
-          return true;
-        }
-        
-        return false;
-      }).toList();
-      
+      _courses = await _contentService.getCourses(universityCode: _universityCode);
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load courses';
+      _errorMessage = 'Failed to load courses: ${e.toString()}';
       notifyListeners();
     }
   }
   
   Future<void> loadAudioModules() async {
     try {
-      // In a real app, fetch from backend with proper filtering
-      _audioModules = DummyData.dummyAudioModules.where((audio) {
-        // If audio is not university exclusive, it's available to everyone
-        if (!audio.universityExclusive) return true;
-        
-        // If audio is university exclusive, check if user has access
-        if (_universityCode != null && 
-            audio.universityAccess != null && 
-            audio.universityAccess!.contains(_universityCode)) {
-          return true;
-        }
-        
-        return false;
-      }).toList();
+      _audioModules = await _contentService.getDailyAudios(universityCode: _universityCode);
       
       // Set today's audio
-      _todayAudio = _audioModules.firstWhere(
-        (audio) => audio.datePublished.day == DateTime.now().day,
-        orElse: () => _audioModules.first, // Fallback to the first one if no match
-      );
+      _todayAudio = _audioModules.isNotEmpty 
+        ? _audioModules.firstWhere(
+            (audio) => audio.datePublished.day == DateTime.now().day,
+            orElse: () => _audioModules.first,
+          )
+        : null;
       
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load audio modules';
+      _errorMessage = 'Failed to load audio modules: ${e.toString()}';
       notifyListeners();
     }
   }
   
-  Future<void> loadArticles() async {
+  Future<void> loadDailyModule() async {
     try {
-      // In a real app, fetch from backend with proper filtering
-      _articles = DummyData.dummyArticles.where((article) {
-        // If article is not university exclusive, it's available to everyone
-        if (!article.universityExclusive) return true;
-        
-        // If article is university exclusive, check if user has access
-        if (_universityCode != null && 
-            article.universityAccess != null && 
-            article.universityAccess!.contains(_universityCode)) {
-          return true;
-        }
-        
-        return false;
-      }).toList();
+      _dailyModuleAssignment = await _contentService.getTodayModuleAssignment();
       
-      // Make sure we have articles
-      if (_articles.isEmpty) {
-        _articles = DummyData.dummyArticles;
+      if (_dailyModuleAssignment != null && _dailyModuleAssignment!['module'] != null) {
+        _dailyModule = Module.fromJson(_dailyModuleAssignment!['module'] as Map<String, dynamic>);
       }
       
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load articles';
+      _errorMessage = 'Failed to load daily module: ${e.toString()}';
       notifyListeners();
     }
   }
   
-  Future<void> loadCoaches() async {
+  Future<bool> markDailyModuleCompleted() async {
+    if (_dailyModuleAssignment == null) return false;
+    
     try {
-      // In a real app, fetch from backend with proper filtering
-      // For now, we'll just use the dummy data directly
-      _coaches = DummyData.dummyCoaches;
+      final assignmentId = _dailyModuleAssignment!['assignment']['id'];
+      final result = await _contentService.markModuleCompleted(assignmentId);
       
-      notifyListeners();
+      if (result) {
+        // Update the local assignment state
+        _dailyModuleAssignment!['assignment']['completed'] = true;
+        _dailyModuleAssignment!['assignment']['completedDate'] = DateTime.now().toIso8601String();
+        notifyListeners();
+      }
+      
+      return result;
     } catch (e) {
-      _errorMessage = 'Failed to load coaches';
+      _errorMessage = 'Failed to mark module as completed: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+  
+  Future<void> refreshTodayAudio() async {
+    try {
+      await loadAudioModules();
+    } catch (e) {
+      _errorMessage = 'Failed to load today\'s audio: ${e.toString()}';
       notifyListeners();
     }
   }
@@ -215,25 +178,23 @@ class ContentProvider with ChangeNotifier {
   }
   
   // Method to get a specific course
-  Course? getCourseById(String courseId) {
+  Future<Course?> getCourseById(String courseId) async {
     try {
-      return _courses.firstWhere((course) => course.id == courseId);
-    } catch (e) {
-      return null;
-    }
-  }
-  
-  // Method to get today's audio
-  Future<void> refreshTodayAudio() async {
-    try {
-      _todayAudio = _audioModules.firstWhere(
-        (audio) => audio.datePublished.day == DateTime.now().day,
-        orElse: () => _audioModules.first,
+      // Check if the course is already loaded
+      final localCourse = _courses.firstWhere(
+        (course) => course.id == courseId,
+        orElse: () => null as Course,
       );
-      notifyListeners();
+      
+      if (localCourse != null) {
+        return localCourse;
+      }
+      
+      // If not, fetch it from Firebase
+      return await _contentService.getCourseById(courseId);
     } catch (e) {
-      _errorMessage = 'Failed to load today\'s audio';
-      notifyListeners();
+      _errorMessage = 'Failed to get course: ${e.toString()}';
+      return null;
     }
   }
   
@@ -255,91 +216,46 @@ class ContentProvider with ChangeNotifier {
       return audio.title.toLowerCase().contains(lowerQuery) ||
              audio.description.toLowerCase().contains(lowerQuery) ||
              audio.creatorName.toLowerCase().contains(lowerQuery) ||
+             audio.category.toLowerCase().contains(lowerQuery) ||
              audio.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery));
     }).toList();
   }
   
-  // Method to get all daily audio modules
-  List<DailyAudio> getDailyAudio() {
-    return _audioModules;
-  }
-
-  // Method to get a specific audio module
-  DailyAudio? getAudioById(String audioId) {
-    try {
-      return _audioModules.firstWhere((audio) => audio.id == audioId);
-    } catch (e) {
-      return null;
-    }
-  }
+  // Helper methods
   
-  // Methods to get coaches
-  
-  List<Map<String, dynamic>> getAllCoaches() {
-    return _coaches;
-  }
-  
-  List<Map<String, dynamic>> searchCoaches(String query) {
-    if (query.isEmpty) return _coaches;
-    
-    final lowerQuery = query.toLowerCase();
-    return _coaches.where((coach) {
-      return coach['name'].toString().toLowerCase().contains(lowerQuery) ||
-             coach['bio'].toString().toLowerCase().contains(lowerQuery) ||
-             coach['specialization'].toString().toLowerCase().contains(lowerQuery);
+  void loadCoursesSync() {
+    _courses = DummyData.dummyCourses.where((course) {
+      // If course is not university exclusive, it's available to everyone
+      if (!course.universityExclusive) return true;
+      
+      // If course is university exclusive, check if user has access
+      if (_universityCode != null && 
+          course.universityAccess != null && 
+          course.universityAccess!.contains(_universityCode)) {
+        return true;
+      }
+      
+      return false;
     }).toList();
   }
   
-  // Method to get a specific coach
-  Map<String, dynamic>? getCoachById(String coachId) {
+  // Methods to create content (for admin purposes)
+  
+  Future<String?> createCourse(Course course) async {
     try {
-      return _coaches.firstWhere((coach) => coach['id'] == coachId);
+      return await _contentService.createCourse(course);
     } catch (e) {
-      return null;
-    }
-  }
-
-  // Get article by ID
-  Article? getArticleById(String id) {
-    try {
-      return _articles.firstWhere((article) => article.id == id);
-    } catch (e) {
+      _errorMessage = 'Failed to create course: ${e.toString()}';
       return null;
     }
   }
   
-  // Get articles by author ID
-  List<Article> getArticlesByAuthor(String authorId) {
-    return _articles.where((article) => article.authorId == authorId).toList();
-  }
-  
-  // Get articles by tag
-  List<Article> getArticlesByTag(String tag) {
-    return _articles.where((article) => article.tags.contains(tag)).toList();
-  }
-  
-  // Get articles by focus area
-  List<Article> getArticlesByFocusArea(String focusArea) {
-    return _articles.where((article) => article.focusAreas.contains(focusArea)).toList();
-  }
-  
-  // Get featured articles (newest ones)
-  List<Article> getFeaturedArticles({int limit = 5}) {
-    final articles = List<Article>.from(_articles);
-    articles.sort((a, b) => b.publishedDate.compareTo(a.publishedDate));
-    return articles.take(limit).toList();
-  }
-
-  // Synchronous method to load courses immediately
-  void loadCoursesSync() {
-    _courses = DummyData.dummyCourses;
-    
-    // Filter based on university access if needed
-    if (_universityCode != null) {
-      _courses = _courses.where((course) => 
-        !course.universityExclusive || 
-        (course.universityAccess?.contains(_universityCode) ?? false)
-      ).toList();
+  Future<String?> createDailyAudio(DailyAudio audio) async {
+    try {
+      return await _contentService.createDailyAudio(audio);
+    } catch (e) {
+      _errorMessage = 'Failed to create daily audio: ${e.toString()}';
+      return null;
     }
   }
 } 
