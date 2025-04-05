@@ -16,6 +16,7 @@ import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
 import 'media_player_screen.dart';
+import '../../utils/chewie_video_helper.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({Key? key}) : super(key: key);
@@ -726,10 +727,8 @@ class _DashboardTabState extends State<DashboardTab> {
       title: 'Bounce-Back Ability Training',
       description: 'Learn essential techniques to build mental resilience and bounce back from setbacks',
       mediaType: MediaType.video,
-      // Use a compatible video URL for web browsers
-      mediaUrl: kIsWeb 
-          ? 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4'
-          : 'assets/videos/day 3- bounce-back ability (1).mp4.9.x.16.protrait.mp4',
+      // Always use the local asset video regardless of platform
+      mediaUrl: 'assets/videos/bounce_back_training.mp4',
       imageUrl: 'https://picsum.photos/500/300?random=42',
       creatorId: 'coach5',
       creatorName: 'Morgan Taylor',
@@ -768,18 +767,14 @@ class _DashboardTabState extends State<DashboardTab> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: GestureDetector(
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => MediaPlayerScreen(
-                    title: featuredVideo.title,
-                    subtitle: featuredVideo.description,
-                    mediaUrl: featuredVideo.mediaUrl,
-                    mediaType: featuredVideo.mediaType,
-                    imageUrl: featuredVideo.imageUrl,
-                    mediaItem: featuredVideo,
-                  ),
-                ),
+              ChewieVideoHelper.playVideo(
+                context: context,
+                videoUrl: featuredVideo.mediaUrl,
+                title: featuredVideo.title,
+                subtitle: featuredVideo.description,
+                thumbnailUrl: featuredVideo.imageUrl,
+                mediaItem: featuredVideo,
+                openFullscreen: true,
               );
             },
             child: Container(

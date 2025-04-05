@@ -8,6 +8,7 @@ import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../constants/theme.dart';
+import '../../services/chewie_video_service.dart';
 import '../auth/login_screen.dart';
 import 'dashboard_tab.dart';
 import 'explore_tab.dart';
@@ -17,6 +18,7 @@ import 'more_tab.dart';
 import 'media_tab.dart';
 import 'journal_search_screen.dart';
 import '../../widgets/mini_player.dart';
+import '../../widgets/chewie_mini_player.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -135,15 +137,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: _tabs,
           ),
           
-          // Mini player
-          Consumer<MediaProvider>(
-            builder: (context, mediaProvider, _) {
-              if (mediaProvider.showMiniPlayer) {
-                return const MiniPlayer();
-              } else {
-                return const SizedBox.shrink();
-              }
-            },
+          // Mini player - positioned at the bottom above the nav bar
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Consumer<ChewieVideoService>(
+              builder: (context, videoService, _) {
+                if (videoService.showMiniPlayer) {
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: kBottomNavigationBarHeight),
+                    child: const ChewieMiniPlayer(),
+                  );
+                } else {
+                  return const SizedBox.shrink();
+                }
+              },
+            ),
           ),
         ],
       ),

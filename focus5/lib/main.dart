@@ -24,6 +24,7 @@ import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
 import 'widgets/mini_player.dart';
 import 'constants/theme.dart';
+import 'services/chewie_video_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => MediaProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
         ChangeNotifierProvider(create: (context) => JournalProvider('default_user')),
+        ChangeNotifierProvider(create: (context) => ChewieVideoService()),
       ],
       child: Focus5App(isFirstLaunch: isFirstLaunch),
     ),
@@ -140,11 +142,6 @@ class Focus5App extends StatelessWidget {
         return Stack(
           children: [
             child!,
-            Consumer<MediaProvider>(
-              builder: (context, mediaProvider, _) {
-                return const MiniPlayer();
-              },
-            ),
           ],
         );
       },

@@ -1071,7 +1071,7 @@ By following this framework and adapting it to your individual needs, you create
       title: 'Bounce-Back Ability Training',
       description: 'Learn essential techniques to build mental resilience and bounce back from setbacks',
       mediaType: MediaType.video,
-      mediaUrl: 'assets/videos/day 3- bounce-back ability (1).mp4.9.x.16.protrait.mp4',
+      mediaUrl: 'assets/videos/bounce_back_training.mp4',
       imageUrl: 'https://picsum.photos/500/300?random=1',
       creatorId: 'coach5',
       creatorName: 'Morgan Taylor',

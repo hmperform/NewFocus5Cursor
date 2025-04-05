@@ -8,6 +8,7 @@ import '../../models/content_models.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../screens/home/media_player_screen.dart';
+import '../../utils/chewie_video_helper.dart';
 
 class MediaTab extends StatefulWidget {
   const MediaTab({Key? key}) : super(key: key);
@@ -204,7 +205,7 @@ class _MediaTabState extends State<MediaTab> with SingleTickerProviderStateMixin
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _playMedia(media),
+        onTap: () => _playMedia(context, media),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -366,21 +367,34 @@ class _MediaTabState extends State<MediaTab> with SingleTickerProviderStateMixin
     );
   }
   
-  void _playMedia(MediaItem media) {
-    final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MediaPlayerScreen(
-          title: media.title,
-          subtitle: media.description,
-          mediaUrl: media.mediaUrl,
-          mediaType: media.mediaType,
-          imageUrl: media.imageUrl,
-          mediaItem: media,
+  void _playMedia(BuildContext context, MediaItem media) {
+    if (media.mediaType == MediaType.video) {
+      ChewieVideoHelper.playVideo(
+        context: context,
+        videoUrl: media.mediaUrl,
+        title: media.title,
+        subtitle: media.description,
+        thumbnailUrl: media.imageUrl,
+        mediaItem: media,
+        openFullscreen: true,
+      );
+    } else {
+      // Handle audio playback with existing player
+      final mediaProvider = Provider.of<MediaProvider>(context, listen: false);
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MediaPlayerScreen(
+            title: media.title,
+            subtitle: media.description,
+            mediaUrl: media.mediaUrl,
+            mediaType: media.mediaType,
+            imageUrl: media.imageUrl,
+            mediaItem: media,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 } 
