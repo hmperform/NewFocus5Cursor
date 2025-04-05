@@ -16,7 +16,7 @@ import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
 import 'media_player_screen.dart';
-import '../../utils/chewie_video_helper.dart';
+import '../../utils/basic_video_helper.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({Key? key}) : super(key: key);
@@ -767,7 +767,7 @@ class _DashboardTabState extends State<DashboardTab> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: GestureDetector(
             onTap: () {
-              ChewieVideoHelper.playVideo(
+              BasicVideoHelper.playVideo(
                 context: context,
                 videoUrl: featuredVideo.mediaUrl,
                 title: featuredVideo.title,

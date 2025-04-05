@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
-import '../services/chewie_video_service.dart';
-import '../screens/chewie_player_screen.dart';
+import '../services/basic_video_service.dart';
+import '../screens/basic_player_screen.dart';
 
-class ChewieMiniPlayer extends StatefulWidget {
+class BasicMiniPlayer extends StatefulWidget {
   final double bottomPadding;
 
-  const ChewieMiniPlayer({Key? key, this.bottomPadding = 80}) : super(key: key);
+  const BasicMiniPlayer({Key? key, this.bottomPadding = 80}) : super(key: key);
 
   @override
-  State<ChewieMiniPlayer> createState() => _ChewieMiniPlayerState();
+  State<BasicMiniPlayer> createState() => _BasicMiniPlayerState();
 }
 
-class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
+class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
   @override
   void initState() {
     super.initState();
@@ -26,7 +26,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
   void _checkPlaybackState() {
     if (!mounted) return;
     
-    final videoService = Provider.of<ChewieVideoService>(context, listen: false);
+    final videoService = Provider.of<BasicVideoService>(context, listen: false);
     
     // Ensure video is playing if it should be
     if (videoService.isPlaying && 
@@ -44,7 +44,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
   }
 
   void _openFullScreenPlayer() {
-    final videoService = Provider.of<ChewieVideoService>(context, listen: false);
+    final videoService = Provider.of<BasicVideoService>(context, listen: false);
     
     if (videoService.videoController == null) return;
     
@@ -54,7 +54,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
     // Navigate to full screen player
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const ChewiePlayerScreen(),
+        builder: (context) => const BasicPlayerScreen(),
       ),
     ).then((_) {
       // Reset state when returning
@@ -67,7 +67,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
   
   @override
   Widget build(BuildContext context) {
-    return Consumer<ChewieVideoService>(
+    return Consumer<BasicVideoService>(
       builder: (context, videoService, child) {
         // Don't show mini player if no video or if explicitly hidden
         if (videoService.videoController == null || 
@@ -81,7 +81,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
     );
   }
 
-  Widget _buildMiniPlayer(ChewieVideoService videoService) {
+  Widget _buildMiniPlayer(BasicVideoService videoService) {
     final screenWidth = MediaQuery.of(context).size.width;
     
     return Container(
@@ -225,7 +225,7 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
     );
   }
 
-  Widget _buildThumbnail(ChewieVideoService videoService) {
+  Widget _buildThumbnail(BasicVideoService videoService) {
     if (videoService.videoController != null) {
       return ClipRRect(
         borderRadius: const BorderRadius.only(
@@ -254,19 +254,25 @@ class _ChewieMiniPlayerState extends State<ChewieMiniPlayer> {
         child: videoService.thumbnailUrl.isNotEmpty
             ? Image.network(
                 videoService.thumbnailUrl,
-                width: 64,
-                height: 64,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
                     color: Colors.grey[800],
-                    child: const Icon(Icons.movie, color: Colors.white54),
+                    child: const Icon(
+                      Icons.videocam,
+                      color: Colors.white54,
+                      size: 30,
+                    ),
                   );
                 },
               )
             : Container(
                 color: Colors.grey[800],
-                child: const Icon(Icons.movie, color: Colors.white54),
+                child: const Icon(
+                  Icons.videocam,
+                  color: Colors.white54,
+                  size: 30,
+                ),
               ),
       );
     }

@@ -88,6 +88,7 @@ class Module {
   final String? textContent;
   final int durationMinutes;
   final int sortOrder;
+  final String? thumbnailUrl;
 
   Module({
     required this.id,
@@ -99,6 +100,7 @@ class Module {
     this.textContent,
     required this.durationMinutes,
     required this.sortOrder,
+    this.thumbnailUrl,
   });
 
   factory Module.fromJson(Map<String, dynamic> json) {
@@ -115,6 +117,7 @@ class Module {
       textContent: json['textContent'] as String?,
       durationMinutes: json['durationMinutes'] as int,
       sortOrder: json['sortOrder'] as int,
+      thumbnailUrl: json['thumbnailUrl'] as String?,
     );
   }
 
@@ -129,6 +132,7 @@ class Module {
       'textContent': textContent,
       'durationMinutes': durationMinutes,
       'sortOrder': sortOrder,
+      'thumbnailUrl': thumbnailUrl,
     };
   }
 }

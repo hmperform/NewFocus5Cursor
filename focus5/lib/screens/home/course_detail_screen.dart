@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
+import 'package:flutter/services.dart';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
 import '../../utils/image_utils.dart';
+import '../../utils/basic_video_helper.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -940,270 +942,65 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  bool _showControls = true;
-  bool _isPlaying = false;
-
   @override
   void initState() {
     super.initState();
-    // Auto-hide controls after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showControls = false;
-        });
-      }
+    
+    // Initialize the video when the screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeVideo();
     });
   }
-
-  void _toggleControls() {
-    setState(() {
-      _showControls = !_showControls;
-      if (_showControls) {
-        // Auto-hide controls after 3 seconds
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted) {
-            setState(() {
-              _showControls = false;
-            });
-          }
-        });
-      }
-    });
-  }
-
-  void _togglePlayPause() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
+  
+  void _initializeVideo() {
+    // Check if there's a video URL
+    final videoUrl = widget.module.videoUrl;
+    if (videoUrl == null || videoUrl.isEmpty) {
+      // If no video URL, show error message and return
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No video available for this module'),
+        ),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+    
+    // Play the video using BasicVideoHelper
+    BasicVideoHelper.playVideo(
+      context: context,
+      videoUrl: videoUrl,
+      title: widget.module.title,
+      subtitle: widget.courseTitle,
+      thumbnailUrl: widget.module.thumbnailUrl ?? '',
+      mediaItem: MediaItem(
+        id: widget.module.id,
+        title: widget.module.title,
+        description: widget.module.description,
+        mediaType: MediaType.video,
+        mediaUrl: videoUrl,
+        imageUrl: widget.module.thumbnailUrl ?? '',
+        creatorId: '',
+        creatorName: '',
+        durationMinutes: widget.module.durationMinutes,
+        focusAreas: widget.module.type == ModuleType.video ? ['Video'] : ['Audio'],
+        datePublished: DateTime.now(),
+        universityExclusive: false,
+        category: '',
+        xpReward: 10,
+      ),
+      openFullscreen: true,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // This is now just a wrapper that immediately initializes the basic video player
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _toggleControls,
-        child: Stack(
-          children: [
-            // Video
-            Center(
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Video placeholder (replace with actual video player)
-                    Container(
-                      color: Colors.black,
-                      child: const Center(
-                        child: Icon(
-                          Icons.movie,
-                          color: Colors.white24,
-                          size: 64,
-                        ),
-                      ),
-                    ),
-                    // Play/Pause indicator
-                    if (_showControls)
-                      IconButton(
-                        icon: Icon(
-                          _isPlaying ? Icons.pause_circle : Icons.play_circle,
-                          color: Colors.white,
-                          size: 64,
-                        ),
-                        onPressed: _togglePlayPause,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            
-            // Controls
-            AnimatedOpacity(
-              opacity: _showControls ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 300),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.7),
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.7),
-                    ],
-                    stops: const [0.0, 0.15, 0.85, 1.0],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Top bar - title and close button
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.courseTitle,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 14,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    widget.module.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Bottom bar - progress, time and controls
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        child: Column(
-                          children: [
-                            // Progress bar
-                            Row(
-                              children: [
-                                Text(
-                                  '0:00',
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Slider(
-                                    value: 0,
-                                    max: 100,
-                                    activeColor: const Color(0xFFB4FF00),
-                                    inactiveColor: Colors.grey[800],
-                                    onChanged: (value) {},
-                                  ),
-                                ),
-                                Text(
-                                  '${widget.module.durationMinutes}:00',
-                                  style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            
-                            // Controls row
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.replay_10, color: Colors.white),
-                                  onPressed: () {
-                                    // Rewind 10 seconds
-                                  },
-                                ),
-                                const SizedBox(width: 16),
-                                SizedBox(
-                                  width: 64,
-                                  height: 64,
-                                  child: FloatingActionButton(
-                                    backgroundColor: const Color(0xFFB4FF00),
-                                    foregroundColor: Colors.black,
-                                    onPressed: _togglePlayPause,
-                                    child: Icon(
-                                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                                      size: 32,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                IconButton(
-                                  icon: const Icon(Icons.forward_10, color: Colors.white),
-                                  onPressed: () {
-                                    // Forward 10 seconds
-                                  },
-                                ),
-                              ],
-                            ),
-                            
-                            // Additional controls
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.speed, color: Colors.white),
-                                      onPressed: () {
-                                        // Speed settings
-                                      },
-                                    ),
-                                    const Text(
-                                      '1x',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.settings, color: Colors.white),
-                                      onPressed: () {
-                                        // Show settings
-                                      },
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.fullscreen, color: Colors.white),
-                                      onPressed: () {
-                                        // Toggle fullscreen
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );

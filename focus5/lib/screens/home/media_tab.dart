@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:transparent_image/transparent_image.dart';
 
-import '../../constants/dummy_data.dart';
-import '../../models/content_models.dart';
-import '../../providers/theme_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/content_provider.dart';
 import '../../providers/media_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../models/content_models.dart';
+import '../../constants/dummy_data.dart';
+import '../../utils/basic_video_helper.dart';
+import '../../utils/image_utils.dart';
 import '../../screens/home/media_player_screen.dart';
-import '../../utils/chewie_video_helper.dart';
 
 class MediaTab extends StatefulWidget {
   const MediaTab({Key? key}) : super(key: key);
@@ -369,7 +372,7 @@ class _MediaTabState extends State<MediaTab> with SingleTickerProviderStateMixin
   
   void _playMedia(BuildContext context, MediaItem media) {
     if (media.mediaType == MediaType.video) {
-      ChewieVideoHelper.playVideo(
+      BasicVideoHelper.playVideo(
         context: context,
         videoUrl: media.mediaUrl,
         title: media.title,
