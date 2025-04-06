@@ -38,6 +38,8 @@ dependencies:
 
   # Authentication
   firebase_auth: ^4.15.0
+  cloud_firestore: ^4.13.3
+  firebase_storage: ^11.5.3
   google_sign_in: ^6.1.6
   flutter_secure_storage: ^9.0.0
 
@@ -82,7 +84,6 @@ dependencies:
 
   # RevenueCat (Optional - if implementing subscriptions)
   purchases_flutter: ^6.9.2
-  firebase_storage: ^11.6.5
 
 dev_dependencies:
   flutter_test:

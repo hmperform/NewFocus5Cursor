@@ -154,7 +154,7 @@ class SettingsScreen extends StatelessWidget {
               title: 'Data Migration',
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                Navigator.pushNamed(context, '/admin/data_migration');
+                Navigator.pushNamed(context, '/data_migration');
               },
             ),
             

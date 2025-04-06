@@ -181,13 +181,14 @@ class ContentProvider with ChangeNotifier {
   Future<Course?> getCourseById(String courseId) async {
     try {
       // Check if the course is already loaded
-      final localCourse = _courses.firstWhere(
-        (course) => course.id == courseId,
-        orElse: () => null as Course,
-      );
-      
-      if (localCourse != null) {
+      Course? localCourse;
+      try {
+        localCourse = _courses.firstWhere(
+          (course) => course.id == courseId,
+        );
         return localCourse;
+      } catch (e) {
+        // Course not found in local cache, fetch from Firebase
       }
       
       // If not, fetch it from Firebase
@@ -219,6 +220,79 @@ class ContentProvider with ChangeNotifier {
              audio.category.toLowerCase().contains(lowerQuery) ||
              audio.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery));
     }).toList();
+  }
+  
+  // Article methods
+  
+  Future<void> loadArticles() async {
+    try {
+      // For now, just use dummy data
+      _articles = DummyData.dummyArticles;
+      
+      // Filter based on university access if needed
+      if (_universityCode != null) {
+        _articles = _articles.where((article) => 
+          !article.universityExclusive || 
+          (article.universityAccess?.contains(_universityCode) ?? false)
+        ).toList();
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to load articles: ${e.toString()}';
+      notifyListeners();
+    }
+  }
+  
+  Article? getArticleById(String id) {
+    try {
+      return _articles.firstWhere((article) => article.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  List<Article> getArticlesByAuthor(String authorId) {
+    return _articles.where((article) => article.authorId == authorId).toList();
+  }
+  
+  List<Article> getArticlesByTag(String tag) {
+    return _articles.where((article) => article.tags.contains(tag)).toList();
+  }
+  
+  List<Article> getArticlesByFocusArea(String focusArea) {
+    return _articles.where((article) => article.focusAreas.contains(focusArea)).toList();
+  }
+  
+  List<Article> getFeaturedArticles({int limit = 5}) {
+    final articles = List<Article>.from(_articles);
+    articles.sort((a, b) => b.publishedDate.compareTo(a.publishedDate));
+    return articles.take(limit).toList();
+  }
+  
+  // Coach methods
+  
+  List<Map<String, dynamic>> getAllCoaches() {
+    return _coaches;
+  }
+  
+  List<Map<String, dynamic>> searchCoaches(String query) {
+    if (query.isEmpty) return _coaches;
+    
+    final lowerQuery = query.toLowerCase();
+    return _coaches.where((coach) {
+      return coach['name'].toString().toLowerCase().contains(lowerQuery) ||
+             coach['bio'].toString().toLowerCase().contains(lowerQuery) ||
+             coach['specialization'].toString().toLowerCase().contains(lowerQuery);
+    }).toList();
+  }
+  
+  Map<String, dynamic>? getCoachById(String coachId) {
+    try {
+      return _coaches.firstWhere((coach) => coach['id'] == coachId);
+    } catch (e) {
+      return null;
+    }
   }
   
   // Helper methods

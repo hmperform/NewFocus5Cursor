@@ -292,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        'Demo Accounts',
+                        'Firebase Authentication',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -301,20 +301,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Individual Athlete: athlete@example.com',
+                        'This app uses real Firebase Authentication. Please create an account by clicking "Sign Up" below or login with your existing credentials.',
                         style: TextStyle(
                           color: Colors.white70,
                         ),
                       ),
+                      SizedBox(height: 8),
                       Text(
-                        'University Athlete: student@university.edu',
-                        style: TextStyle(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Any password will work for this demo',
+                        'Note: The demo accounts mentioned previously (athlete@example.com and student@university.edu) will not work anymore.',
                         style: TextStyle(
                           fontStyle: FontStyle.italic,
                           color: Colors.white70,

@@ -44,13 +44,34 @@ class _SignupScreenState extends State<SignupScreen> {
       });
 
       try {
-        // In a real app, this would authenticate with Firebase
-        await Future.delayed(const Duration(seconds: 2));
+        // Use the actual Firebase authentication
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final success = await authProvider.register(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _nameController.text.trim(),
+          username: _usernameController.text.trim().isEmpty 
+              ? _nameController.text.trim().split(' ')[0].toLowerCase() 
+              : _usernameController.text.trim(),
+          isIndividual: _isIndividual,
+          university: _university,
+          universityCode: _universityCode,
+          sport: _selectedSport,
+          focusAreas: _selectedFocusAreas.isEmpty ? ['Focus', 'Performance'] : _selectedFocusAreas,
+        );
         
         if (!mounted) return;
         
-        // Navigate to home screen
-        Navigator.of(context).pushReplacementNamed('/home');
+        if (success) {
+          // Navigate to home screen on success
+          Navigator.of(context).pushReplacementNamed('/home');
+        } else {
+          // Show error message from provider
+          setState(() {
+            _errorMessage = authProvider.errorMessage ?? "Registration failed";
+            _isLoading = false;
+          });
+        }
       } catch (e) {
         setState(() {
           _errorMessage = e.toString();
@@ -131,6 +152,28 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Username field
+                    TextFormField(
+                      controller: _usernameController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Username (optional)',
+                        labelStyle: TextStyle(color: Colors.white70),
+                        prefixIcon: Icon(Icons.alternate_email, color: Colors.white70),
+                        filled: true,
+                        fillColor: Color(0xFF1E1E1E),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                          borderSide: BorderSide(color: Color(0xFFB4FF00), width: 2),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     

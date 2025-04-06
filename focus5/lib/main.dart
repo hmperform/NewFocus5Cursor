@@ -17,7 +17,7 @@ import 'screens/home/media_player_screen.dart';
 import 'screens/more/journal_entry_screen.dart';
 import 'screens/more/journal_screen.dart';
 import 'screens/paywall/paywall_screen.dart';
-import 'screens/admin/data_migration_screen.dart';
+import 'screens/settings/data_migration_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/content_provider.dart';
@@ -162,7 +162,7 @@ class Focus5App extends StatelessWidget {
         '/journal_entry': (context) => const JournalEntryScreen(),
         '/journal': (context) => const JournalScreen(),
         '/paywall': (context) => const PaywallScreen(),
-        '/admin/data_migration': (context) => const DataMigrationScreen(),
+        '/data_migration': (context) => const DataMigrationScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/media_player') {

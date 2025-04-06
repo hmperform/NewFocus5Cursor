@@ -32,10 +32,15 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCourseData();
+    // Use post-frame callback to ensure context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCourseData();
+    });
   }
 
   Future<void> _loadCourseData() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
     });
@@ -43,13 +48,34 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     // Add a small delay to simulate network request
     await Future.delayed(const Duration(milliseconds: 500));
 
+    if (!mounted) return;
     final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-    final course = contentProvider.getCourseById(widget.courseId);
+    
+    try {
+      // Properly await the Future returned by getCourseById
+      final course = await contentProvider.getCourseById(widget.courseId);
 
-    setState(() {
-      _course = course;
-      _isLoading = false;
-    });
+      if (mounted) {
+        setState(() {
+          _course = course; // This could be null if course not found
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _course = null;
+          _isLoading = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading course: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
