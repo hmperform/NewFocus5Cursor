@@ -1,3 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+import '../models/content_models.dart';
+
 // In the createCourse method, update to create modules as a subcollection
 
 // Create a new course
@@ -28,9 +34,9 @@ Future<String?> createCourse(Course course) async {
     // Create the course document
     await courseRef.set(courseData);
     
-    // Create all modules as a subcollection of the course
+    // Create all lessons as a subcollection of the course
     for (var lesson in course.lessonsList) {
-      final lessonRef = courseRef.collection('modules').doc(lesson.id);
+      final lessonRef = courseRef.collection('lessons').doc(lesson.id);
       final lessonData = {
         'id': lesson.id,
         'courseId': course.id,
@@ -153,54 +159,68 @@ Future<List<Course>> getCourses({String? universityCode}) async {
     for (var doc in coursesSnapshot.docs) {
       try {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        debugPrint('Loading modules for course: ${doc.id} - ${data['title']}');
         
-        // First try to get modules from the subcollection
-        List<Lesson> modules = [];
+        // Ensure all values in the data map are appropriate types (handle DocumentReference)
+        data = _sanitizeDocumentData(data);
         
-        // Try to get modules from the subcollection first
+        debugPrint('Loading lessons for course: ${doc.id} - ${data['title']}');
+        
+        // Get lessons from the course's lessons subcollection
+        List<Lesson> lessons = [];
+        
         try {
-          QuerySnapshot subcollectionModulesSnapshot = await _firestore
+          QuerySnapshot lessonsSnapshot = await _firestore
               .collection('courses')
               .doc(doc.id)
-              .collection('modules')
+              .collection('lessons')
               .orderBy('sortOrder')
               .get();
               
-          debugPrint('Found ${subcollectionModulesSnapshot.docs.length} modules in subcollection for course ${doc.id}');
+          debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course ${doc.id}');
           
-          if (subcollectionModulesSnapshot.docs.isNotEmpty) {
-            modules = subcollectionModulesSnapshot.docs.map((moduleDoc) {
-              Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
-              return Lesson.fromJson(moduleData);
+          if (lessonsSnapshot.docs.isNotEmpty) {
+            lessons = lessonsSnapshot.docs.map((lessonDoc) {
+              Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
+              // Sanitize the lesson data
+              lessonData = _sanitizeDocumentData(lessonData);
+              return Lesson.fromJson(lessonData);
             }).toList();
           }
-        } catch (subcollectionError) {
-          debugPrint('Error loading subcollection modules for course ${doc.id}: $subcollectionError');
+        } catch (lessonsError) {
+          debugPrint('Error loading lessons for course ${doc.id}: $lessonsError');
         }
         
-        // If no modules in subcollection, try the top-level collection
-        if (modules.isEmpty) {
+        // If no lessons in new structure, try the old module subcollection for backward compatibility
+        if (lessons.isEmpty) {
           try {
-            debugPrint('No modules found in subcollection, trying top-level collection');
-            QuerySnapshot lessonsSnapshot = await _firestore
+            debugPrint('No lessons found in lessons subcollection, trying modules subcollection');
+            QuerySnapshot moduleSnapshot = await _firestore
+                .collection('courses')
+                .doc(doc.id)
                 .collection('modules')
-                .where('courseId', isEqualTo: doc.id)
                 .orderBy('sortOrder')
                 .get();
                 
-            debugPrint('Found ${lessonsSnapshot.docs.length} modules in top-level collection for course ${doc.id}');
+            debugPrint('Found ${moduleSnapshot.docs.length} modules in subcollection for course ${doc.id}');
             
-            modules = lessonsSnapshot.docs.map((lessonDoc) {
-              Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
-              return Lesson.fromJson(lessonData);
-            }).toList();
-          } catch (topLevelError) {
-            debugPrint('Error loading top-level modules for course ${doc.id}: $topLevelError');
+            if (moduleSnapshot.docs.isNotEmpty) {
+              lessons = moduleSnapshot.docs.map((moduleDoc) {
+                Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
+                // Sanitize the module data
+                moduleData = _sanitizeDocumentData(moduleData);
+                // Ensure courseId is included
+                if (!moduleData.containsKey('courseId')) {
+                  moduleData['courseId'] = doc.id;
+                }
+                return Lesson.fromJson(moduleData);
+              }).toList();
+            }
+          } catch (subcollectionError) {
+            debugPrint('Error loading subcollection modules for course ${doc.id}: $subcollectionError');
           }
         }
         
-        // Create course with modules/lessons
+        // Create course with lessons
         courses.add(Course(
           id: doc.id,
           title: data['title'] ?? 'Untitled Course',
@@ -215,7 +235,7 @@ Future<List<Course>> getCourses({String? universityCode}) async {
           durationMinutes: data['durationMinutes'] ?? 0,
           duration: data['durationMinutes'] ?? 0,
           xpReward: data['xpReward'] ?? 0,
-          lessonsList: modules,
+          lessonsList: lessons,
           featured: data['featured'] ?? false,
           premium: data['premium'] ?? false,
           createdAt: data['createdAt'] != null 
@@ -229,7 +249,7 @@ Future<List<Course>> getCourses({String? universityCode}) async {
               : null,
         ));
       } catch (courseError) {
-        debugPrint('Error loading modules for course ${doc.id}: $courseError');
+        debugPrint('Error loading lessons for course ${doc.id}: $courseError');
       }
     }
     
@@ -262,4 +282,167 @@ Future<List<Course>> getCourses({String? universityCode}) async {
     // Still return empty list to not break the app
     return [];
   }
+}
+
+// Get a specific course by ID
+Future<Course?> getCourseById(String courseId) async {
+  try {
+    debugPrint('Loading course by ID: $courseId');
+    final doc = await _firestore.collection('courses').doc(courseId).get();
+    if (!doc.exists) {
+      debugPrint('Course with ID $courseId does not exist');
+      return null;
+    }
+    
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    // Sanitize data
+    data = _sanitizeDocumentData(data);
+    
+    debugPrint('Found course: ${data['title']}');
+    
+    // Get lessons for this course
+    try {
+      debugPrint('Loading lessons for course: $courseId');
+      QuerySnapshot lessonsSnapshot = await _firestore
+          .collection('courses')
+          .doc(courseId)
+          .collection('lessons')
+          .orderBy('sortOrder')
+          .get();
+          
+      debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course $courseId');
+      
+      List<Lesson> lessons = lessonsSnapshot.docs.map((lessonDoc) {
+        Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
+        // Sanitize lesson data
+        lessonData = _sanitizeDocumentData(lessonData);
+        return Lesson.fromJson(lessonData);
+      }).toList();
+      
+      return Course(
+        id: doc.id,
+        title: data['title'] ?? 'Untitled Course',
+        description: data['description'] ?? 'No description available',
+        imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
+        thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
+        creatorId: data['creatorId'] ?? '',
+        creatorName: data['creatorName'] ?? 'Unknown Creator',
+        creatorImageUrl: data['creatorImageUrl'] ?? '',
+        tags: List<String>.from(data['tags'] ?? []),
+        focusAreas: List<String>.from(data['focusAreas'] ?? []),
+        durationMinutes: data['durationMinutes'] ?? 0,
+        duration: data['durationMinutes'] ?? 0,
+        xpReward: data['xpReward'] ?? 0,
+        lessonsList: lessons,
+        featured: data['featured'] ?? false,
+        premium: data['premium'] ?? false,
+        createdAt: data['createdAt'] != null 
+            ? (data['createdAt'] is Timestamp 
+               ? (data['createdAt'] as Timestamp).toDate() 
+               : DateTime.parse(data['createdAt'] as String))
+            : DateTime.now(),
+        universityExclusive: data['universityExclusive'] ?? false,
+        universityAccess: data['universityAccess'] != null 
+            ? List<String>.from(data['universityAccess']) 
+            : null,
+      );
+    } catch (lessonsError) {
+      debugPrint('Error loading lessons for course $courseId: $lessonsError');
+      
+      // If there was an error loading lessons, try to get modules from the subcollection
+      try {
+        debugPrint('Trying to load modules from subcollection for course: $courseId');
+        QuerySnapshot modulesSnapshot = await _firestore
+            .collection('courses')
+            .doc(courseId)
+            .collection('modules')
+            .get();
+            
+        debugPrint('Found ${modulesSnapshot.docs.length} modules in subcollection');
+        
+        List<Lesson> lessons = modulesSnapshot.docs.map((moduleDoc) {
+          Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
+          // Sanitize module data
+          moduleData = _sanitizeDocumentData(moduleData);
+          
+          if (!moduleData.containsKey('courseId')) {
+            moduleData['courseId'] = courseId;
+          }
+          return Lesson.fromJson(moduleData);
+        }).toList();
+        
+        return Course(
+          id: doc.id,
+          title: data['title'] ?? 'Untitled Course',
+          description: data['description'] ?? 'No description available',
+          imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
+          thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
+          creatorId: data['creatorId'] ?? '',
+          creatorName: data['creatorName'] ?? 'Unknown Creator',
+          creatorImageUrl: data['creatorImageUrl'] ?? '',
+          tags: List<String>.from(data['tags'] ?? []),
+          focusAreas: List<String>.from(data['focusAreas'] ?? []),
+          durationMinutes: data['durationMinutes'] ?? 0,
+          duration: data['durationMinutes'] ?? 0,
+          xpReward: data['xpReward'] ?? 0,
+          lessonsList: lessons,
+          featured: data['featured'] ?? false,
+          premium: data['premium'] ?? false,
+          createdAt: data['createdAt'] != null 
+              ? (data['createdAt'] is Timestamp 
+                 ? (data['createdAt'] as Timestamp).toDate() 
+                 : DateTime.parse(data['createdAt'] as String))
+              : DateTime.now(),
+          universityExclusive: data['universityExclusive'] ?? false,
+          universityAccess: data['universityAccess'] != null 
+              ? List<String>.from(data['universityAccess']) 
+              : null,
+        );
+      } catch (e) {
+        debugPrint('Error loading modules from subcollection: $e');
+        return null;
+      }
+    }
+  } catch (e) {
+    debugPrint('Error loading course by ID: $e');
+    return null;
+  }
+}
+
+// Helper method to sanitize Firestore document data
+Map<String, dynamic> _sanitizeDocumentData(Map<String, dynamic> data) {
+  Map<String, dynamic> sanitizedData = {};
+  
+  data.forEach((key, value) {
+    if (value is DocumentReference) {
+      // Convert document references to string paths
+      sanitizedData[key] = value.path;
+    } else if (value is List) {
+      // Handle lists containing document references
+      sanitizedData[key] = _sanitizeList(value);
+    } else if (value is Map) {
+      // Handle nested maps
+      sanitizedData[key] = _sanitizeDocumentData(Map<String, dynamic>.from(value));
+    } else {
+      // Keep other values as is
+      sanitizedData[key] = value;
+    }
+  });
+  
+  return sanitizedData;
+}
+
+// Helper method to sanitize lists in Firestore data
+List _sanitizeList(List list) {
+  return list.map((item) {
+    if (item is DocumentReference) {
+      return item.path;
+    } else if (item is Map) {
+      return _sanitizeDocumentData(Map<String, dynamic>.from(item));
+    } else if (item is List) {
+      return _sanitizeList(item);
+    } else {
+      return item;
+    }
+  }).toList();
 } 

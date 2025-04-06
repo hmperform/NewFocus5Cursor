@@ -66,10 +66,12 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'An unexpected error occurred. Please try again.';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Login failed: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 

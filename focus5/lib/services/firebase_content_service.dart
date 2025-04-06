@@ -635,43 +635,41 @@ class FirebaseContentService {
   // Get all articles
   Future<List<Article>> getArticles({String? universityCode}) async {
     try {
-      QuerySnapshot articleSnapshot = await _firestore.collection('articles').get();
+      QuerySnapshot articlesSnapshot = await _firestore.collection('articles').get();
       
-      List<Article> articles = articleSnapshot.docs.map((doc) {
+      List<Article> articles = articlesSnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        // Sanitize data
+        data = _sanitizeDocumentData(data);
+        
         return Article(
           id: doc.id,
-          title: data['title'],
-          content: data['content'],
-          thumbnailUrl: data['thumbnailUrl'] ?? '',
-          authorId: data['authorId'],
-          authorName: data['authorName'],
-          authorImageUrl: data['authorImageUrl'] ?? '',
-          publishedDate: data['publishedDate'] != null 
-              ? DateTime.parse(data['publishedDate']) 
+          title: data['title'] ?? '',
+          description: data['description'] ?? '',
+          content: data['content'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          thumbnailUrl: data['thumbnailUrl'] ?? data['imageUrl'] ?? '',
+          creatorId: data['creatorId'] ?? '',
+          creatorName: data['creatorName'] ?? '',
+          creatorImageUrl: data['creatorImageUrl'] ?? '',
+          category: data['category'] ?? '',
+          tags: List<String>.from(data['tags'] ?? []),
+          createdAt: data['createdAt'] != null 
+              ? (data['createdAt'] is Timestamp 
+                ? (data['createdAt'] as Timestamp).toDate() 
+                : DateTime.parse(data['createdAt'] as String))
               : DateTime.now(),
-          readTimeMinutes: data['readTimeMinutes'] ?? 3,
-          tags: data['tags'] != null ? List<String>.from(data['tags']) : [],
-          focusAreas: data['focusAreas'] != null 
-              ? List<String>.from(data['focusAreas']) 
-              : [],
-          universityExclusive: data['universityExclusive'] ?? false,
-          universityAccess: data['universityAccess'] != null 
-              ? List<String>.from(data['universityAccess']) 
-              : null,
+          focusAreas: List<String>.from(data['focusAreas'] ?? data['tags'] ?? []),
         );
       }).toList();
       
       // Filter based on university access if needed
       if (universityCode != null) {
         articles = articles.where((article) {
-          if (!article.universityExclusive) return true;
+          if (article.universityExclusive != true) return true;
           return article.universityAccess?.contains(universityCode) ?? false;
         }).toList();
       }
-      
-      // Sort by published date (newest first)
-      articles.sort((a, b) => b.publishedDate.compareTo(a.publishedDate));
       
       return articles;
     } catch (e) {
@@ -751,6 +749,104 @@ class FirebaseContentService {
       debugPrint('Module/lesson organization check and fix completed');
     } catch (e) {
       debugPrint('Error fixing module/lesson organization: $e');
+    }
+  }
+
+  // Load modules for a specific course
+  Future<List<Lesson>> loadModules(String courseId) async {
+    try {
+      debugPrint('Loading modules for course: $courseId');
+      
+      // First try to load from the lessons collection (new approach)
+      try {
+        QuerySnapshot lessonsSnapshot = await _firestore
+            .collection('lessons')
+            .where('courseId', isEqualTo: courseId)
+            .orderBy('sortOrder')
+            .get();
+            
+        debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course $courseId');
+        
+        if (lessonsSnapshot.docs.isNotEmpty) {
+          return lessonsSnapshot.docs.map((lessonDoc) {
+            Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
+            // Sanitize the lesson data
+            lessonData = _sanitizeDocumentData(lessonData);
+            
+            // Ensure courseId is included
+            if (!lessonData.containsKey('courseId')) {
+              lessonData['courseId'] = courseId;
+            }
+            
+            return Lesson.fromJson(lessonData);
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('Error loading lessons for course $courseId: $e');
+      }
+      
+      // If that fails, try the old approach with modules collection as fallback
+      try {
+        QuerySnapshot modulesSnapshot = await _firestore
+            .collection('modules')
+            .where('courseId', isEqualTo: courseId)
+            .orderBy('sortOrder')
+            .get();
+            
+        debugPrint('Found ${modulesSnapshot.docs.length} modules in modules collection for course $courseId');
+        
+        if (modulesSnapshot.docs.isNotEmpty) {
+          return modulesSnapshot.docs.map((moduleDoc) {
+            Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
+            // Sanitize the module data
+            moduleData = _sanitizeDocumentData(moduleData);
+            
+            // Ensure courseId is included
+            if (!moduleData.containsKey('courseId')) {
+              moduleData['courseId'] = courseId;
+            }
+            
+            return Lesson.fromJson(moduleData);
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('Error loading modules for course $courseId: $e');
+      }
+      
+      // Finally try the subcollection approach
+      try {
+        QuerySnapshot subcollectionSnapshot = await _firestore
+            .collection('courses')
+            .doc(courseId)
+            .collection('lessons')
+            .orderBy('sortOrder')
+            .get();
+            
+        debugPrint('Found ${subcollectionSnapshot.docs.length} lessons in subcollection for course $courseId');
+        
+        if (subcollectionSnapshot.docs.isNotEmpty) {
+          return subcollectionSnapshot.docs.map((lessonDoc) {
+            Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
+            // Sanitize the lesson data
+            lessonData = _sanitizeDocumentData(lessonData);
+            
+            // Ensure courseId is included
+            if (!lessonData.containsKey('courseId')) {
+              lessonData['courseId'] = courseId;
+            }
+            
+            return Lesson.fromJson(lessonData);
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('Error loading lessons subcollection for course $courseId: $e');
+      }
+      
+      // If all approaches failed, return an empty list
+      return [];
+    } catch (e) {
+      debugPrint('Error loading modules for course $courseId: $e');
+      return [];
     }
   }
 } 
