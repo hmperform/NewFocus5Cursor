@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/paywall/paywall_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PaywallService {
   // Singleton instance
@@ -74,5 +75,15 @@ class PaywallService {
     // For demo purposes, always succeed
     _hasSubscription = true;
     return true;
+  }
+  
+  /// Check if user has access to premium content
+  /// Returns true if user has access, false otherwise
+  Future<bool> checkAccess() async {
+    // In a real app, this would check the user's subscription status
+    // For now, we'll just check if the user has a premium flag in shared preferences
+    
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('premium_access') ?? false;
   }
 } 

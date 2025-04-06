@@ -12,10 +12,12 @@ import '../../utils/basic_video_helper.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
+  final Course? course;
 
   const CourseDetailScreen({
     Key? key,
     required this.courseId,
+    this.course,
   }) : super(key: key);
 
   @override
@@ -32,10 +34,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Use post-frame callback to ensure context is available
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCourseData();
-    });
+    
+    // If course was passed in, use it directly
+    if (widget.course != null) {
+      _course = widget.course;
+      _isLoading = false;
+      return;
+    }
+    
+    // Otherwise load the course from provider
+    _loadCourse();
+  }
+  
+  void _buildAnimationController() {
+    // Implementation for animation controller
+    // This is just a placeholder since we don't know what animations are used
+  }
+  
+  Future<void> _loadCourse() async {
+    await _loadCourseData();
   }
 
   Future<void> _loadCourseData() async {

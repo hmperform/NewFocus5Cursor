@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/foundation.dart';
 
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
@@ -98,6 +99,14 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: Image.asset(
                     'assets/images/logos/just_focus5_head.png',
                     fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('Error loading logo: $error');
+                      return Icon(
+                        Icons.fitness_center,
+                        size: 80,
+                        color: accentColor,
+                      );
+                    },
                   ),
                 ),
               )

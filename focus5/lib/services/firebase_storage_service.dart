@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 class FirebaseStorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -55,5 +58,67 @@ class FirebaseStorageService {
     }
     
     return results;
+  }
+
+  // Upload a profile image to Firebase Storage and return the download URL
+  Future<String?> uploadProfileImage(String userId, File imageFile) async {
+    try {
+      // Create a reference to the location where we'll store the file
+      // Store profile images in a dedicated folder with user ID as filename
+      final fileName = path.basename(imageFile.path);
+      final fileExtension = path.extension(fileName);
+      final storageRef = _storage.ref().child('profile_images/$userId$fileExtension');
+      
+      // Upload the file
+      await storageRef.putFile(imageFile);
+      
+      // Get the download URL
+      final downloadUrl = await storageRef.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Error uploading profile image: $e');
+      return null;
+    }
+  }
+
+  // Upload a profile image from web (Uint8List)
+  Future<String?> uploadProfileImageWeb(String userId, Uint8List imageData, String fileExtension) async {
+    try {
+      // Create a reference to the location where we'll store the file
+      final storageRef = _storage.ref().child('profile_images/$userId$fileExtension');
+      
+      // Upload the file
+      await storageRef.putData(
+        imageData,
+        SettableMetadata(contentType: 'image/$fileExtension'),
+      );
+      
+      // Get the download URL
+      final downloadUrl = await storageRef.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      debugPrint('Error uploading profile image for web: $e');
+      return null;
+    }
+  }
+
+  // Delete a file from Firebase Storage
+  Future<bool> deleteFile(String fileUrl) async {
+    try {
+      // If it's a direct URL, convert it to a storage reference
+      if (fileUrl.startsWith('http')) {
+        // Create a reference from the URL
+        final ref = _storage.refFromURL(fileUrl);
+        await ref.delete();
+      } else {
+        // It's a path
+        await _storage.ref(fileUrl).delete();
+      }
+      
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting file: $e');
+      return false;
+    }
   }
 } 

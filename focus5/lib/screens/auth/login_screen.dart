@@ -332,11 +332,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SignupScreen(),
-                          ),
-                        );
+                        // Navigate to onboarding flow instead of directly to signup
+                        Navigator.of(context).pushReplacementNamed('/onboarding');
                       },
                       child: const Text(
                         'Sign Up',

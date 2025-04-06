@@ -1,9 +1,27 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/user_model.dart';
 import '../models/content_models.dart';
+import '../services/firebase_storage_service.dart';
+import '../services/badge_service.dart';
+import '../services/user_level_service.dart';
+import '../providers/auth_provider.dart';
+import '../services/firebase_auth_service.dart';
+import 'package:provider/provider.dart';
+import '../main.dart'; // Import to access navigatorKey
 
 class UserProvider extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorageService _storageService = FirebaseStorageService();
+  final BadgeService _badgeService = BadgeService();
+  final AuthProvider? _authProvider;
+  
   User? _user;
   List<JournalEntry> _journalEntries = [];
   bool _isLoading = false;
@@ -14,9 +32,15 @@ class UserProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   int get xp => _user?.xp ?? 0;
+  int get focusPoints => _user?.focusPoints ?? 0;
   int get streak => _user?.streak ?? 0;
   List<AppBadge> get badges => _user?.badges ?? [];
   List<String> get focusAreas => _user?.focusAreas ?? [];
+  
+  // Level-related getters
+  int get level => UserLevelService.getUserLevel(_user?.xp ?? 0);
+  int get xpForNextLevel => UserLevelService.getXpForNextLevel(_user?.xp ?? 0);
+  double get levelProgress => UserLevelService.getLevelProgress(_user?.xp ?? 0);
 
   void setUser(User user) {
     _user = user;
@@ -29,301 +53,458 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // In a real app, this would be a call to the backend
-      // For now, we use the user that's already set by the auth provider
-      if (_user != null) {
-        await _loadJournalEntries(_user!.id);
-        _checkAndUpdateStreak();
+      // Get user data from Firestore
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+      
+      if (docSnapshot.exists) {
+        _user = User.fromFirestore(docSnapshot);
+        await _loadJournalEntries(userId);
+        await _checkAndUpdateStreak(userId);
+        
+        // Check for new badges
+        final newBadges = await _badgeService.checkForNewBadges(userId, _user!);
+        if (newBadges.isNotEmpty) {
+          // Update local user with new badges
+          final allBadges = [..._user!.badges, ...newBadges];
+          _user = _user!.copyWith(
+            badges: allBadges,
+            xp: _user!.xp + newBadges.fold(0, (sum, badge) => sum + badge.xpValue),
+          );
+        }
       }
       
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'Failed to load user data';
+      _errorMessage = 'Failed to load user data: ${e.toString()}';
       notifyListeners();
     }
+  }
+
+  // Get real-time updates for user data
+  Stream<User?> getUserStream(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.exists) {
+            return User.fromFirestore(snapshot);
+          }
+          return null;
+        });
   }
 
   Future<void> _loadJournalEntries(String userId) async {
-    // In a real app, fetch from backend
-    // For now, filter dummy entries
-    _journalEntries = [];
-    notifyListeners();
-  }
-
-  Future<void> _checkAndUpdateStreak() async {
-    if (_user == null) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastActiveStr = prefs.getString('last_active_date');
-    final currentDate = DateTime.now().toIso8601String().split('T')[0]; // Just get the date part
-
-    if (lastActiveStr != null) {
-      final lastActiveDate = DateTime.parse(lastActiveStr);
-      final today = DateTime.now();
-      final difference = today.difference(lastActiveDate).inDays;
-
-      if (difference == 1) {
-        // User was active yesterday, increment streak
-        _user = _user!.copyWith(
-          streak: _user!.streak + 1,
-          lastActive: today,
-        );
-      } else if (difference > 1) {
-        // User missed a day, reset streak
-        _user = _user!.copyWith(
-          streak: 1, // Reset to 1 for today
-          lastActive: today,
-        );
-      }
+    try {
+      final querySnapshot = await _firestore
+          .collection('journal_entries')
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      
+      _journalEntries = querySnapshot.docs
+          .map((doc) => JournalEntry.fromJson(doc.data()))
+          .toList();
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading journal entries: $e');
     }
-
-    // Save today's date
-    await prefs.setString('last_active_date', currentDate);
-    notifyListeners();
   }
 
-  Future<void> updateUserProfile({
+  Future<void> _checkAndUpdateStreak(String userId) async {
+    if (_user == null) return;
+    
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final lastLogin = _user!.lastLoginDate;
+      final lastLoginDate = DateTime(lastLogin.year, lastLogin.month, lastLogin.day);
+      
+      // Check if this is a new day compared to last login
+      if (today.isAfter(lastLoginDate)) {
+        int newStreak = _user!.streak;
+        
+        // If the last login was yesterday, increment streak
+        final yesterday = today.subtract(const Duration(days: 1));
+        if (lastLoginDate.isAtSameMomentAs(yesterday)) {
+          newStreak += 1;
+        } else if (today.difference(lastLoginDate).inDays > 1) {
+          // If more than one day has passed, reset streak
+          newStreak = 1;
+        }
+        
+        // Update streak in Firestore
+        await _firestore.collection('users').doc(userId).update({
+          'streak': newStreak,
+          'lastLoginDate': FieldValue.serverTimestamp(),
+          'longestStreak': FieldValue.increment(newStreak > _user!.longestStreak ? newStreak - _user!.longestStreak : 0),
+        });
+        
+        // Update locally
+        _user = _user!.copyWith(
+          streak: newStreak,
+          lastLoginDate: now,
+          longestStreak: newStreak > _user!.longestStreak ? newStreak : _user!.longestStreak,
+        );
+        
+        // Log login
+        await _firestore.collection('user_logins').add({
+          'userId': userId,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        // Add XP for daily login
+        await addXp(userId, 25, 'Daily login');
+        
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error updating streak: $e');
+    }
+  }
+  
+  // Add XP to user
+  Future<void> addXp(String userId, int amount, String reason) async {
+    if (_user == null || amount <= 0) return;
+    
+    try {
+      int oldXp = _user!.xp;
+      int newXp = oldXp + amount;
+      
+      // Update XP in Firestore
+      await _firestore.collection('users').doc(userId).update({
+        'xp': newXp,
+      });
+      
+      // Log XP history
+      await _firestore.collection('xp_history').add({
+        'userId': userId,
+        'amount': amount,
+        'reason': reason,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      // Update local user
+      _user = _user!.copyWith(xp: newXp);
+      
+      // Check for level up
+      await UserLevelService.checkAndProcessLevelUp(userId, oldXp, newXp);
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error adding XP: $e');
+    }
+  }
+  
+  // Add Focus Points to user
+  Future<void> addFocusPoints(String userId, int amount, String source) async {
+    if (_user == null || amount <= 0) return;
+    
+    try {
+      // Update Focus Points in Firestore
+      await _firestore.collection('users').doc(userId).update({
+        'focusPoints': FieldValue.increment(amount),
+      });
+      
+      // Log Focus Points history
+      await _firestore.collection('focus_points_history').add({
+        'userId': userId,
+        'amount': amount,
+        'source': source,
+        'isAddition': true,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      // Update local user
+      _user = _user!.copyWith(focusPoints: _user!.focusPoints + amount);
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error adding Focus Points: $e');
+    }
+  }
+  
+  // Spend Focus Points
+  Future<bool> spendFocusPoints(String userId, int amount, String purpose) async {
+    if (_user == null || _user!.focusPoints < amount) return false;
+    
+    try {
+      // Update Focus Points in Firestore
+      await _firestore.collection('users').doc(userId).update({
+        'focusPoints': FieldValue.increment(-amount),
+      });
+      
+      // Log Focus Points history
+      await _firestore.collection('focus_points_history').add({
+        'userId': userId,
+        'amount': amount,
+        'source': purpose,
+        'isAddition': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      // Update local user
+      _user = _user!.copyWith(focusPoints: _user!.focusPoints - amount);
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error spending Focus Points: $e');
+      return false;
+    }
+  }
+  
+  // Track app session
+  Future<void> trackAppSession(String userId, int durationMinutes) async {
+    if (_user == null || durationMinutes <= 0) return;
+    
+    try {
+      // Log app session
+      await _firestore.collection('app_sessions').add({
+        'userId': userId,
+        'durationMinutes': durationMinutes,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      // Calculate XP (10 XP per minute)
+      int xpEarned = durationMinutes * 10;
+      await addXp(userId, xpEarned, 'App usage');
+      
+      // Check for badges based on total time spent
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
+    } catch (e) {
+      debugPrint('Error tracking app session: $e');
+    }
+  }
+
+  Future<bool> updateUserProfile({
     String? fullName,
-    String? username,
-    String? sport,
-    List<String>? focusAreas,
+    String? email,
     String? profileImageUrl,
+    String? sport,
+    bool? isIndividual,
+    String? university,
+    String? universityCode,
+    List<String>? focusAreas,
   }) async {
-    if (_user == null) return;
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      // In a real app, send update to backend
-      // For now, just update the local user object
-      _user = _user!.copyWith(
-        fullName: fullName ?? _user!.fullName,
-        username: username ?? _user!.username,
-        sport: sport ?? _user!.sport,
-        focusAreas: focusAreas ?? _user!.focusAreas,
-        profileImageUrl: profileImageUrl ?? _user!.profileImageUrl,
-      );
-
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Failed to update profile';
-      notifyListeners();
-    }
-  }
-
-  Future<bool> addJournalEntry(String title, String content, List<String>? tags) async {
     if (_user == null) return false;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Create a new journal entry
-      final newEntry = JournalEntry(
-        id: 'journal_${DateTime.now().millisecondsSinceEpoch}',
-        userId: _user!.id,
-        title: title,
-        content: content,
-        tags: tags,
-        createdAt: DateTime.now(),
-      );
-
-      // In a real app, send to backend
-      // For now, just add to the local list
-      _journalEntries.insert(0, newEntry);
+      final updates = <String, dynamic>{};
+      if (fullName != null) updates['fullName'] = fullName;
+      if (email != null) updates['email'] = email;
+      if (profileImageUrl != null) updates['profileImageUrl'] = profileImageUrl;
+      if (sport != null) updates['sport'] = sport;
+      if (isIndividual != null) updates['isIndividual'] = isIndividual;
+      if (university != null) updates['university'] = university;
+      if (universityCode != null) updates['universityCode'] = universityCode;
+      if (focusAreas != null) updates['focusAreas'] = focusAreas;
       
-      // Add some XP for creating a journal entry
-      await addXp(10, 'Created a journal entry');
+      // Handle profile image upload if provided
+      if (profileImageUrl != null) {
+        // Update local user object
+        _user = _user!.copyWith(
+          fullName: fullName ?? _user!.fullName,
+          email: email ?? _user!.email,
+          profileImageUrl: profileImageUrl,
+          sport: sport ?? _user!.sport,
+          isIndividual: isIndividual ?? _user!.isIndividual,
+          university: university ?? _user!.university,
+          universityCode: universityCode ?? _user!.universityCode,
+          focusAreas: focusAreas ?? _user!.focusAreas,
+        );
+      }
+      
+      // Update Firestore
+      if (updates.isNotEmpty) {
+        await _firestore.collection('users').doc(_user!.id).update(updates);
+      }
 
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = 'Failed to add journal entry';
+      _errorMessage = 'Failed to update profile: ${e.toString()}';
       notifyListeners();
       return false;
     }
   }
-
-  Future<bool> deleteJournalEntry(String entryId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      // In a real app, send delete request to backend
-      // For now, just remove from the local list
-      _journalEntries.removeWhere((entry) => entry.id == entryId);
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Failed to delete journal entry';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<void> addXp(int amount, String reason) async {
+  
+  // Track course completion
+  Future<void> trackCourseCompletion(String userId, String courseId) async {
     if (_user == null) return;
-
-    try {
-      // In a real app, send to backend
-      // For now, just update the local user object
-      _user = _user!.copyWith(
-        xp: _user!.xp + amount,
-      );
-
-      // Check if the user has earned any badges
-      _checkForNewBadges();
-
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = 'Failed to add XP';
-      notifyListeners();
-    }
-  }
-
-  void _checkForNewBadges() {
-    if (_user == null) return;
-
-    // In a real app, this logic would be more complex and likely on the backend
-    // For this demo, we'll just add a badge if they reach certain XP thresholds
     
-    // Example: Award "XP Milestone" badge at 1000 XP
-    if (_user!.xp >= 1000 && !_hasBadge('badge_xp_1000')) {
-      final newBadge = AppBadge(
-        id: 'badge_xp_1000',
-        name: 'XP Milestone: 1000',
-        description: 'You\'ve earned 1000 XP!',
-        imageUrl: 'assets/images/badges/xp_1000.png',
-        earnedAt: DateTime.now(),
-        xpValue: 50, // Earning the badge itself gives 50 XP
-      );
+    try {
+      // Check if course is already completed
+      if (_user!.completedCourses.contains(courseId)) return;
       
-      // Add the badge and its XP value
-      final updatedBadges = [..._user!.badges, newBadge];
-      _user = _user!.copyWith(
-        badges: updatedBadges,
-        xp: _user!.xp + newBadge.xpValue,
-      );
+      // Add to completed courses
+      List<String> updatedCourses = [..._user!.completedCourses, courseId];
+      
+      // Update user document
+      await _firestore.collection('users').doc(userId).update({
+        'completedCourses': updatedCourses,
+      });
+      
+      // Log completion
+      await _firestore.collection('course_completions').add({
+        'userId': userId,
+        'courseId': courseId,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      
+      // Award XP
+      await addXp(userId, 100, 'Course completion');
+      
+      // Award Focus Points
+      await addFocusPoints(userId, 25, 'Course completion');
+      
+      // Update local user
+      _user = _user!.copyWith(completedCourses: updatedCourses);
+      
+      // Check for badges
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error tracking course completion: $e');
     }
+  }
+  
+  // Track audio module completion
+  Future<void> trackAudioCompletion(String userId, String audioId) async {
+    if (_user == null) return;
     
-    // Example: Award streak badge at 7 days
-    if (_user!.streak >= 7 && !_hasBadge('badge_streak_7')) {
-      final newBadge = AppBadge(
-        id: 'badge_streak_7',
-        name: '7-Day Streak',
-        description: 'You\'ve used Focus 5 for 7 days in a row!',
-        imageUrl: 'assets/images/badges/streak_7.png',
-        earnedAt: DateTime.now(),
-        xpValue: 100,
-      );
-      
-      final updatedBadges = [..._user!.badges, newBadge];
-      _user = _user!.copyWith(
-        badges: updatedBadges,
-        xp: _user!.xp + newBadge.xpValue,
-      );
-    }
-  }
-
-  bool _hasBadge(String badgeId) {
-    if (_user == null) return false;
-    return _user!.badges.any((badge) => badge.id == badgeId);
-  }
-
-  Future<void> addCompletedCourse(String courseId, int xpReward) async {
-    if (_user == null) return;
-
     try {
-      // Avoid duplicate entries
-      if (!_user!.completedCourses.contains(courseId)) {
-        final updatedCourses = [..._user!.completedCourses, courseId];
-        _user = _user!.copyWith(
-          completedCourses: updatedCourses,
-        );
-        
-        // Add XP for completing the course
-        await addXp(xpReward, 'Completed a course');
-      }
-
+      // Check if audio is already completed
+      if (_user!.completedAudios.contains(audioId)) return;
+      
+      // Add to completed audios
+      List<String> updatedAudios = [..._user!.completedAudios, audioId];
+      
+      // Update user document
+      await _firestore.collection('users').doc(userId).update({
+        'completedAudios': updatedAudios,
+      });
+      
+      // Log completion
+      await _firestore.collection('audio_completions').add({
+        'userId': userId,
+        'audioId': audioId,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      
+      // Award XP
+      await addXp(userId, 50, 'Audio completion');
+      
+      // Award Focus Points
+      await addFocusPoints(userId, 10, 'Audio completion');
+      
+      // Update local user
+      _user = _user!.copyWith(completedAudios: updatedAudios);
+      
+      // Check for badges
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to update completed courses';
-      notifyListeners();
+      debugPrint('Error tracking audio completion: $e');
     }
   }
 
-  Future<void> addCompletedAudio(String audioId, int xpReward) async {
-    if (_user == null) return;
-
+  Future<void> updateProfile({
+    String? name,
+    String? university,
+    File? imageFile,
+    Uint8List? imageBytes,
+  }) async {
     try {
-      // Avoid duplicate entries
-      if (!_user!.completedAudios.contains(audioId)) {
-        final updatedAudios = [..._user!.completedAudios, audioId];
-        _user = _user!.copyWith(
-          completedAudios: updatedAudios,
-        );
-        
-        // Add XP for completing the audio
-        await addXp(xpReward, 'Completed an audio session');
-      }
-
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = 'Failed to update completed audio sessions';
-      notifyListeners();
-    }
-  }
-
-  Future<void> toggleSavedCourse(String courseId) async {
-    if (_user == null) return;
-
-    try {
-      List<String> updatedSavedCourses;
-      
-      if (_user!.savedCourses.contains(courseId)) {
-        // Remove if already saved
-        updatedSavedCourses = _user!.savedCourses.where((id) => id != courseId).toList();
-      } else {
-        // Add if not saved
-        updatedSavedCourses = [..._user!.savedCourses, courseId];
+      if (_user == null) {
+        throw Exception('No user data available');
       }
       
-      _user = _user!.copyWith(
-        savedCourses: updatedSavedCourses,
+      final authProvider = Provider.of<AuthProvider>(navigatorKey.currentContext!, listen: false);
+      
+      // Call the auth service to update the profile
+      final error = await authProvider.updateUserProfile(
+        uid: _user!.id,
+        fullName: name,
+        university: university,
+        imageFile: imageFile,
+        imageBytes: imageBytes,
       );
-
+      
+      if (error != null) {
+        throw Exception(error);
+      }
+      
+      // Reload user data to get the updated information including new image URL
+      await loadUser(_user!.id);
+      
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to update saved courses';
-      notifyListeners();
+      debugPrint('Error updating profile: $e');
+      rethrow;
     }
   }
 
-  // Check if a course is saved
-  bool isSavedCourse(String courseId) {
-    if (_user == null) return false;
-    return _user!.savedCourses.contains(courseId);
-  }
-
-  // Check if user has completed a course
-  bool hasCompletedCourse(String courseId) {
-    if (_user == null) return false;
-    return _user!.completedCourses.contains(courseId);
-  }
-
-  // Check if user has completed an audio
-  bool hasCompletedAudio(String audioId) {
-    if (_user == null) return false;
-    return _user!.completedAudios.contains(audioId);
+  // Get all available badges including not yet earned ones
+  Future<List<AppBadge>> getAllAvailableBadges() async {
+    try {
+      // Fetch all badge definitions from Firestore
+      final FirebaseFirestore _db = FirebaseFirestore.instance;
+      final querySnapshot = await _db.collection('badges').get();
+      
+      // Convert to AppBadge objects with earnedAt set to null (not yet earned)
+      final List<AppBadge> allBadges = [];
+      
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        allBadges.add(AppBadge(
+          id: doc.id,
+          name: data['name'] ?? '',
+          description: data['description'] ?? '',
+          imageUrl: data['imageUrl'] ?? 'assets/images/badges/default.png',
+          earnedAt: null, // Not earned yet
+          xpValue: data['xpValue'] ?? 0,
+        ));
+      }
+      
+      // If user has badges, mark them as earned
+      if (_user != null && _user!.badges.isNotEmpty) {
+        // For each badge in allBadges, check if the user has already earned it
+        for (var i = 0; i < allBadges.length; i++) {
+          final existingBadge = _user!.badges.firstWhere(
+            (badge) => badge.id == allBadges[i].id,
+            orElse: () => AppBadge(
+              id: 'not_found',
+              name: '',
+              description: '',
+              imageUrl: '',
+              earnedAt: DateTime.now(),
+              xpValue: 0,
+            ),
+          );
+          
+          if (existingBadge.id != 'not_found') {
+            // User has this badge, so replace with the earned version
+            allBadges[i] = existingBadge;
+          }
+        }
+      }
+      
+      return allBadges;
+    } catch (e) {
+      debugPrint('Error getting available badges: $e');
+      return [];
+    }
   }
 } 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
@@ -12,6 +13,9 @@ import '../../widgets/article/article_card.dart';
 import 'course_detail_screen.dart';
 import 'coach_profile_screen.dart';
 import 'articles_list_screen.dart';
+import 'all_coaches_screen.dart';
+import 'all_courses_screen.dart';
+import 'all_modules_screen.dart';
 import '../../services/paywall_service.dart';
 import 'article_detail_screen.dart';
 
@@ -28,6 +32,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   String _searchQuery = '';
   bool _isLoading = false;
   int _selectedTabIndex = 0;
+  
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  List<Map<String, dynamic>> _coaches = [];
+  bool _loadingCoaches = true;
   
   late TabController _tabController;
   
@@ -59,7 +67,60 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       if (contentProvider.articles.isEmpty) {
         contentProvider.loadArticles();
       }
+      
+      _loadCoaches();
     });
+  }
+  
+  Future<void> _loadCoaches() async {
+    try {
+      setState(() {
+        _loadingCoaches = true;
+      });
+      
+      final QuerySnapshot coachesSnapshot = await _firestore
+          .collection('coaches')
+          .where('isActive', isEqualTo: true)
+          .limit(10)
+          .get();
+      
+      if (coachesSnapshot.docs.isEmpty) {
+        // If no coaches found in Firestore, use dummy data
+        setState(() {
+          _coaches = DummyData.dummyCoaches;
+          _loadingCoaches = false;
+        });
+        return;
+      }
+      
+      final List<Map<String, dynamic>> loadedCoaches = coachesSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'id': doc.id,
+          'name': data['name'] ?? 'Unknown Coach',
+          'title': data['title'] ?? 'Mental Performance Coach',
+          'specialization': data['specialization'] ?? 'Performance',
+          'description': data['description'] ?? 'No description available',
+          'imageUrl': data['imageUrl'] ?? 'https://via.placeholder.com/300',
+          'rating': data['rating'] ?? 4.8,
+          'reviews': data['reviews'] ?? 24,
+          'price': data['price'] ?? 99,
+          'isActive': data['isActive'] ?? true,
+        };
+      }).toList();
+      
+      setState(() {
+        _coaches = loadedCoaches;
+        _loadingCoaches = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading coaches: $e');
+      // Fallback to dummy data on error
+      setState(() {
+        _coaches = DummyData.dummyCoaches;
+        _loadingCoaches = false;
+      });
+    }
   }
 
   @override
@@ -188,14 +249,29 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               ),
               TextButton(
                 onPressed: () {
-                  // Navigate to all coaches
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllCoachesScreen(),
+                    ),
+                  );
                 },
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryTextColor,
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -203,15 +279,24 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         ),
         SizedBox(
           height: MediaQuery.of(context).size.height * 0.33, // 1/3 of screen height
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: DummyData.dummyCoaches.length,
-            itemBuilder: (context, index) {
-              final coach = DummyData.dummyCoaches[index];
-              return _buildCoachCard(coach);
-            },
-          ),
+          child: _loadingCoaches
+              ? Center(child: CircularProgressIndicator())
+              : _coaches.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No coaches available',
+                        style: TextStyle(color: textColor),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _coaches.length,
+                      itemBuilder: (context, index) {
+                        final coach = _coaches[index];
+                        return _buildCoachCard(coach);
+                      },
+                    ),
         ),
       ],
     );
@@ -251,11 +336,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                       return Container(
                         width: 170,
                         height: 210,
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Icons.person,
-                          color: Colors.white54,
-                          size: 48,
+                        color: Colors.grey.shade200,
+                        child: const Center(
+                          child: Icon(Icons.person, size: 50),
                         ),
                       );
                     },
@@ -267,13 +350,13 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   top: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Theme.of(context).primaryColor.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      coach['specialization'],
+                      coach['specialization'] ?? 'Performance',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -285,434 +368,83 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               ],
             ),
             
+            const SizedBox(height: 10),
+            
             // Coach name
-            Padding(
-              padding: const EdgeInsets.only(top: 12, left: 4),
-              child: Text(
-                coach['name'],
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            Text(
+              coach['name'],
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            
+            const SizedBox(height: 4),
+            
+            // Coach title
+            Text(
+              coach['title'],
+              style: TextStyle(
+                fontSize: 14,
+                color: textColor.withOpacity(0.7),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            
+            const SizedBox(height: 6),
+            
+            // Rating
+            Row(
+              children: [
+                Icon(
+                  Icons.star,
+                  color: Colors.amber,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${coach['rating']}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '(${coach['reviews']})',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: textColor.withOpacity(0.7),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
-    );
-  }
-  
-  Widget _buildModulesSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Modules',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // Navigate to all modules
-                },
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryTextColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 150,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            children: [
-              _buildModuleCard('Mental Toughness', Colors.blue.shade700),
-              _buildModuleCard('Motivation Mastery', Colors.green.shade700),
-              _buildModuleCard('Focus Training', Colors.purple.shade700),
-              _buildModuleCard('Team Leadership', Colors.orange.shade700),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildModuleCard(String title, Color color) {
-    return GestureDetector(
-      onTap: () {
-        // Find a course related to this module
-        final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-        
-        // Make sure courses are loaded
-        if (contentProvider.courses.isEmpty) {
-          contentProvider.initContent(null);
-        }
-        
-        // Find a course that matches this module's topic
-        final relatedCourses = contentProvider.courses.where((course) {
-          return course.title.contains(title) || 
-                 course.focusAreas.any((area) => area.contains(title)) ||
-                 title.contains(course.title);
-        }).toList();
-        
-        if (relatedCourses.isNotEmpty) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CourseDetailScreen(
-                courseId: relatedCourses.first.id,
-              ),
-            ),
-          );
-        } else {
-          // Fallback to showing a message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No modules available for $title yet. Check back soon!'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      },
-      child: Container(
-        width: 220,
-        margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              bottom: 16,
-              right: 16,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_forward,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildCourseTopicsSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Course Topics',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // Navigate to all course topics
-                },
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryTextColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 150,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            children: [
-              _buildTopicCard('Mental Toughness', Colors.teal.shade600),
-              _buildTopicCard('Power Mindset', Colors.green.shade600),
-              _buildTopicCard('Focus Training', Colors.blue.shade600),
-              _buildTopicCard('Team Dynamics', Colors.orange.shade600),
-              _buildTopicCard('Motivation', Colors.purple.shade600),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32), // Bottom padding
-      ],
-    );
-  }
-  
-  Widget _buildTopicCard(String topic, Color color) {
-    return GestureDetector(
-      onTap: () {
-        // Navigate to filtered courses
-        final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-        
-        // Make sure we have content initialized
-        if (contentProvider.courses.isEmpty) {
-          contentProvider.initContent(null);
-        }
-        
-        final courses = contentProvider.getCoursesForFocusArea(topic);
-        
-        // Check if we found courses for this topic
-        if (courses.isNotEmpty) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CourseDetailScreen(
-                courseId: courses.first.id,
-              ),
-            ),
-          );
-        } else {
-          // Show a message if no courses found for this topic
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No courses found for $topic yet. Check back soon!'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      },
-      child: Container(
-        width: 140,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            topic,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildFeaturedCoursesSection() {
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final courses = contentProvider.courses;
-    
-    if (courses.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Featured Courses',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // Navigate to courses tab
-                  DefaultTabController.of(context)?.animateTo(2);
-                },
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryTextColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: courses.length > 5 ? 5 : courses.length,
-            itemBuilder: (context, index) {
-              final course = courses[index];
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CourseDetailScreen(
-                        courseId: course.id,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 300,
-                  margin: const EdgeInsets.only(right: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: surfaceColor,
-                  ),
-                  clipBehavior: Clip.hardEdge,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Course image
-                      SizedBox(
-                        height: 120,
-                        width: double.infinity,
-                        child: FadeInImage.memoryNetwork(
-                          placeholder: kTransparentImage,
-                          image: course.thumbnailUrl,
-                          fit: BoxFit.cover,
-                          imageErrorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Theme.of(context).colorScheme.surfaceVariant,
-                              child: Icon(
-                                Icons.image_not_supported,
-                                color: secondaryTextColor,
-                                size: 48,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      // Course info
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              course.title,
-                              style: TextStyle(
-                                color: textColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              course.creatorName,
-                              style: TextStyle(
-                                color: secondaryTextColor,
-                                fontSize: 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
   
   Widget _buildArticlesSection() {
-    final contentProvider = Provider.of<ContentProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    final featuredArticles = contentProvider.getFeaturedArticles();
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final articles = contentProvider.articles;
     
-    if (featuredArticles.isEmpty) {
-      return const SizedBox.shrink();
+    if (articles.isEmpty) {
+      return const SizedBox.shrink(); // Hide if no articles
     }
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -733,52 +465,506 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                     ),
                   );
                 },
-                child: Text(
-                  'See all',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: secondaryTextColor,
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
         SizedBox(
-          height: 260,
+          height: 280,
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.only(left: 16),
             scrollDirection: Axis.horizontal,
-            itemCount: featuredArticles.length,
+            itemCount: articles.length > 5 ? 5 : articles.length,
             itemBuilder: (context, index) {
-              final article = featuredArticles[index];
-              return GestureDetector(
-                onTap: () async {
-                  // Check if user has access or show paywall
-                  final paywallService = PaywallService();
-                  final hasAccess = await paywallService.showPaywallIfNeeded(
-                    context,
-                    source: 'article',
-                  );
-                  
-                  // If user has access, navigate to article
-                  if (hasAccess && context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ArticleDetailScreen(
-                          articleId: article.id,
-                        ),
-                      ),
-                    );
-                  }
-                },
-                child: ArticleCard(article: article),
+              final article = articles[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: ArticleCard(
+                  article: article,
+                ),
               );
             },
           ),
         ),
+      ],
+    );
+  }
+  
+  Widget _buildFeaturedCoursesSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final courses = contentProvider.getFeaturedCourses();
+    
+    if (courses.isEmpty) {
+      return const SizedBox.shrink(); // Hide if no courses
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Featured Courses',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllCoursesScreen(),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 260,
+          child: ListView.builder(
+            padding: const EdgeInsets.only(left: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: courses.length,
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              return _buildCourseCard(course);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildCourseCard(Course course) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final isDarkMode = themeProvider.isDarkMode;
+    
+    return GestureDetector(
+      onTap: () async {
+        final paywallService = PaywallService();
+        final canAccess = await paywallService.checkAccess();
+        
+        if (!canAccess && course.premium) {
+          Navigator.pushNamed(context, '/paywall');
+          return;
+        }
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CourseDetailScreen(
+              courseId: course.id,
+              course: course,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 280,
+        margin: const EdgeInsets.only(right: 20, bottom: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Course image
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                  child: FadeInImage.memoryNetwork(
+                    placeholder: kTransparentImage,
+                    image: course.imageUrl,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    imageErrorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 140,
+                        width: double.infinity,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image, color: Colors.grey),
+                      );
+                    },
+                  ),
+                ),
+                if (course.premium)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade800,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.star,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Premium',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Course title
+                  Text(
+                    course.title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  
+                  const SizedBox(height: 8),
+                  
+                  // Course meta info (lessons, duration)
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.play_circle_outline,
+                        size: 16,
+                        color: textColor.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${course.lessons.length} lessons',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textColor.withOpacity(0.7),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Icon(
+                        Icons.access_time,
+                        size: 16,
+                        color: textColor.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${course.duration} mins',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textColor.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Progress indicator
+                  LinearProgressIndicator(
+                    value: 0.0, // No progress initially
+                    backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(themeProvider.accentColor),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildModulesSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final modules = contentProvider.getModules();
+    
+    if (modules.isEmpty) {
+      return const SizedBox.shrink(); // Hide if no modules
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Focus Areas',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllModulesScreen(),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 1.5,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: modules.length > 4 ? 4 : modules.length, // Show max 4 modules in grid
+          itemBuilder: (context, index) {
+            final module = modules[index];
+            return _buildModuleCard(module);
+          },
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildModuleCard(Module module) {
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
+    return GestureDetector(
+      onTap: () {
+        // Navigate to module content
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: FadeInImage.memoryNetwork(
+                placeholder: kTransparentImage,
+                image: module.imageUrl,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                imageErrorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.shade200,
+                    child: const Icon(Icons.image, color: Colors.grey),
+                  );
+                },
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    module.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${module.audioCount} audio tracks',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildCourseTopicsSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final isDark = themeProvider.isDarkMode;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+          child: Text(
+            'Popular Topics',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 50,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: _categories.length,
+            itemBuilder: (context, index) {
+              final bool isSelected = index == _selectedTabIndex;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = index;
+                  });
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? themeProvider.accentColor 
+                        : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _categories[index],
+                      style: TextStyle(
+                        color: isSelected 
+                            ? (isDark ? Colors.black : Colors.white) 
+                            : textColor,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 40),
       ],
     );
   }

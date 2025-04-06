@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
@@ -91,6 +93,9 @@ class AuthProvider extends ChangeNotifier {
     String? universityCode,
     String? sport,
     required List<String> focusAreas,
+    File? profileImageFile,
+    Uint8List? profileImageBytes,
+    String? profileImageName,
   }) async {
     _status = AuthStatus.authenticating;
     _errorMessage = null;
@@ -106,7 +111,10 @@ class AuthProvider extends ChangeNotifier {
         sport,
         university,
         universityCode,
-        focusAreas
+        focusAreas,
+        profileImageFile,
+        profileImageBytes,
+        profileImageName,
       );
       
       await _loadUser(userCredential.user!.uid);
@@ -177,6 +185,38 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       print('Error verifying university code: $e');
       return false;
+    }
+  }
+  
+  // Update user profile through auth service
+  Future<String?> updateUserProfile({
+    required String uid,
+    String? fullName,
+    String? username,
+    String? sport,
+    String? university,
+    String? universityCode,
+    bool? isIndividual,
+    List<String>? focusAreas,
+    File? imageFile,
+    Uint8List? imageBytes,
+  }) async {
+    try {
+      return await _authService.updateUserProfile(
+        uid: uid,
+        fullName: fullName,
+        username: username,
+        sport: sport,
+        university: university,
+        universityCode: universityCode,
+        isIndividual: isIndividual,
+        focusAreas: focusAreas,
+        imageFile: imageFile,
+        imageBytes: imageBytes,
+      );
+    } catch (e) {
+      print('Error in updateUserProfile: $e');
+      return e.toString();
     }
   }
   

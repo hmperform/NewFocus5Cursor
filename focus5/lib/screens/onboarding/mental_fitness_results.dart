@@ -327,9 +327,15 @@ class _MentalFitnessResultsState extends State<MentalFitnessResults> with Single
                         height: 56,
                         child: ElevatedButton(
                           onPressed: () {
+                            // Save registration info to shared prefs - keep the onboarding flag
+                            final prefs = SharedPreferences.getInstance().then((prefs) {
+                              // Maintain the onboarding flow flag
+                              prefs.setBool('from_onboarding_flow', true);
+                            });
+                            
                             Navigator.of(context).pushReplacement(
                               MaterialPageRoute(
-                                builder: (context) => const ProfileSetupScreen(),
+                                builder: (context) => const ProfileSetupScreen(fromOnboarding: true),
                               ),
                             );
                           },

@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../providers/auth_provider.dart';
 import '../../constants/dummy_data.dart';
+import '../onboarding/sport_selection_screen.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({Key? key}) : super(key: key);
+  final bool fromOnboarding;
+  
+  const SignupScreen({
+    Key? key, 
+    this.fromOnboarding = false,
+  }) : super(key: key);
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -25,6 +36,11 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _universityCode;
   List<String> _selectedFocusAreas = [];
   
+  // For handling cross-platform image picking
+  File? _profileImageFile;
+  Uint8List? _profileImageBytes;
+  String? _profileImageName;
+  
   String? _errorMessage;
   
   @override
@@ -34,6 +50,32 @@ class _SignupScreenState extends State<SignupScreen> {
     _nameController.dispose();
     _usernameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 500,
+      maxHeight: 500,
+      imageQuality: 85,
+    );
+    
+    if (pickedFile != null) {
+      if (kIsWeb) {
+        // Web platform - use bytes
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _profileImageBytes = bytes;
+          _profileImageName = pickedFile.name;
+        });
+      } else {
+        // Mobile platform - use File
+        setState(() {
+          _profileImageFile = File(pickedFile.path);
+        });
+      }
+    }
   }
 
   Future<void> _signUp() async {
@@ -46,6 +88,13 @@ class _SignupScreenState extends State<SignupScreen> {
       try {
         // Use the actual Firebase authentication
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        
+        // Save sport selection to prevent asking twice
+        final prefs = await SharedPreferences.getInstance();
+        if (_selectedSport != null) {
+          await prefs.setString('selected_sport', _selectedSport!);
+        }
+        
         final success = await authProvider.register(
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -58,13 +107,37 @@ class _SignupScreenState extends State<SignupScreen> {
           universityCode: _universityCode,
           sport: _selectedSport,
           focusAreas: _selectedFocusAreas.isEmpty ? ['Focus', 'Performance'] : _selectedFocusAreas,
+          profileImageFile: _profileImageFile,
+          profileImageBytes: _profileImageBytes,
+          profileImageName: _profileImageName,
         );
         
         if (!mounted) return;
         
         if (success) {
-          // Navigate to home screen on success
-          Navigator.of(context).pushReplacementNamed('/home');
+          // Set a flag to indicate we're coming from onboarding if needed
+          if (widget.fromOnboarding) {
+            // If coming from onboarding and we already selected a sport,
+            // skip the sport selection screen
+            if (_selectedSport != null) {
+              // Set the flag and go directly to profile setup
+              await prefs.setBool('from_onboarding_flow', true);
+              Navigator.of(context).pushReplacementNamed('/profile_setup');
+            } else {
+              // If no sport selected, continue to the sport selection screen
+              await prefs.setBool('from_onboarding_flow', true);
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const SportSelectionScreen(),
+                ),
+              );
+            }
+          } else {
+            // Clear the onboarding flow flag as we're done with it
+            await prefs.remove('from_onboarding_flow');
+            // Navigate to home screen on success
+            Navigator.of(context).pushReplacementNamed('/home');
+          }
         } else {
           // Show error message from provider
           setState(() {
@@ -83,10 +156,18 @@ class _SignupScreenState extends State<SignupScreen> {
   
   @override
   Widget build(BuildContext context) {
+    // Determine if we have a profile image to display
+    bool hasProfileImage = _profileImageFile != null || _profileImageBytes != null;
+    
     return WillPopScope(
       onWillPop: () async {
-        // Navigate directly to login to prevent returning to onboarding
-        Navigator.of(context).pushReplacementNamed('/login');
+        if (widget.fromOnboarding) {
+          // If coming from onboarding, go back to onboarding
+          Navigator.of(context).pushReplacementNamed('/onboarding');
+        } else {
+          // Otherwise go to login
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
         return false;
       },
       child: Scaffold(
@@ -96,7 +177,15 @@ class _SignupScreenState extends State<SignupScreen> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+            onPressed: () {
+              if (widget.fromOnboarding) {
+                // If coming from onboarding, go back to onboarding
+                Navigator.of(context).pushReplacementNamed('/onboarding');
+              } else {
+                // Otherwise go to login
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
+            },
           ),
         ),
         body: SafeArea(
@@ -126,6 +215,73 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
+                    
+                    // Profile image picker
+                    Center(
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E1E1E),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white24,
+                                width: 2,
+                              ),
+                            ),
+                            child: hasProfileImage
+                                ? ClipOval(
+                                    child: kIsWeb && _profileImageBytes != null
+                                        ? Image.memory(
+                                            _profileImageBytes!,
+                                            width: 120,
+                                            height: 120,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : !kIsWeb && _profileImageFile != null
+                                            ? Image.file(
+                                                _profileImageFile!,
+                                                width: 120,
+                                                height: 120,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : const Icon(
+                                                Icons.person,
+                                                size: 60,
+                                                color: Colors.white70,
+                                              ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 60,
+                                    color: Colors.white70,
+                                  ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _pickImage,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFB4FF00),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  size: 20,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     
                     // Name field
                     TextFormField(

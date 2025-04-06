@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:confetti/confetti.dart';
+import 'dart:math' as Math;
 
 import '../../providers/auth_provider.dart';
 import '../../constants/dummy_data.dart';
@@ -244,6 +246,9 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
   // Track the long press status
   DateTime? _pressStartTime;
   
+  // Add confetti controller
+  late ConfettiController _confettiController;
+  
   @override
   void initState() {
     super.initState();
@@ -264,14 +269,20 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
       end: const Color(0xFFB4FF00),
     ).animate(_animationController);
     
+    // Initialize confetti controller
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    
     _animationController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() {
           _isComplete = true;
         });
         
+        // Play confetti when complete
+        _confettiController.play();
+        
         // Delay to show completion before navigating
-        Future.delayed(const Duration(milliseconds: 500), () {
+        Future.delayed(const Duration(milliseconds: 1500), () {
           _navigateToSignup();
         });
       }
@@ -281,6 +292,7 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
   @override
   void dispose() {
     _animationController.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
   
@@ -300,16 +312,17 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
   }
   
   void _navigateToSignup() async {
-    // Save that first launch is complete
+    // Save that first launch is complete but DO NOT set onboarding flag yet
+    // We'll want to complete the signup first, then do the rest of onboarding
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_first_launch', false);
     
     if (!mounted) return;
     
-    // Navigate to sport selection screen first
-    Navigator.of(context).push(
+    // Navigate to signup screen first, then we'll do sport selection
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => const SportSelectionScreen(),
+        builder: (context) => const SignupScreen(fromOnboarding: true),
       ),
     );
   }
@@ -323,147 +336,173 @@ class _SignupCommitmentScreenState extends State<SignupCommitmentScreen> with Si
           builder: (context, constraints) {
             final availableHeight = constraints.maxHeight;
             
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: availableHeight,
+            return Stack(
+              children: [
+                // Confetti widget
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConfettiWidget(
+                    confettiController: _confettiController,
+                    blastDirection: Math.pi/2,
+                    maxBlastForce: 5,
+                    minBlastForce: 2,
+                    emissionFrequency: 0.05,
+                    numberOfParticles: 50,
+                    gravity: 0.1,
+                    colors: const [
+                      Colors.green,
+                      Colors.blue,
+                      Colors.pink,
+                      Colors.orange,
+                      Colors.purple,
+                      Color(0xFFB4FF00),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(height: 20),
-                          AnimatedOpacity(
-                            opacity: _isComplete ? 1.0 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            child: const Text(
-                              "LET'S GET TO WORK!",
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          if (!_isComplete)
-                            const Text(
-                              "Make a commitment to your mental training",
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1.2,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          const SizedBox(height: 24),
-                          if (!_isComplete)
-                            const Text(
-                              "Hold the thumbprint below for 5 seconds to commit to your transformation",
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white70,
-                                height: 1.5,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          const SizedBox(height: 40),
-                          if (!_isComplete)
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: constraints.maxWidth * 0.9,
-                              height: availableHeight * 0.25,
-                              decoration: BoxDecoration(
-                                color: _colorAnimation.value ?? const Color(0xFF1E1E1E),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  GestureDetector(
-                                    onLongPressStart: (_) => _startCommitment(),
-                                    onLongPressEnd: (_) => _cancelCommitment(),
-                                    child: Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF2A2A2A),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(0.3),
-                                            spreadRadius: 1,
-                                            blurRadius: 10,
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.fingerprint,
-                                        size: 60,
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  if (_isPressed)
-                                    SizedBox(
-                                      width: 200,
-                                      child: LinearProgressIndicator(
-                                        value: _commitmentProgress,
-                                        backgroundColor: const Color(0xFF2A2A2A),
-                                        color: const Color(0xFFB4FF00),
-                                        minHeight: 8,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    "Hold to commit",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 40),
-                          if (!_isComplete)
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: OutlinedButton(
-                                onPressed: _navigateToSignup,
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Color(0xFFB4FF00), width: 1),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text(
-                                  "Skip",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFB4FF00),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
+                
+                SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: availableHeight,
                     ),
-                  ],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 20),
+                              AnimatedOpacity(
+                                opacity: _isComplete ? 1.0 : 0.0,
+                                duration: const Duration(milliseconds: 300),
+                                child: const Text(
+                                  "LET'S GET TO WORK!",
+                                  style: TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 1,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              if (!_isComplete)
+                                const Text(
+                                  "Make a commitment to your mental training",
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    height: 1.2,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              const SizedBox(height: 24),
+                              if (!_isComplete)
+                                const Text(
+                                  "Hold the thumbprint below for 5 seconds to commit to your transformation",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.white70,
+                                    height: 1.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              const SizedBox(height: 40),
+                              if (!_isComplete)
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  width: constraints.maxWidth * 0.9,
+                                  height: availableHeight * 0.25,
+                                  decoration: BoxDecoration(
+                                    color: _colorAnimation.value ?? const Color(0xFF1E1E1E),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      GestureDetector(
+                                        onLongPressStart: (_) => _startCommitment(),
+                                        onLongPressEnd: (_) => _cancelCommitment(),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2A2A2A),
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.3),
+                                                spreadRadius: 1,
+                                                blurRadius: 10,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.fingerprint,
+                                            size: 60,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      if (_isPressed)
+                                        SizedBox(
+                                          width: 200,
+                                          child: LinearProgressIndicator(
+                                            value: _commitmentProgress,
+                                            backgroundColor: const Color(0xFF2A2A2A),
+                                            color: const Color(0xFFB4FF00),
+                                            minHeight: 8,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                        ),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        "Hold to commit",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              const SizedBox(height: 40),
+                              if (!_isComplete)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: OutlinedButton(
+                                    onPressed: _navigateToSignup,
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Color(0xFFB4FF00), width: 1),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      "Skip",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFB4FF00),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             );
           }
         ),

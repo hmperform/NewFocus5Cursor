@@ -7,6 +7,9 @@ import '../../providers/theme_provider.dart';
 import '../../models/user_model.dart';
 import '../../constants/theme.dart';
 import '../../utils/image_utils.dart';
+import '../../services/user_level_service.dart';
+import 'all_badges_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -31,19 +34,18 @@ class _ProfileTabState extends State<ProfileTab> {
     },
   ];
 
-  // Dummy data for the profile screen
+  // This dummy data will be replaced by the real user data from Firebase
+  // The dummy data matches our updated User model for testing purposes
   final User _dummyUser = User(
     id: 'user123',
     email: 'bessiecooper@example.com',
-    username: 'focus_athlete',
     fullName: 'Bessie Cooper',
     profileImageUrl: 'https://picsum.photos/200/200?random=3',
-    sport: 'Soccer',
-    university: 'Stanford University',
-    universityCode: 'SU',
-    isIndividual: true,
-    focusAreas: ['Confidence', 'Pressure Situations', 'Game Day Preparation'],
     xp: 300,
+    focusPoints: 75,
+    streak: 5,
+    longestStreak: 7,
+    focusAreas: ['Confidence', 'Pressure Situations', 'Game Day Preparation'],
     badges: [
       AppBadge(
         id: 'badge1',
@@ -80,13 +82,9 @@ class _ProfileTabState extends State<ProfileTab> {
     ],
     completedCourses: ['course1'],
     completedAudios: ['audio1', 'audio2', 'audio3'],
-    savedCourses: ['course3', 'course4'],
-    streak: 5,
-    lastActive: DateTime.now(),
+    lastLoginDate: DateTime.now(),
+    createdAt: DateTime.now().subtract(const Duration(days: 30)),
   );
-
-  // XP required for each level
-  final int _maxXP = 2000;
 
   Future<void> _launchCalendly(String url) async {
     if (!await launchUrl(Uri.parse(url))) {
@@ -95,16 +93,36 @@ class _ProfileTabState extends State<ProfileTab> {
       );
     }
   }
+  
+  void _navigateToEditProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const EditProfileScreen(),
+      ),
+    );
+  }
+  
+  void _navigateToAllBadges() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AllBadgesScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     // In a real app, we would use the UserProvider here
-    // final userProvider = Provider.of<UserProvider>(context);
-    // final user = userProvider.user;
+    final userProvider = Provider.of<UserProvider>(context);
+    // Use real user data when available
+    final user = userProvider.user ?? _dummyUser;
     
-    // For now, use the dummy data
-    final user = _dummyUser;
     final themeProvider = Provider.of<ThemeProvider>(context);
+    
+    // Get level info
+    final int userLevel = userProvider.level;
+    final int xpForNextLevel = userProvider.xpForNextLevel;
+    final double levelProgress = userProvider.levelProgress;
     
     // Use theme-aware colors
     final accentColor = themeProvider.isDarkMode 
@@ -123,7 +141,9 @@ class _ProfileTabState extends State<ProfileTab> {
           color: accentColor,
           onRefresh: () async {
             // In a real app, refresh user data here
-            await Future.delayed(const Duration(milliseconds: 1000));
+            if (userProvider.user != null) {
+              await userProvider.loadUserData(userProvider.user!.id);
+            }
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -131,7 +151,7 @@ class _ProfileTabState extends State<ProfileTab> {
               children: [
                 const SizedBox(height: 20),
                 
-                // Profile avatar and badge
+                // Profile avatar and edit button
                 Center(
                   child: Stack(
                     children: [
@@ -164,16 +184,19 @@ class _ProfileTabState extends State<ProfileTab> {
                       Positioned(
                         right: 0,
                         bottom: 10,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.diamond_outlined,
-                            color: themeProvider.isDarkMode ? Colors.black : Colors.white,
-                            size: 24,
+                        child: GestureDetector(
+                          onTap: _navigateToEditProfile,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.edit,
+                              color: themeProvider.isDarkMode ? Colors.black : Colors.white,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),
@@ -201,25 +224,59 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 ),
                 
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 
-                // Bio text
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    "Striving to build mental strength and discipline through daily challenges. Growth is a journey, not a destination.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: themeProvider.isDarkMode 
-                          ? Colors.grey[300]
-                          : Colors.grey[800],
-                      height: 1.4,
-                    ),
+                // Level indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.star,
+                        color: accentColor,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        "Level $userLevel",
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                
+                // Focus Areas
+                if (user.focusAreas.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: user.focusAreas.map((area) => Chip(
+                        label: Text(area),
+                        backgroundColor: themeProvider.isDarkMode
+                            ? Colors.grey[800]
+                            : Colors.grey[200],
+                        labelStyle: TextStyle(
+                          color: textColor,
+                          fontSize: 12,
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 
                 // Theme toggle switch
                 Padding(
@@ -279,32 +336,53 @@ class _ProfileTabState extends State<ProfileTab> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Level Progress",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          Text(
+                            "${(levelProgress * 100).toInt()}%",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: accentColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             "${user.xp} XP",
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: accentColor,
+                              fontSize: 14,
+                              color: secondaryTextColor,
                             ),
                           ),
                           Text(
-                            "$_maxXP XP",
+                            "${user.xp + xpForNextLevel} XP",
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
+                              fontSize: 14,
+                              color: secondaryTextColor,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       LinearPercentIndicator(
                         lineHeight: 8,
-                        percent: user.xp / _maxXP,
+                        percent: levelProgress,
                         backgroundColor: themeProvider.isDarkMode 
                             ? Colors.grey[800]
                             : Colors.grey[300],
@@ -314,12 +392,141 @@ class _ProfileTabState extends State<ProfileTab> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        "Earn 10 XP per minute in the app. Unlock courses with 2000 XP.",
+                        "${xpForNextLevel} XP needed for Level ${userLevel + 1}",
                         style: TextStyle(
                           fontSize: 12,
                           color: secondaryTextColor,
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Focus Points
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    color: Theme.of(context).colorScheme.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: accentColor.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.diamond_outlined,
+                              color: accentColor,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Focus Points",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Use to unlock premium content",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: secondaryTextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Text(
+                            "${user.focusPoints}",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: accentColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 32),
+                
+                // Badges section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Badges",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: textColor,
+                            ),
+                          ),
+                          if (user.badges.length > 3)
+                            TextButton(
+                              onPressed: _navigateToAllBadges,
+                              child: Text(
+                                "See All",
+                                style: TextStyle(
+                                  color: accentColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (user.badges.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(
+                              "No badges earned yet. Complete courses and challenges to earn badges!",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: secondaryTextColor,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          height: 110,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: user.badges.length > 3 ? 3 : user.badges.length,
+                            itemBuilder: (context, index) {
+                              final badge = user.badges[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 16),
+                                child: _buildBadgeItem(badge, context),
+                              );
+                            },
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -332,11 +539,10 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatCircle("4/30", "Badges", context),
-                      _buildStatCircle("5/20", "Streaks", context),
-                      _buildStatCircle("3/17", "Modules\ncompleted", context),
-                      _buildStatCircle("1/10", "Courses\ncompleted", context),
-                      _buildStatCircle("10", "Journal\nentries", context),
+                      _buildStatCircle("${user.badges.length}", "Badges", context),
+                      _buildStatCircle("${user.streak}/${user.longestStreak}", "Current/\nBest Streak", context),
+                      _buildStatCircle("${user.completedAudios.length}", "Audio\ncompleted", context),
+                      _buildStatCircle("${user.completedCourses.length}", "Courses\ncompleted", context),
                     ],
                   ),
                 ),
@@ -422,6 +628,58 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
         ),
       ),
+    );
+  }
+  
+  Widget _buildBadgeItem(AppBadge badge, BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
+    return Column(
+      children: [
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: themeProvider.isDarkMode ? Colors.white24 : Colors.black12,
+              width: 2,
+            ),
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              badge.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Icon(
+                    Icons.emoji_events,
+                    color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
+                    size: 36,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 80,
+          child: Text(
+            badge.name,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            style: TextStyle(
+              fontSize: 12,
+              color: textColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
   

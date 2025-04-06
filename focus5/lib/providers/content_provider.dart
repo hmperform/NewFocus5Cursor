@@ -332,4 +332,52 @@ class ContentProvider with ChangeNotifier {
       return null;
     }
   }
+
+  /// Get all modules
+  List<Module> getModules() {
+    // In a real app, this would filter by category or other criteria
+    // For now, we'll create some dummy modules
+    return [
+      Module(
+        id: 'module1',
+        title: 'Mental Toughness',
+        description: 'Develop mental toughness for athletic performance',
+        imageUrl: 'https://source.unsplash.com/random/?mental,athlete',
+        audioCount: 8,
+        categories: ['Mental', 'Performance'],
+      ),
+      Module(
+        id: 'module2',
+        title: 'Focus Training',
+        description: 'Improve your concentration and focus',
+        imageUrl: 'https://source.unsplash.com/random/?focus,mind',
+        audioCount: 6,
+        categories: ['Focus', 'Training'],
+      ),
+      Module(
+        id: 'module3',
+        title: 'Visualization',
+        description: 'Master the art of visualization for better performance',
+        imageUrl: 'https://source.unsplash.com/random/?visualization',
+        audioCount: 5,
+        categories: ['Visualization', 'Mental'],
+      ),
+      Module(
+        id: 'module4',
+        title: 'Recovery',
+        description: 'Mental techniques for faster recovery',
+        imageUrl: 'https://source.unsplash.com/random/?recovery,relax',
+        audioCount: 7,
+        categories: ['Recovery', 'Relax'],
+        premium: true,
+      ),
+    ];
+  }
+
+  /// Get featured courses
+  List<Course> getFeaturedCourses() {
+    // Filter courses that are marked as featured
+    // In a real app, this would come from Firestore
+    return courses.where((course) => course.featured).toList();
+  }
 } 

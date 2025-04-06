@@ -42,15 +42,22 @@ class ImageUtils {
     Color? backgroundColor,
     Color? textColor,
   }) {
+    // Only use NetworkImage and onBackgroundImageError when imageUrl is not null
+    final NetworkImage? networkImage = 
+        (imageUrl != null && imageUrl.isNotEmpty) 
+            ? NetworkImage(imageUrl) 
+            : null;
+            
     return CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor ?? Colors.grey[300],
-      backgroundImage: imageUrl != null && imageUrl.isNotEmpty 
-          ? NetworkImage(imageUrl) 
+      backgroundImage: networkImage,
+      // Only provide onBackgroundImageError when we have a backgroundImage
+      onBackgroundImageError: networkImage != null 
+          ? (exception, stackTrace) {
+              debugPrint('Failed to load avatar image: $exception');
+            }
           : null,
-      onBackgroundImageError: (exception, stackTrace) {
-        debugPrint('Failed to load avatar image: $exception');
-      },
       child: imageUrl == null || imageUrl.isEmpty 
           ? Text(
               name != null && name.isNotEmpty ? name[0].toUpperCase() : '?',

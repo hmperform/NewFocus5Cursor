@@ -1,59 +1,45 @@
-class Course {
+// Module types enum
+enum ModuleType {
+  video,
+  audio,
+  text,
+  quiz
+}
+
+class Lesson {
   final String id;
   final String title;
   final String description;
-  final String thumbnailUrl;
-  final String creatorId;
-  final String creatorName;
-  final String creatorImageUrl;
-  final List<String> tags;
-  final List<String> focusAreas;
-  final int durationMinutes;
-  final int xpReward;
-  final List<Module> modules;
-  final DateTime createdAt;
-  final bool universityExclusive;
-  final List<String>? universityAccess;
+  final String? videoUrl;
+  final String? audioUrl;
+  final String? imageUrl;
+  final int duration;
+  final bool completed;
+  final int sortOrder;
 
-  Course({
+  Lesson({
     required this.id,
     required this.title,
     required this.description,
-    required this.thumbnailUrl,
-    required this.creatorId,
-    required this.creatorName,
-    required this.creatorImageUrl,
-    required this.tags,
-    required this.focusAreas,
-    required this.durationMinutes,
-    required this.xpReward,
-    required this.modules,
-    required this.createdAt,
-    required this.universityExclusive,
-    this.universityAccess,
+    required this.duration,
+    required this.sortOrder,
+    this.videoUrl,
+    this.audioUrl,
+    this.imageUrl,
+    this.completed = false,
   });
 
-  factory Course.fromJson(Map<String, dynamic> json) {
-    return Course(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      thumbnailUrl: json['thumbnailUrl'] as String,
-      creatorId: json['creatorId'] as String,
-      creatorName: json['creatorName'] as String,
-      creatorImageUrl: json['creatorImageUrl'] as String,
-      tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
-      focusAreas: (json['focusAreas'] as List<dynamic>).map((e) => e as String).toList(),
-      durationMinutes: json['durationMinutes'] as int,
-      xpReward: json['xpReward'] as int,
-      modules: (json['modules'] as List<dynamic>)
-          .map((e) => Module.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      universityExclusive: json['universityExclusive'] as bool,
-      universityAccess: json['universityAccess'] != null
-          ? (json['universityAccess'] as List<dynamic>).map((e) => e as String).toList()
-          : null,
+  factory Lesson.fromJson(Map<String, dynamic> json) {
+    return Lesson(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      videoUrl: json['videoUrl'],
+      audioUrl: json['audioUrl'],
+      imageUrl: json['imageUrl'],
+      duration: json['duration'] ?? 0,
+      completed: json['completed'] ?? false,
+      sortOrder: json['sortOrder'] ?? 0,
     );
   }
 
@@ -62,15 +48,122 @@ class Course {
       'id': id,
       'title': title,
       'description': description,
+      'videoUrl': videoUrl,
+      'audioUrl': audioUrl,
+      'imageUrl': imageUrl,
+      'duration': duration,
+      'completed': completed,
+      'sortOrder': sortOrder,
+    };
+  }
+}
+
+class Course {
+  final String id;
+  final String title;
+  final String description;
+  final String imageUrl;
+  final String thumbnailUrl;  // Added for backwards compatibility
+  final String creatorId;     // Added for backwards compatibility
+  final String creatorName;
+  final String creatorImageUrl; // Added for backwards compatibility
+  final List<String> tags;    // Added for backwards compatibility
+  final int duration;
+  final int durationMinutes;  // Added for backwards compatibility
+  final int xpReward;         // Added for backwards compatibility
+  final List<String> focusAreas;
+  final List<Lesson> lessons;
+  final List<Module> modules; // Added for backwards compatibility
+  final bool premium;
+  final bool featured;
+  final DateTime createdAt;
+  final bool universityExclusive; // Added for backwards compatibility
+  final List<String>? universityAccess; // Added for backwards compatibility
+
+  Course({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.imageUrl,
+    required this.creatorName,
+    required this.duration,
+    required this.focusAreas,
+    required this.lessons,
+    this.premium = false,
+    this.featured = false,
+    required this.createdAt,
+    // Backwards compatibility fields
+    String? thumbnailUrl,
+    String? creatorId,
+    String? creatorImageUrl,
+    List<String>? tags,
+    int? durationMinutes,
+    int? xpReward,
+    List<Module>? modules,
+    bool? universityExclusive,
+    this.universityAccess,
+  }) : 
+    thumbnailUrl = thumbnailUrl ?? imageUrl,
+    creatorId = creatorId ?? 'default',
+    creatorImageUrl = creatorImageUrl ?? 'https://via.placeholder.com/150',
+    tags = tags ?? focusAreas,
+    durationMinutes = durationMinutes ?? duration,
+    xpReward = xpReward ?? 100,
+    modules = modules ?? [],
+    universityExclusive = universityExclusive ?? false;
+
+  // Factory method to create a Course from a Map
+  factory Course.fromJson(Map<String, dynamic> json) {
+    return Course(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      imageUrl: json['imageUrl'] ?? '',
+      thumbnailUrl: json['thumbnailUrl'],
+      creatorId: json['creatorId'],
+      creatorName: json['creatorName'] ?? 'Focus 5 Team',
+      creatorImageUrl: json['creatorImageUrl'],
+      tags: json['tags'] != null ? List<String>.from(json['tags']) : null,
+      duration: json['duration'] ?? 0,
+      durationMinutes: json['durationMinutes'],
+      xpReward: json['xpReward'],
+      focusAreas: List<String>.from(json['focusAreas'] ?? []),
+      lessons: (json['lessons'] as List?)
+              ?.map((lesson) => Lesson.fromJson(lesson))
+              .toList() ??
+          [],
+      modules: (json['modules'] as List?)
+              ?.map((module) => Module.fromJson(module))
+              .toList(),
+      premium: json['premium'] ?? false,
+      featured: json['featured'] ?? false,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : DateTime.now(),
+      universityExclusive: json['universityExclusive'],
+    );
+  }
+
+  // Method to convert a Course to a Map
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'imageUrl': imageUrl,
       'thumbnailUrl': thumbnailUrl,
       'creatorId': creatorId,
       'creatorName': creatorName,
       'creatorImageUrl': creatorImageUrl,
       'tags': tags,
-      'focusAreas': focusAreas,
+      'duration': duration,
       'durationMinutes': durationMinutes,
       'xpReward': xpReward,
+      'focusAreas': focusAreas,
+      'lessons': lessons.map((lesson) => lesson.toJson()).toList(),
       'modules': modules.map((module) => module.toJson()).toList(),
+      'premium': premium,
+      'featured': featured,
       'createdAt': createdAt.toIso8601String(),
       'universityExclusive': universityExclusive,
       'universityAccess': universityAccess,
@@ -82,62 +175,92 @@ class Module {
   final String id;
   final String title;
   final String description;
-  final ModuleType type;
-  final String? videoUrl;
-  final String? audioUrl;
-  final String? textContent;
-  final int durationMinutes;
-  final int sortOrder;
-  final String? thumbnailUrl;
+  final String imageUrl;
+  final String? thumbnailUrl; // Added for backwards compatibility
+  final int audioCount;
+  final List<String> categories;
+  final bool premium;
+  final ModuleType type; // Added for backwards compatibility
+  final String? videoUrl; // Added for backwards compatibility
+  final String? audioUrl; // Added for backwards compatibility
+  final String? textContent; // Added for backwards compatibility
+  final int durationMinutes; // Added for backwards compatibility
+  final int sortOrder; // Added for backwards compatibility
 
   Module({
     required this.id,
     required this.title,
     required this.description,
-    required this.type,
+    String? imageUrl, // Make imageUrl optional with a default value
+    this.thumbnailUrl,
+    this.audioCount = 0,
+    required this.categories,
+    this.premium = false,
+    // Backwards compatibility fields
+    ModuleType? type,
     this.videoUrl,
     this.audioUrl,
     this.textContent,
-    required this.durationMinutes,
-    required this.sortOrder,
-    this.thumbnailUrl,
-  });
+    int? durationMinutes,
+    int? sortOrder,
+  }) : 
+    imageUrl = imageUrl ?? 'https://via.placeholder.com/300', // Default placeholder
+    type = type ?? ModuleType.video,
+    durationMinutes = durationMinutes ?? 10,
+    sortOrder = sortOrder ?? 0;
 
+  // Factory method to create a Module from a Map
   factory Module.fromJson(Map<String, dynamic> json) {
+    ModuleType type = ModuleType.video;
+    if (json['type'] != null) {
+      try {
+        type = ModuleType.values.firstWhere(
+          (e) => e.toString().split('.').last == json['type'],
+          orElse: () => ModuleType.video,
+        );
+      } catch (_) {
+        // Default to video on error
+      }
+    }
+
     return Module(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      type: ModuleType.values.firstWhere(
-        (e) => e.toString().split('.').last == json['type'],
-        orElse: () => ModuleType.video,
-      ),
-      videoUrl: json['videoUrl'] as String?,
-      audioUrl: json['audioUrl'] as String?,
-      textContent: json['textContent'] as String?,
-      durationMinutes: json['durationMinutes'] as int,
-      sortOrder: json['sortOrder'] as int,
-      thumbnailUrl: json['thumbnailUrl'] as String?,
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      imageUrl: json['imageUrl'] ?? '',
+      thumbnailUrl: json['thumbnailUrl'],
+      audioCount: json['audioCount'] ?? 0,
+      categories: List<String>.from(json['categories'] ?? []),
+      premium: json['premium'] ?? false,
+      type: type,
+      videoUrl: json['videoUrl'],
+      audioUrl: json['audioUrl'],
+      textContent: json['textContent'],
+      durationMinutes: json['durationMinutes'],
+      sortOrder: json['sortOrder'],
     );
   }
 
+  // Method to convert a Module to a Map
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'title': title,
       'description': description,
+      'imageUrl': imageUrl,
+      'thumbnailUrl': thumbnailUrl,
+      'audioCount': audioCount,
+      'categories': categories,
+      'premium': premium,
       'type': type.toString().split('.').last,
       'videoUrl': videoUrl,
       'audioUrl': audioUrl,
       'textContent': textContent,
       'durationMinutes': durationMinutes,
       'sortOrder': sortOrder,
-      'thumbnailUrl': thumbnailUrl,
     };
   }
 }
-
-enum ModuleType { video, audio, text, quiz }
 
 class DailyAudio {
   final String id;

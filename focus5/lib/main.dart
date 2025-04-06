@@ -18,6 +18,8 @@ import 'screens/more/journal_entry_screen.dart';
 import 'screens/more/journal_screen.dart';
 import 'screens/paywall/paywall_screen.dart';
 import 'screens/settings/data_migration_screen.dart';
+import 'screens/settings/firebase_setup_screen.dart';
+import 'screens/settings/admin_management_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/content_provider.dart';
@@ -25,9 +27,14 @@ import 'providers/media_provider.dart';
 import 'providers/journal_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/coach_provider.dart';
 import 'widgets/mini_player.dart';
 import 'constants/theme.dart';
 import 'services/basic_video_service.dart';
+import 'services/initialize_database.dart';
+
+// Add global navigator key
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +50,10 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   
+  // Initialize database with default data
+  final dbService = InitializeDatabaseService();
+  await dbService.initializeDatabase();
+  
   runApp(
     MultiProvider(
       providers: [
@@ -54,6 +65,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => ChatProvider()),
         ChangeNotifierProvider(create: (context) => JournalProvider('default_user')),
         ChangeNotifierProvider(create: (context) => BasicVideoService()),
+        ChangeNotifierProvider(create: (context) => CoachProvider()),
       ],
       child: Focus5App(isFirstLaunch: isFirstLaunch),
     ),
@@ -70,6 +82,7 @@ class Focus5App extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Focus 5',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -163,6 +176,8 @@ class Focus5App extends StatelessWidget {
         '/journal': (context) => const JournalScreen(),
         '/paywall': (context) => const PaywallScreen(),
         '/data_migration': (context) => const DataMigrationScreen(),
+        '/firebase_setup': (context) => const FirebaseSetupScreen(),
+        '/admin-management': (context) => const AdminManagementScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/media_player') {

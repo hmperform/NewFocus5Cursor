@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'mental_fitness_questionnaire.dart';
+import '../../constants/dummy_data.dart';
+import 'profile_setup_screen.dart';
 
 class SportSelectionScreen extends StatefulWidget {
   const SportSelectionScreen({Key? key}) : super(key: key);
@@ -52,6 +53,32 @@ class _SportSelectionScreenState extends State<SportSelectionScreen> with Single
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    
+    // Check if sport is already selected in signup
+    _checkExistingSport();
+  }
+  
+  Future<void> _checkExistingSport() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existingSport = prefs.getString('selected_sport');
+    
+    // If a sport is already selected (from signup) and we're in onboarding flow
+    if (existingSport != null && (prefs.getBool('from_onboarding_flow') ?? false)) {
+      // Skip this screen and go directly to profile setup
+      if (!mounted) return;
+      
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const ProfileSetupScreen(fromOnboarding: true),
+        ),
+      );
+    } else if (existingSport != null) {
+      // If sport exists but we're not in onboarding, just set it
+      setState(() {
+        _selectedSport = existingSport;
+        _selectedSportIndex = _sports.indexOf(existingSport);
+      });
+    }
   }
   
   @override
@@ -75,27 +102,34 @@ class _SportSelectionScreenState extends State<SportSelectionScreen> with Single
     });
   }
   
-  // Save selections and navigate to next screen
-  void _continueToNextScreen() async {
+  Future<void> _continueToNextScreen() async {
     if (_selectedSport == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a sport')),
+        const SnackBar(content: Text('Please select a sport to continue')),
       );
       return;
     }
     
-    // Save selections to shared preferences
+    // Save selected sport to shared preferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_sport', _selectedSport!);
     
+    // Check if we're in the onboarding flow
+    final bool fromOnboardingFlow = prefs.getBool('from_onboarding_flow') ?? false;
+    
     if (!mounted) return;
     
-    // Navigate to mental fitness questionnaire
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const MentalFitnessQuestionnaire(),
-      ),
-    );
+    if (fromOnboardingFlow) {
+      // Continue to profile setup directly, skipping questionnaire
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const ProfileSetupScreen(fromOnboarding: true),
+        ),
+      );
+    } else {
+      // Navigate directly to home if not from onboarding
+      Navigator.of(context).pushReplacementNamed('/home');
+    }
   }
   
   @override
@@ -123,7 +157,7 @@ class _SportSelectionScreenState extends State<SportSelectionScreen> with Single
               
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
-                  builder: (context) => const MentalFitnessQuestionnaire(),
+                  builder: (context) => const ProfileSetupScreen(fromOnboarding: true),
                 ),
               );
             },

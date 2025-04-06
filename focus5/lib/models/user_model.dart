@@ -1,125 +1,183 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class User {
   final String id;
   final String email;
-  final String username;
   final String fullName;
+  final String? username;
   final String? profileImageUrl;
   final String? sport;
   final String? university;
   final String? universityCode;
   final bool isIndividual;
-  final List<String> focusAreas;
+  final bool isAdmin;
   final int xp;
+  final int focusPoints;
+  final int streak;
+  final int longestStreak;
+  final List<String> focusAreas;
   final List<AppBadge> badges;
   final List<String> completedCourses;
   final List<String> completedAudios;
-  final List<String> savedCourses;
-  final int streak;
-  final DateTime lastActive;
+  final DateTime lastLoginDate;
+  final DateTime createdAt;
+  final Map<String, dynamic>? preferences;
 
   User({
     required this.id,
     required this.email,
-    required this.username,
     required this.fullName,
+    this.username,
     this.profileImageUrl,
     this.sport,
     this.university,
     this.universityCode,
-    required this.isIndividual,
-    required this.focusAreas,
-    required this.xp,
-    required this.badges,
-    required this.completedCourses,
-    required this.completedAudios,
-    required this.savedCourses,
-    required this.streak,
-    required this.lastActive,
-  });
+    this.isIndividual = false,
+    this.isAdmin = false,
+    this.xp = 0,
+    this.focusPoints = 0,
+    this.streak = 0,
+    this.longestStreak = 0,
+    this.focusAreas = const [],
+    this.badges = const [],
+    this.completedCourses = const [],
+    this.completedAudios = const [],
+    DateTime? lastLoginDate,
+    DateTime? createdAt,
+    this.preferences,
+  }) : 
+    this.lastLoginDate = lastLoginDate ?? DateTime.now(),
+    this.createdAt = createdAt ?? DateTime.now();
 
-  factory User.fromJson(Map<String, dynamic> json) {
+  factory User.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    // Get list of badges
+    List<AppBadge> badgesList = [];
+    if (data['badges'] != null) {
+      badgesList = List<AppBadge>.from(
+        (data['badges'] as List).map((badge) => AppBadge.fromJson(badge))
+      );
+    }
+    
+    // Parse date fields
+    DateTime? lastLogin;
+    if (data['lastLoginDate'] != null) {
+      final timestamp = data['lastLoginDate'] as Timestamp;
+      lastLogin = DateTime.fromMillisecondsSinceEpoch(
+        timestamp.millisecondsSinceEpoch
+      );
+    }
+    
+    DateTime? created;
+    if (data['createdAt'] != null) {
+      final timestamp = data['createdAt'] as Timestamp;
+      created = DateTime.fromMillisecondsSinceEpoch(
+        timestamp.millisecondsSinceEpoch
+      );
+    }
+    
     return User(
-      id: json['id'] as String,
-      email: json['email'] as String,
-      username: json['username'] as String,
-      fullName: json['fullName'] as String,
-      profileImageUrl: json['profileImageUrl'] as String?,
-      sport: json['sport'] as String?,
-      university: json['university'] as String?,
-      universityCode: json['universityCode'] as String?,
-      isIndividual: json['isIndividual'] as bool,
-      focusAreas: (json['focusAreas'] as List<dynamic>).map((e) => e as String).toList(),
-      xp: json['xp'] as int,
-      badges: (json['badges'] as List<dynamic>)
-          .map((e) => AppBadge.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      completedCourses: (json['completedCourses'] as List<dynamic>).map((e) => e as String).toList(),
-      completedAudios: (json['completedAudios'] as List<dynamic>).map((e) => e as String).toList(),
-      savedCourses: (json['savedCourses'] as List<dynamic>).map((e) => e as String).toList(),
-      streak: json['streak'] as int,
-      lastActive: DateTime.parse(json['lastActive'] as String),
+      id: doc.id,
+      email: data['email'] ?? '',
+      fullName: data['fullName'] ?? '',
+      username: data['username'],
+      profileImageUrl: data['profileImageUrl'],
+      sport: data['sport'],
+      university: data['university'],
+      universityCode: data['universityCode'],
+      isIndividual: data['isIndividual'] ?? false,
+      isAdmin: data['isAdmin'] ?? false,
+      xp: data['xp'] ?? 0,
+      focusPoints: data['focusPoints'] ?? 0,
+      streak: data['streak'] ?? 0,
+      longestStreak: data['longestStreak'] ?? 0,
+      focusAreas: data['focusAreas'] != null 
+          ? List<String>.from(data['focusAreas']) 
+          : [],
+      badges: badgesList,
+      completedCourses: data['completedCourses'] != null 
+          ? List<String>.from(data['completedCourses']) 
+          : [],
+      completedAudios: data['completedAudios'] != null 
+          ? List<String>.from(data['completedAudios']) 
+          : [],
+      lastLoginDate: lastLogin,
+      createdAt: created,
+      preferences: data['preferences'] as Map<String, dynamic>?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'email': email,
-      'username': username,
       'fullName': fullName,
-      'profileImageUrl': profileImageUrl,
-      'sport': sport,
-      'university': university,
-      'universityCode': universityCode,
+      if (username != null) 'username': username,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
+      if (sport != null) 'sport': sport,
+      if (university != null) 'university': university,
+      if (universityCode != null) 'universityCode': universityCode,
       'isIndividual': isIndividual,
-      'focusAreas': focusAreas,
+      'isAdmin': isAdmin,
       'xp': xp,
+      'focusPoints': focusPoints,
+      'streak': streak,
+      'longestStreak': longestStreak,
+      'focusAreas': focusAreas,
       'badges': badges.map((badge) => badge.toJson()).toList(),
       'completedCourses': completedCourses,
       'completedAudios': completedAudios,
-      'savedCourses': savedCourses,
-      'streak': streak,
-      'lastActive': lastActive.toIso8601String(),
+      'lastLoginDate': Timestamp.fromDate(lastLoginDate),
+      'createdAt': Timestamp.fromDate(createdAt),
+      if (preferences != null) 'preferences': preferences,
     };
   }
 
   User copyWith({
     String? id,
     String? email,
-    String? username,
     String? fullName,
+    String? username,
     String? profileImageUrl,
     String? sport,
     String? university,
     String? universityCode,
     bool? isIndividual,
-    List<String>? focusAreas,
+    bool? isAdmin,
     int? xp,
+    int? focusPoints,
+    int? streak,
+    int? longestStreak,
+    List<String>? focusAreas,
     List<AppBadge>? badges,
     List<String>? completedCourses,
     List<String>? completedAudios,
-    List<String>? savedCourses,
-    int? streak,
-    DateTime? lastActive,
+    DateTime? lastLoginDate,
+    DateTime? createdAt,
+    Map<String, dynamic>? preferences,
   }) {
     return User(
       id: id ?? this.id,
       email: email ?? this.email,
-      username: username ?? this.username,
       fullName: fullName ?? this.fullName,
+      username: username ?? this.username,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       sport: sport ?? this.sport,
       university: university ?? this.university,
       universityCode: universityCode ?? this.universityCode,
       isIndividual: isIndividual ?? this.isIndividual,
-      focusAreas: focusAreas ?? this.focusAreas,
+      isAdmin: isAdmin ?? this.isAdmin,
       xp: xp ?? this.xp,
+      focusPoints: focusPoints ?? this.focusPoints,
+      streak: streak ?? this.streak,
+      longestStreak: longestStreak ?? this.longestStreak,
+      focusAreas: focusAreas ?? this.focusAreas,
       badges: badges ?? this.badges,
       completedCourses: completedCourses ?? this.completedCourses,
       completedAudios: completedAudios ?? this.completedAudios,
-      savedCourses: savedCourses ?? this.savedCourses,
-      streak: streak ?? this.streak,
-      lastActive: lastActive ?? this.lastActive,
+      lastLoginDate: lastLoginDate ?? this.lastLoginDate,
+      createdAt: createdAt ?? this.createdAt,
+      preferences: preferences ?? this.preferences,
     );
   }
 }
@@ -142,12 +200,21 @@ class AppBadge {
   });
 
   factory AppBadge.fromJson(Map<String, dynamic> json) {
+    DateTime earned;
+    if (json['earnedAt'] is Timestamp) {
+      earned = DateTime.fromMillisecondsSinceEpoch(
+        (json['earnedAt'] as Timestamp).millisecondsSinceEpoch
+      );
+    } else {
+      earned = DateTime.parse(json['earnedAt'].toString());
+    }
+    
     return AppBadge(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String,
       imageUrl: json['imageUrl'] as String,
-      earnedAt: DateTime.parse(json['earnedAt'] as String),
+      earnedAt: earned,
       xpValue: json['xpValue'] as int,
     );
   }
