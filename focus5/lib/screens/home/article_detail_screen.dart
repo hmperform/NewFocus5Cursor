@@ -164,11 +164,7 @@ class ArticleDetailScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (context) => CoachProfileScreen(
-                                coach: {
-                                  'id': article.authorId,
-                                  'name': article.authorName,
-                                  'imageUrl': article.authorImageUrl,
-                                },
+                                coachId: article.authorId,
                               ),
                             ),
                           );

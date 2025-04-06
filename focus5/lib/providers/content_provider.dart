@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/content_models.dart';
 import '../constants/dummy_data.dart';
 import '../services/firebase_content_service.dart';
@@ -11,8 +12,8 @@ class ContentProvider with ChangeNotifier {
   List<Article> _articles = [];
   List<Map<String, dynamic>> _coaches = [];
   DailyAudio? _todayAudio;
-  Module? _dailyModule;
-  Map<String, dynamic>? _dailyModuleAssignment;
+  Lesson? _dailyLesson;
+  Map<String, dynamic>? _dailyLessonAssignment;
   String? _universityCode;
   bool _isLoading = false;
   String? _errorMessage;
@@ -25,55 +26,69 @@ class ContentProvider with ChangeNotifier {
   List<Article> get articles => _articles;
   List<Map<String, dynamic>> get coaches => _coaches;
   DailyAudio? get todayAudio => _todayAudio;
-  Module? get dailyModule => _dailyModule;
-  Map<String, dynamic>? get dailyModuleAssignment => _dailyModuleAssignment;
+  Lesson? get dailyLesson => _dailyLesson;
+  Map<String, dynamic>? get dailyLessonAssignment => _dailyLessonAssignment;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  // For backward compatibility
+  Lesson? get dailyModule => _dailyLesson;
+  Map<String, dynamic>? get dailyModuleAssignment => _dailyLessonAssignment;
+
   // Initialize content, optionally filtering by university code
   Future<void> initContent(String? universityCode) async {
-    _isLoading = true;
+    if (_isLoading) return; // Prevent multiple initializations
+    
     _errorMessage = null;
     _universityCode = universityCode;
-    notifyListeners();
-
-    try {
-      // Load courses from Firebase
-      await loadCourses();
-      
-      // Load audio modules from Firebase
-      await loadAudioModules();
-      
-      // Load daily module assignment
-      await loadDailyModule();
-      
-      // For now, still use dummy data for articles and coaches
-      _articles = DummyData.dummyArticles;
-      _coaches = DummyData.dummyCoaches;
-      
-      _isLoading = false;
-      _errorMessage = null;
-    } catch (e) {
-      _isLoading = false;
-      _errorMessage = 'Failed to load content: ${e.toString()}';
-      print('Error in initContent: ${e.toString()}');
-      
-      // In case of error, make sure we have at least some data
-      if (_courses.isEmpty) _courses = DummyData.dummyCourses;
-      if (_audioModules.isEmpty) _audioModules = DummyData.dummyAudioModules;
-      if (_articles.isEmpty) _articles = DummyData.dummyArticles;
-      if (_coaches.isEmpty) _coaches = DummyData.dummyCoaches;
-    }
     
-    notifyListeners();
+    // Use post-frame callback to avoid setState during build
+    SchedulerBinding.instance.addPostFrameCallback((_) async {
+      _isLoading = true;
+      notifyListeners();
+  
+      try {
+        // Load courses from Firebase
+        await loadCourses();
+        
+        // Load audio modules from Firebase
+        await loadAudioModules();
+        
+        // Load daily lesson assignment
+        await loadDailyLesson();
+        
+        // Load articles from Firebase
+        await loadArticles();
+        
+        _isLoading = false;
+        _errorMessage = null;
+      } catch (e) {
+        _isLoading = false;
+        _errorMessage = 'Failed to load content: ${e.toString()}';
+        debugPrint('Error in initContent: ${e.toString()}');
+      }
+      
+      notifyListeners();
+    });
   }
 
   Future<void> loadCourses() async {
     try {
+      _isLoading = true;
+      notifyListeners();
+      
       _courses = await _contentService.getCourses(universityCode: _universityCode);
+      
+      if (_courses.isEmpty) {
+        debugPrint('No courses found in Firebase. This could be due to missing data or permissions.');
+      }
+      
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to load courses: ${e.toString()}';
+      debugPrint('Error loading courses: $e');
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -97,38 +112,38 @@ class ContentProvider with ChangeNotifier {
     }
   }
   
-  Future<void> loadDailyModule() async {
+  Future<void> loadDailyLesson() async {
     try {
-      _dailyModuleAssignment = await _contentService.getTodayModuleAssignment();
+      _dailyLessonAssignment = await _contentService.getTodayLessonAssignment();
       
-      if (_dailyModuleAssignment != null && _dailyModuleAssignment!['module'] != null) {
-        _dailyModule = Module.fromJson(_dailyModuleAssignment!['module'] as Map<String, dynamic>);
+      if (_dailyLessonAssignment != null && _dailyLessonAssignment!['lesson'] != null) {
+        _dailyLesson = Lesson.fromJson(_dailyLessonAssignment!['lesson'] as Map<String, dynamic>);
       }
       
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load daily module: ${e.toString()}';
+      _errorMessage = 'Failed to load daily lesson: ${e.toString()}';
       notifyListeners();
     }
   }
   
-  Future<bool> markDailyModuleCompleted() async {
-    if (_dailyModuleAssignment == null) return false;
+  Future<bool> markDailyLessonCompleted() async {
+    if (_dailyLessonAssignment == null) return false;
     
     try {
-      final assignmentId = _dailyModuleAssignment!['assignment']['id'];
-      final result = await _contentService.markModuleCompleted(assignmentId);
+      final assignmentId = _dailyLessonAssignment!['assignment']['id'];
+      final result = await _contentService.markLessonCompleted(assignmentId);
       
       if (result) {
         // Update the local assignment state
-        _dailyModuleAssignment!['assignment']['completed'] = true;
-        _dailyModuleAssignment!['assignment']['completedDate'] = DateTime.now().toIso8601String();
+        _dailyLessonAssignment!['assignment']['completed'] = true;
+        _dailyLessonAssignment!['assignment']['completedDate'] = DateTime.now().toIso8601String();
         notifyListeners();
       }
       
       return result;
     } catch (e) {
-      _errorMessage = 'Failed to mark module as completed: ${e.toString()}';
+      _errorMessage = 'Failed to mark lesson as completed: ${e.toString()}';
       notifyListeners();
       return false;
     }
@@ -225,21 +240,14 @@ class ContentProvider with ChangeNotifier {
   // Article methods
   
   Future<void> loadArticles() async {
+    if (_articles.isNotEmpty) return;
+    
     try {
-      // For now, just use dummy data
-      _articles = DummyData.dummyArticles;
-      
-      // Filter based on university access if needed
-      if (_universityCode != null) {
-        _articles = _articles.where((article) => 
-          !article.universityExclusive || 
-          (article.universityAccess?.contains(_universityCode) ?? false)
-        ).toList();
-      }
-      
+      _articles = await _contentService.getArticles(universityCode: _universityCode);
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load articles: ${e.toString()}';
+      debugPrint('Error loading articles: $e');
+      _articles = [];
       notifyListeners();
     }
   }
@@ -333,51 +341,113 @@ class ContentProvider with ChangeNotifier {
     }
   }
 
-  /// Get all modules
-  List<Module> getModules() {
+  /// Get all lessons
+  List<Lesson> getLessons() {
     // In a real app, this would filter by category or other criteria
-    // For now, we'll create some dummy modules
-    return [
-      Module(
-        id: 'module1',
-        title: 'Mental Toughness',
-        description: 'Develop mental toughness for athletic performance',
-        imageUrl: 'https://source.unsplash.com/random/?mental,athlete',
-        audioCount: 8,
-        categories: ['Mental', 'Performance'],
-      ),
-      Module(
-        id: 'module2',
-        title: 'Focus Training',
-        description: 'Improve your concentration and focus',
-        imageUrl: 'https://source.unsplash.com/random/?focus,mind',
-        audioCount: 6,
-        categories: ['Focus', 'Training'],
-      ),
-      Module(
-        id: 'module3',
-        title: 'Visualization',
-        description: 'Master the art of visualization for better performance',
-        imageUrl: 'https://source.unsplash.com/random/?visualization',
-        audioCount: 5,
-        categories: ['Visualization', 'Mental'],
-      ),
-      Module(
-        id: 'module4',
-        title: 'Recovery',
-        description: 'Mental techniques for faster recovery',
-        imageUrl: 'https://source.unsplash.com/random/?recovery,relax',
-        audioCount: 7,
-        categories: ['Recovery', 'Relax'],
-        premium: true,
-      ),
-    ];
+    return DummyData.dummyLessons;
   }
+
+  // For backward compatibility
+  List<Lesson> getModules() => getLessons();
 
   /// Get featured courses
   List<Course> getFeaturedCourses() {
     // Filter courses that are marked as featured
     // In a real app, this would come from Firestore
     return courses.where((course) => course.featured).toList();
+  }
+
+  // Method to get media (audio/video) by coach
+  List<dynamic>? getMediaByCoach(String coachId, String mediaType) {
+    try {
+      if (mediaType == 'audio') {
+        return _audioModules.where((audio) => audio.creatorId == coachId).toList();
+      } else {
+        // For videos, look in modules within courses
+        List<Lesson> coachLessons = [];
+        for (final course in _courses) {
+          if (course.creatorId == coachId) {
+            coachLessons.addAll(course.modules.where((lesson) => lesson.type == LessonType.video));
+          }
+        }
+        return coachLessons;
+      }
+    } catch (e) {
+      _errorMessage = 'Failed to get media by coach: ${e.toString()}';
+      debugPrint('Error getting media by coach: $e');
+      return [];
+    }
+  }
+
+  // Method to get courses by coach
+  List<Course>? getCoursesByCoach(String coachId) {
+    try {
+      return _courses.where((course) => course.creatorId == coachId).toList();
+    } catch (e) {
+      _errorMessage = 'Failed to get courses by coach: ${e.toString()}';
+      debugPrint('Error getting courses by coach: $e');
+      return [];
+    }
+  }
+  
+  // Method to load media content for the media library
+  Future<void> loadMediaContent() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+      
+      // Load audio modules
+      await loadAudioModules();
+      
+      // Load videos (modules from courses)
+      await loadCourses();
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to load media content: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  
+  // Getter for videos extracted from course modules
+  List<Lesson> get videos {
+    List<Lesson> allLessons = [];
+    for (final course in _courses) {
+      allLessons.addAll(course.modules.where((lesson) => lesson.type == LessonType.video));
+    }
+    return allLessons;
+  }
+  
+  // Getter for audios 
+  List<DailyAudio> get audios => _audioModules;
+  
+  // Search for modules and audio content
+  List<dynamic> searchMediaContent(String query, String mediaType) {
+    if (query.isEmpty) {
+      return mediaType == 'audio' ? audios : videos;
+    }
+    
+    final lowerQuery = query.toLowerCase();
+    
+    if (mediaType == 'audio') {
+      return _audioModules.where((audio) {
+        return audio.title.toLowerCase().contains(lowerQuery) ||
+               audio.description.toLowerCase().contains(lowerQuery) ||
+               audio.creatorName.toLowerCase().contains(lowerQuery) ||
+               audio.categories.any((category) => category.toLowerCase().contains(lowerQuery));
+      }).toList();
+    } else {
+      List<Lesson> filteredLessons = [];
+      for (final course in _courses) {
+        filteredLessons.addAll(course.modules.where((lesson) {
+          return lesson.title.toLowerCase().contains(lowerQuery) ||
+                 lesson.description.toLowerCase().contains(lowerQuery) ||
+                 lesson.categories.any((category) => category.toLowerCase().contains(lowerQuery));
+        }));
+      }
+      return filteredLessons;
+    }
   }
 } 

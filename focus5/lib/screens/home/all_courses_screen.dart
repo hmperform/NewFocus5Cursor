@@ -328,7 +328,7 @@ class _AllCoursesScreenState extends State<AllCoursesScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${course.lessons.length}',
+                        '${course.modules.length}',
                         style: TextStyle(
                           fontSize: 12,
                           color: textColor.withOpacity(0.7),

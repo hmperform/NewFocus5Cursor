@@ -20,6 +20,12 @@ class CoachModel {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  
+  // Add missing properties
+  final String? education;
+  final String? certifications;
+  final String? experience;
+  final String? approach;
 
   CoachModel({
     required this.id,
@@ -41,6 +47,10 @@ class CoachModel {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.education,
+    this.certifications,
+    this.experience,
+    this.approach,
   });
 
   factory CoachModel.fromJson(Map<String, dynamic> json) {
@@ -64,6 +74,10 @@ class CoachModel {
       isActive: json['isActive'] ?? true,
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       updatedAt: (json['updatedAt'] as Timestamp).toDate(),
+      education: json['education'],
+      certifications: json['certifications'],
+      experience: json['experience'],
+      approach: json['approach'],
     );
   }
 
@@ -88,6 +102,10 @@ class CoachModel {
       'isActive': isActive,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
+      'education': education,
+      'certifications': certifications,
+      'experience': experience,
+      'approach': approach,
     };
   }
 } 

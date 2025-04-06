@@ -1,187 +1,142 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/coach_model.dart';
-import '../../providers/coaches_provider.dart';
-import '../coach/coach_profile_screen.dart';
+
+import '../../providers/theme_provider.dart';
+import '../../models/content_models.dart';
+import 'coach_profile_screen.dart';
 
 class CoachesSection extends StatelessWidget {
   const CoachesSection({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
+    // Sample coaches data (in a real app, this would come from a provider)
+    final coaches = [
+      {
+        'id': 'coach-001',
+        'name': 'Dr. Sarah Johnson',
+        'title': 'Performance Psychologist',
+        'imageUrl': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200',
+        'specialization': 'Mental Toughness',
+        'experience': '15+ years',
+        'rating': 4.9,
+        'reviews': 127,
+      },
+      {
+        'id': 'coach-002',
+        'name': 'Michael Davis',
+        'title': 'Mental Performance Coach',
+        'imageUrl': 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200',
+        'specialization': 'Visualization',
+        'experience': '10+ years',
+        'rating': 4.8,
+        'reviews': 98,
+      },
+    ];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Coaches',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // Navigate to all coaches page
-                  Navigator.of(context).pushNamed('/coaches');
-                },
-                child: Row(
-                  children: const [
-                    Text(
-                      'View all',
-                      style: TextStyle(
-                        color: Color(0xFFB4FF00),
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: Color(0xFFB4FF00),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Text(
+            'Top Coaches',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         SizedBox(
-          height: 220,
-          child: FutureBuilder<List<Coach>>(
-            future: Provider.of<CoachesProvider>(context, listen: false).getCoaches(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB4FF00)),
-                  ),
-                );
-              } else if (snapshot.hasError) {
-                return Center(
-                  child: Text(
-                    'Error loading coaches: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                );
-              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No coaches available',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                );
-              }
-              
-              final coaches = snapshot.data!;
-              
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                itemCount: coaches.length,
-                itemBuilder: (context, index) {
-                  final coach = coaches[index];
-                  return _buildCoachCard(context, coach);
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: coaches.length,
+            padding: const EdgeInsets.only(left: 16),
+            itemBuilder: (context, index) {
+              final coach = coaches[index];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CoachProfileScreen(
+                        coachId: coach['id'],
+                      ),
+                    ),
+                  );
                 },
+                child: Container(
+                  width: 150,
+                  margin: const EdgeInsets.only(right: 16),
+                  decoration: BoxDecoration(
+                    color: themeProvider.surfaceColor,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        child: coach['imageUrl'] != null && coach['imageUrl'].isNotEmpty
+                            ? Image.network(
+                                coach['imageUrl'],
+                                height: 120,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              )
+                            : Container(
+                                height: 120,
+                                width: double.infinity,
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.person, size: 60, color: Colors.grey),
+                              ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              coach['name'],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              coach['specialization'],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: themeProvider.secondaryTextColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
           ),
         ),
       ],
-    );
-  }
-  
-  Widget _buildCoachCard(BuildContext context, Coach coach) {
-    // Handle null values by providing defaults
-    final name = coach.name ?? 'Coach';
-    final specialty = coach.specialty != null && coach.specialty!.isNotEmpty 
-        ? coach.specialty! 
-        : 'Mental Performance Coach';
-    
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CoachProfileScreen(coach: coach),
-          ),
-        );
-      },
-      child: Container(
-        width: 160,
-        margin: const EdgeInsets.all(8.0),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(16.0),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Coach image
-            Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16.0),
-                  topRight: Radius.circular(16.0),
-                ),
-                image: coach.profileImageUrl != null && coach.profileImageUrl!.isNotEmpty
-                    ? DecorationImage(
-                        image: NetworkImage(coach.profileImageUrl!),
-                        fit: BoxFit.cover,
-                        onError: (exception, stackTrace) {
-                          // On error, don't display an image
-                        },
-                      )
-                    : null,
-              ),
-              // Fallback if image fails to load
-              child: coach.profileImageUrl == null || coach.profileImageUrl!.isEmpty
-                  ? const Icon(
-                      Icons.person,
-                      size: 60,
-                      color: Colors.white70,
-                    )
-                  : null,
-            ),
-            
-            // Coach name and specialty
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    specialty,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 } 

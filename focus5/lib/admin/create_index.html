@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Firestore Index</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .btn {
+            background-color: #1a73e8;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .btn:hover {
+            background-color: #0d62d0;
+        }
+        .note {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fffde7;
+            border-left: 4px solid #ffeb3b;
+            border-radius: 4px;
+        }
+        code {
+            background-color: #f0f0f0;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Create Firestore Index for Coaches Collection</h1>
+        <p>This page will redirect you to the Firebase Console to create the required index for the coaches collection.</p>
+        <p>The error you're seeing is because Firestore requires a composite index for the query you're trying to execute.</p>
+        
+        <div class="note">
+            <p><strong>Note:</strong> You'll need to be logged into your Firebase account to create the index.</p>
+        </div>
+        
+        <button class="btn" onclick="window.location.href='https://console.firebase.google.com/v1/r/project/focus-5-app/firestore/indexes?create_composite=Cktwcm9qZWN0cy9mb2N1cy01LWFwcC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvY29hY2hlcy9pbmRleGVzL18QARoMCghpc1ZlcmlmaWVkEAEaCAoEbmFtZRABGgwKCF9fbmFtZV9fEAE'">
+            Create Firestore Index
+        </button>
+        
+        <div class="note" style="margin-top: 30px;">
+            <h3>What is happening?</h3>
+            <p>Your app is trying to query the <code>coaches</code> collection with multiple ordering or filtering conditions, which requires a composite index.</p>
+            <p>This specifically looks like a query that's filtering by <code>isVerified</code> and ordering by <code>name</code>.</p>
+            <p>After clicking the button above and creating the index, you'll need to wait a few minutes for the index to be created and deployed.</p>
+        </div>
+
+        <div class="note" style="margin-top: 30px;">
+            <h3>Other Module Index</h3>
+            <p>There also appears to be an issue with your modules index. You can create that index with the button below:</p>
+            <button class="btn" onclick="window.location.href='https://console.firebase.google.com/v1/r/project/focus-5-app/firestore/indexes?create_composite=Cktwcm9qZWN0cy9mb2N1cy01LWFwcC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvbW9kdWxlcy9pbmRleGVzL18QARoMCghjb3Vyc2VJZBABGg0KCXNvcnRPcmRlchABGgwKCF9fbmFtZV9fEAE'">
+                Create Modules Index
+            </button>
+        </div>
+    </div>
+</body>
+</html> 

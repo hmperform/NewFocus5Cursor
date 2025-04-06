@@ -187,7 +187,7 @@ class AppBadge {
   final String name;
   final String description;
   final String imageUrl;
-  final DateTime earnedAt;
+  final DateTime? earnedAt;
   final int xpValue;
 
   AppBadge({
@@ -200,13 +200,17 @@ class AppBadge {
   });
 
   factory AppBadge.fromJson(Map<String, dynamic> json) {
-    DateTime earned;
-    if (json['earnedAt'] is Timestamp) {
-      earned = DateTime.fromMillisecondsSinceEpoch(
-        (json['earnedAt'] as Timestamp).millisecondsSinceEpoch
-      );
+    DateTime? earned;
+    if (json['earnedAt'] != null) {
+      if (json['earnedAt'] is Timestamp) {
+        earned = DateTime.fromMillisecondsSinceEpoch(
+          (json['earnedAt'] as Timestamp).millisecondsSinceEpoch
+        );
+      } else {
+        earned = DateTime.parse(json['earnedAt'].toString());
+      }
     } else {
-      earned = DateTime.parse(json['earnedAt'].toString());
+      earned = null;
     }
     
     return AppBadge(
@@ -225,7 +229,7 @@ class AppBadge {
       'name': name,
       'description': description,
       'imageUrl': imageUrl,
-      'earnedAt': earnedAt.toIso8601String(),
+      'earnedAt': earnedAt?.toIso8601String(),
       'xpValue': xpValue,
     };
   }

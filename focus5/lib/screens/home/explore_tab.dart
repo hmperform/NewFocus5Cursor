@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:developer';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/coach_provider.dart';
 import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import '../../constants/dummy_data.dart';
@@ -18,6 +20,7 @@ import 'all_courses_screen.dart';
 import 'all_modules_screen.dart';
 import '../../services/paywall_service.dart';
 import 'article_detail_screen.dart';
+import '../explore/focus_area_courses_screen.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -36,6 +39,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> _coaches = [];
   bool _loadingCoaches = true;
+  String? _coachesError;
   
   late TabController _tabController;
   
@@ -58,7 +62,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       });
     });
     
-    // Initialize content with dummy data
+    // Initialize content data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final contentProvider = Provider.of<ContentProvider>(context, listen: false);
       if (contentProvider.courses.isEmpty) {
@@ -68,61 +72,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         contentProvider.loadArticles();
       }
       
-      _loadCoaches();
+      // Load coaches from CoachProvider instead of directly from Firestore
+      final coachProvider = Provider.of<CoachProvider>(context, listen: false);
+      coachProvider.loadCoaches();
     });
   }
   
-  Future<void> _loadCoaches() async {
-    try {
-      setState(() {
-        _loadingCoaches = true;
-      });
-      
-      final QuerySnapshot coachesSnapshot = await _firestore
-          .collection('coaches')
-          .where('isActive', isEqualTo: true)
-          .limit(10)
-          .get();
-      
-      if (coachesSnapshot.docs.isEmpty) {
-        // If no coaches found in Firestore, use dummy data
-        setState(() {
-          _coaches = DummyData.dummyCoaches;
-          _loadingCoaches = false;
-        });
-        return;
-      }
-      
-      final List<Map<String, dynamic>> loadedCoaches = coachesSnapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return {
-          'id': doc.id,
-          'name': data['name'] ?? 'Unknown Coach',
-          'title': data['title'] ?? 'Mental Performance Coach',
-          'specialization': data['specialization'] ?? 'Performance',
-          'description': data['description'] ?? 'No description available',
-          'imageUrl': data['imageUrl'] ?? 'https://via.placeholder.com/300',
-          'rating': data['rating'] ?? 4.8,
-          'reviews': data['reviews'] ?? 24,
-          'price': data['price'] ?? 99,
-          'isActive': data['isActive'] ?? true,
-        };
-      }).toList();
-      
-      setState(() {
-        _coaches = loadedCoaches;
-        _loadingCoaches = false;
-      });
-    } catch (e) {
-      debugPrint('Error loading coaches: $e');
-      // Fallback to dummy data on error
-      setState(() {
-        _coaches = DummyData.dummyCoaches;
-        _loadingCoaches = false;
-      });
-    }
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -188,38 +143,48 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                       hintText: 'Search topics, coaches, modules...',
                       hintStyle: TextStyle(color: secondaryTextColor),
                       prefixIcon: Icon(Icons.search, color: secondaryTextColor),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      suffixIcon: _isSearching
+                          ? IconButton(
+                              icon: Icon(Icons.close, color: secondaryTextColor),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _isSearching = false;
+                                  _searchQuery = '';
+                                });
+                              },
+                            )
+                          : null,
                     ),
-                    onChanged: _handleSearch,
+                    onChanged: (value) {
+                      setState(() {
+                        _isSearching = value.isNotEmpty;
+                        _handleSearch(value);
+                      });
+                    },
                   ),
                 ),
               ),
             ),
           ),
-          
-          // Coaches section
-          SliverToBoxAdapter(
-            child: _buildCoachesSection(),
-          ),
-          
-          // Featured articles section
-          SliverToBoxAdapter(
-            child: _buildArticlesSection(),
-          ),
-          
-          // Featured courses section
-          SliverToBoxAdapter(
-            child: _buildFeaturedCoursesSection(),
-          ),
-          
-          // Focus areas / modules section
-          SliverToBoxAdapter(
-            child: _buildModulesSection(),
-          ),
-          
-          // Course Topics Section
-          SliverToBoxAdapter(
-            child: _buildCourseTopicsSection(),
+
+          // Main content
+          SliverList(
+            delegate: SliverChildListDelegate([
+              // Coaches Section - Now first
+              _buildCoachesSection(),
+              
+              // Featured Courses Section - Now second
+              _buildFeaturedCoursesSection(),
+              
+              // Focus Areas (Modules) Section - Now third
+              _buildModulesSection(),
+              
+              // Articles Section - Now last
+              _buildArticlesSection(),
+              
+              const SizedBox(height: 80), // Bottom padding
+            ]),
           ),
         ],
       ),
@@ -228,19 +193,26 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   
   Widget _buildCoachesSection() {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
     final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    
+    // Use CoachProvider instead of directly querying Firestore
+    final coachProvider = Provider.of<CoachProvider>(context);
+    final coaches = coachProvider.coaches;
+    final isLoading = coachProvider.isLoading;
+    final error = coachProvider.error;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Coaches',
+                'Top Coaches',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -251,9 +223,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const AllCoachesScreen(),
-                    ),
+                    MaterialPageRoute(builder: (context) => const AllCoachesScreen()),
                   );
                 },
                 child: Row(
@@ -277,156 +247,148 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             ],
           ),
         ),
-        SizedBox(
-          height: MediaQuery.of(context).size.height * 0.33, // 1/3 of screen height
-          child: _loadingCoaches
-              ? Center(child: CircularProgressIndicator())
-              : _coaches.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No coaches available',
-                        style: TextStyle(color: textColor),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _coaches.length,
-                      itemBuilder: (context, index) {
-                        final coach = _coaches[index];
-                        return _buildCoachCard(coach);
-                      },
-                    ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildCoachCard(Map<String, dynamic> coach) {
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CoachProfileScreen(coach: coach),
-          ),
-        );
-      },
-      child: Container(
-        width: 170,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Coach image with specialization tag
-            Stack(
-              children: [
-                // Coach photo
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: FadeInImage.memoryNetwork(
-                    placeholder: kTransparentImage,
-                    image: coach['imageUrl'],
-                    width: 170,
-                    height: 210,
-                    fit: BoxFit.cover,
-                    imageErrorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 170,
-                        height: 210,
-                        color: Colors.grey.shade200,
-                        child: const Center(
-                          child: Icon(Icons.person, size: 50),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+        
+        if (isLoading)
+          SizedBox(
+            height: 120,
+            child: Center(
+              child: CircularProgressIndicator(
+                color: themeProvider.accentColor,
+              ),
+            ),
+          )
+        else if (error != null)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Error loading coaches: $error',
+              style: TextStyle(color: Colors.red.shade300),
+            ),
+          )
+        else if (coaches.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'No coaches available at this time',
+              style: TextStyle(color: textColor.withOpacity(0.7)),
+            ),
+          )
+        else
+          SizedBox(
+            height: 150,
+            child: ListView.builder(
+              padding: const EdgeInsets.only(left: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: coaches.length,
+              itemBuilder: (context, index) {
+                final coach = coaches[index];
                 
-                // Specialization tag
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      coach['specialization'] ?? 'Performance',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CoachProfileScreen(
+                          coachId: coach.id,
+                        ),
                       ),
+                    );
+                  },
+                  child: Container(
+                    width: 300,
+                    margin: const EdgeInsets.only(right: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Coach image
+                        CircleAvatar(
+                          radius: 35,
+                          backgroundImage: NetworkImage(
+                            coach.profileImageUrl.isNotEmpty
+                              ? coach.profileImageUrl
+                              : 'https://via.placeholder.com/70',
+                          ),
+                          onBackgroundImageError: (_, __) {},
+                          backgroundColor: Colors.grey.shade200,
+                        ),
+                        
+                        const SizedBox(width: 16),
+                        
+                        // Coach info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                coach.name,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                coach.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontStyle: FontStyle.italic,
+                                  color: isDarkMode ? Colors.white60 : Colors.black45,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              // Check if coach has verified badge
+                              if (coach.isVerified)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.blue.shade300, width: 1),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified, size: 16, color: Colors.blue.shade300),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Verified',
+                                        style: TextStyle(
+                                          color: Colors.blue.shade300,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
-            
-            const SizedBox(height: 10),
-            
-            // Coach name
-            Text(
-              coach['name'],
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            
-            const SizedBox(height: 4),
-            
-            // Coach title
-            Text(
-              coach['title'],
-              style: TextStyle(
-                fontSize: 14,
-                color: textColor.withOpacity(0.7),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            
-            const SizedBox(height: 6),
-            
-            // Rating
-            Row(
-              children: [
-                Icon(
-                  Icons.star,
-                  color: Colors.amber,
-                  size: 16,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${coach['rating']}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '(${coach['reviews']})',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: textColor.withOpacity(0.7),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
   
@@ -707,7 +669,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${course.lessons.length} lessons',
+                        '${course.modules.length} lessons',
                         style: TextStyle(
                           fontSize: 14,
                           color: textColor.withOpacity(0.7),
@@ -803,168 +765,107 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             ],
           ),
         ),
-        GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 1.5,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: modules.length > 4 ? 4 : modules.length, // Show max 4 modules in grid
-          itemBuilder: (context, index) {
-            final module = modules[index];
-            return _buildModuleCard(module);
-          },
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildModuleCard(Module module) {
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    
-    return GestureDetector(
-      onTap: () {
-        // Navigate to module content
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: FadeInImage.memoryNetwork(
-                placeholder: kTransparentImage,
-                image: module.imageUrl,
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                imageErrorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  );
-                },
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.7),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    module.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${module.audioCount} audio tracks',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildCourseTopicsSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final isDark = themeProvider.isDarkMode;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-          child: Text(
-            'Popular Topics',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-        ),
         SizedBox(
-          height: 50,
+          height: 160,
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.only(left: 16),
             scrollDirection: Axis.horizontal,
-            itemCount: _categories.length,
+            itemCount: modules.length,
             itemBuilder: (context, index) {
-              final bool isSelected = index == _selectedTabIndex;
+              final module = modules[index];
+              
               return GestureDetector(
                 onTap: () {
-                  setState(() {
-                    _selectedTabIndex = index;
-                  });
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? themeProvider.accentColor 
-                        : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _categories[index],
-                      style: TextStyle(
-                        color: isSelected 
-                            ? (isDark ? Colors.black : Colors.white) 
-                            : textColor,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  // Navigate to the focus area courses screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FocusAreaCoursesScreen(
+                        focusArea: module.categories.isNotEmpty ? module.categories.first : module.title,
                       ),
                     ),
+                  );
+                },
+                child: Container(
+                  width: 160,
+                  margin: const EdgeInsets.only(right: 16, bottom: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Background image
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: FadeInImage.memoryNetwork(
+                          placeholder: kTransparentImage,
+                          image: module.imageUrl ?? 'https://via.placeholder.com/300',
+                          fit: BoxFit.cover,
+                          imageErrorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.image, color: Colors.grey),
+                            );
+                          },
+                        ),
+                      ),
+                      
+                      // Gradient overlay
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.7),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      
+                      // Module title
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                module.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 40),
       ],
     );
   }

@@ -45,9 +45,11 @@ class DataMigrationService {
     }
   }
   
-  // Migrate Courses and Modules
-  Future<void> migrateCoursesAndModules() async {
+  // Migrate courses to Firestore
+  Future<void> migrateCourses() async {
     try {
+      debugPrint('Starting migration of courses and lessons...');
+      
       // Check if any courses already exist
       final existingCourses = await _firestore.collection('courses').limit(1).get();
       if (existingCourses.docs.isNotEmpty) {
@@ -55,19 +57,21 @@ class DataMigrationService {
         return;
       }
       
-      // Create a batch operation
-      WriteBatch batch = _firestore.batch();
+      // Create a batch operation to make this faster and more reliable
+      var batch = _firestore.batch();
       int batchCount = 0;
       
       // Process each course
       for (final course in DummyData.dummyCourses) {
+        debugPrint('Processing course: ${course.title}');
         final courseRef = _firestore.collection('courses').doc(course.id);
         
-        // Convert course to map for Firestore
+        // Convert course to map for Firestore, excluding lessons
         final courseData = {
           'id': course.id,
           'title': course.title,
           'description': course.description,
+          'imageUrl': course.imageUrl, 
           'thumbnailUrl': course.thumbnailUrl,
           'creatorId': course.creatorId,
           'creatorName': course.creatorName,
@@ -85,27 +89,27 @@ class DataMigrationService {
         batch.set(courseRef, courseData);
         batchCount++;
         
-        // Process each module for this course
-        for (final module in course.modules) {
-          final moduleRef = _firestore.collection('modules').doc(module.id);
+        // Now process each lesson in the course
+        for (final lesson in course.lessonsList) {
+          final lessonRef = _firestore.collection('lessons').doc(lesson.id);
           
-          // Convert module to map for Firestore
-          final moduleData = {
-            'id': module.id,
+          // Convert lesson to map for Firestore
+          final lessonData = {
+            'id': lesson.id,
             'courseId': course.id,
-            'title': module.title,
-            'description': module.description,
-            'type': module.type.toString().split('.').last,
-            'videoUrl': module.videoUrl,
-            'audioUrl': module.audioUrl,
-            'textContent': module.textContent,
-            'durationMinutes': module.durationMinutes,
-            'sortOrder': module.sortOrder,
-            'thumbnailUrl': module.thumbnailUrl,
+            'title': lesson.title,
+            'description': lesson.description,
+            'type': lesson.type.toString().split('.').last,
+            'videoUrl': lesson.videoUrl,
+            'audioUrl': lesson.audioUrl,
+            'textContent': lesson.textContent,
+            'durationMinutes': lesson.durationMinutes,
+            'sortOrder': lesson.sortOrder,
+            'thumbnailUrl': lesson.thumbnailUrl,
           };
           
-          // Add module to batch
-          batch.set(moduleRef, moduleData);
+          // Add lesson to batch
+          batch.set(lessonRef, lessonData);
           batchCount++;
           
           // Firestore batches have a limit of 500 operations
@@ -122,9 +126,9 @@ class DataMigrationService {
         await batch.commit();
       }
       
-      debugPrint('Successfully migrated ${DummyData.dummyCourses.length} courses and their modules');
+      debugPrint('Successfully migrated ${DummyData.dummyCourses.length} courses and their lessons');
     } catch (e) {
-      debugPrint('Error migrating courses and modules: $e');
+      debugPrint('Error migrating courses and lessons: $e');
     }
   }
   
@@ -259,7 +263,7 @@ class DataMigrationService {
       // Migrate in this order to ensure proper references
       await migrateUniversities();
       await migrateCoaches();
-      await migrateCoursesAndModules();
+      await migrateCourses();
       await migrateDailyAudios();
       await migrateArticles();
       

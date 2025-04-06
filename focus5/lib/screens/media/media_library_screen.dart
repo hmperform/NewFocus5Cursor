@@ -18,6 +18,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
   late TabController _tabController;
   String _selectedCategory = 'All';
   bool _isLoading = false;
+  String _searchQuery = '';
   
   @override
   void initState() {
@@ -93,6 +94,28 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
                 fontSize: 16,
                 color: isDarkMode ? Colors.white70 : Colors.black54,
               ),
+            ),
+          ),
+          
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search for content...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (query) {
+                setState(() {
+                  _searchQuery = query;
+                });
+              },
             ),
           ),
           
@@ -184,7 +207,10 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
   }
   
   Widget _buildVideoList(ContentProvider contentProvider) {
-    final videos = contentProvider.videos;
+    // If searching, use the search method
+    final videos = _searchQuery.isNotEmpty 
+        ? contentProvider.searchMediaContent(_searchQuery, 'video')
+        : contentProvider.videos;
     
     // Filter by category if not "All"
     final filteredVideos = _selectedCategory == 'All'
@@ -195,12 +221,15 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     if (filteredVideos.isEmpty) {
       return Center(
         child: Text(
-          'No videos available in this category',
+          _searchQuery.isNotEmpty
+              ? 'No videos matching "$_searchQuery" in this category'
+              : 'No videos available in this category',
           style: TextStyle(
             color: Provider.of<ThemeProvider>(context).isDarkMode 
                 ? Colors.white70 
                 : Colors.black54,
           ),
+          textAlign: TextAlign.center,
         ),
       );
     }
@@ -215,7 +244,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
           description: video.description,
           duration: video.duration,
           xpReward: video.xpReward,
-          instructor: video.instructor,
+          instructor: video.creatorName,
           categories: video.categories,
           onTap: () {
             Navigator.push(
@@ -231,7 +260,10 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
   }
   
   Widget _buildAudioList(ContentProvider contentProvider) {
-    final audios = contentProvider.audios;
+    // If searching, use the search method
+    final audios = _searchQuery.isNotEmpty 
+        ? contentProvider.searchMediaContent(_searchQuery, 'audio')
+        : contentProvider.audios;
     
     // Filter by category if not "All"
     final filteredAudios = _selectedCategory == 'All'
@@ -242,12 +274,15 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     if (filteredAudios.isEmpty) {
       return Center(
         child: Text(
-          'No audio content available in this category',
+          _searchQuery.isNotEmpty
+              ? 'No audio content matching "$_searchQuery" in this category'
+              : 'No audio content available in this category',
           style: TextStyle(
             color: Provider.of<ThemeProvider>(context).isDarkMode 
                 ? Colors.white70 
                 : Colors.black54,
           ),
+          textAlign: TextAlign.center,
         ),
       );
     }
@@ -262,7 +297,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
           description: audio.description,
           duration: audio.duration,
           xpReward: audio.xpReward,
-          instructor: audio.instructor,
+          instructor: audio.creatorName,
           categories: audio.categories,
           isAudio: true,
           onTap: () {

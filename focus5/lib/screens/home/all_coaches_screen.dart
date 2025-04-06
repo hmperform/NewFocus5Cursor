@@ -172,7 +172,9 @@ class _AllCoachesScreenState extends State<AllCoachesScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => CoachProfileScreen(coach: coach),
+            builder: (context) => CoachProfileScreen(
+              coachId: coach['id'],
+            ),
           ),
         );
       },

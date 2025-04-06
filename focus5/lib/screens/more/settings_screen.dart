@@ -6,6 +6,7 @@ import '../../services/user_permissions_service.dart';
 import '../settings/firebase_setup_screen.dart';
 import '../settings/data_migration_screen.dart';
 import '../settings/admin_management_screen.dart';
+import '../../utils/migrate_modules_to_lessons.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -183,7 +184,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Data Migration',
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      Navigator.pushNamed(context, '/data_migration');
+                      Navigator.pushNamed(context, '/module_to_lesson_migration');
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _buildSettingCard(
+                    context: context,
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    icon: Icons.swap_horiz,
+                    title: 'Modules to Lessons Migration',
+                    subtitle: 'Migrate modules subcollection to lessons collection',
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const ModulesToLessonsMigrationScreen(),
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(height: 8),

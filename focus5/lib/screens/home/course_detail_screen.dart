@@ -172,7 +172,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
-                    module: _course!.modules[0],
+                    lesson: _course!.modules[0],
                     courseId: widget.courseId,
                     courseTitle: _course!.title,
                   ),
@@ -425,7 +425,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         physics: const NeverScrollableScrollPhysics(), // Disable scrolling since parent handles it
         itemCount: _course!.modules.length,
         itemBuilder: (context, index) {
-          final module = _course!.modules[index];
+          final lesson = _course!.modules[index];
           // Enhanced lesson item
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -449,7 +449,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => VideoPlayerScreen(
-                        module: module,
+                        lesson: lesson,
                         courseId: widget.courseId,
                         courseTitle: _course!.title,
                       ),
@@ -485,7 +485,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              module.title,
+                              lesson.title,
                               style: TextStyle(
                                 color: textColor,
                                 fontWeight: FontWeight.bold,
@@ -494,7 +494,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              module.description,
+                              lesson.description,
                               style: TextStyle(
                                 color: secondaryTextColor,
                                 fontSize: 14,
@@ -507,13 +507,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             Row(
                               children: [
                                 Icon(
-                                  _getModuleTypeIcon(module.type),
+                                  _getLessonTypeIcon(lesson.type),
                                   color: secondaryTextColor,
                                   size: 14,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  _getModuleTypeText(module.type),
+                                  _getLessonTypeText(lesson.type),
                                   style: TextStyle(
                                     color: secondaryTextColor,
                                     fontSize: 12,
@@ -528,7 +528,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${module.durationMinutes} min',
+                                  '${lesson.durationMinutes} min',
                                   style: TextStyle(
                                     color: secondaryTextColor,
                                     fontSize: 12,
@@ -565,29 +565,33 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
   
-  IconData _getModuleTypeIcon(ModuleType type) {
+  IconData _getLessonTypeIcon(LessonType type) {
     switch (type) {
-      case ModuleType.video:
+      case LessonType.video:
         return Icons.videocam;
-      case ModuleType.audio:
+      case LessonType.audio:
         return Icons.headset;
-      case ModuleType.text:
-        return Icons.description;
-      case ModuleType.quiz:
+      case LessonType.text:
+        return Icons.article;
+      case LessonType.quiz:
         return Icons.quiz;
+      default:
+        return Icons.school;
     }
   }
   
-  String _getModuleTypeText(ModuleType type) {
+  String _getLessonTypeText(LessonType type) {
     switch (type) {
-      case ModuleType.video:
+      case LessonType.video:
         return 'Video';
-      case ModuleType.audio:
+      case LessonType.audio:
         return 'Audio';
-      case ModuleType.text:
-        return 'Reading';
-      case ModuleType.quiz:
+      case LessonType.text:
+        return 'Text';
+      case LessonType.quiz:
         return 'Quiz';
+      default:
+        return 'Lesson';
     }
   }
 
@@ -969,13 +973,13 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 }
 
 class VideoPlayerScreen extends StatefulWidget {
-  final Module module;
+  final Lesson lesson;
   final String courseId;
   final String courseTitle;
 
   const VideoPlayerScreen({
     Key? key,
-    required this.module,
+    required this.lesson,
     required this.courseId,
     required this.courseTitle,
   }) : super(key: key);
@@ -997,12 +1001,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   
   void _initializeVideo() {
     // Check if there's a video URL
-    final videoUrl = widget.module.videoUrl;
+    final videoUrl = widget.lesson.videoUrl;
     if (videoUrl == null || videoUrl.isEmpty) {
       // If no video URL, show error message and return
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No video available for this module'),
+          content: Text('No video available for this lesson'),
         ),
       );
       Navigator.of(context).pop();
@@ -1013,20 +1017,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     BasicVideoHelper.playVideo(
       context: context,
       videoUrl: videoUrl,
-      title: widget.module.title,
+      title: widget.lesson.title,
       subtitle: widget.courseTitle,
-      thumbnailUrl: widget.module.thumbnailUrl ?? '',
+      thumbnailUrl: widget.lesson.thumbnailUrl ?? '',
       mediaItem: MediaItem(
-        id: widget.module.id,
-        title: widget.module.title,
-        description: widget.module.description,
+        id: widget.lesson.id,
+        title: widget.lesson.title,
+        description: widget.lesson.description,
         mediaType: MediaType.video,
         mediaUrl: videoUrl,
-        imageUrl: widget.module.thumbnailUrl ?? '',
+        imageUrl: widget.lesson.thumbnailUrl ?? '',
         creatorId: '',
         creatorName: '',
-        durationMinutes: widget.module.durationMinutes,
-        focusAreas: widget.module.type == ModuleType.video ? ['Video'] : ['Audio'],
+        durationMinutes: widget.lesson.durationMinutes,
+        focusAreas: widget.lesson.type == LessonType.video ? ['Video'] : ['Audio'],
         datePublished: DateTime.now(),
         universityExclusive: false,
         category: '',

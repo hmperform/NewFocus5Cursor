@@ -19,6 +19,15 @@ class ThemeProvider with ChangeNotifier {
   
   // Secondary text color (used for hints, subtitles, etc.)
   Color get secondaryTextColor => _isDarkMode ? Colors.white70 : Colors.black87;
+  
+  // Background color based on theme
+  Color get backgroundColor => _isDarkMode ? AppColors.backgroundDark : AppColors.backgroundLight;
+  
+  // Text color based on theme
+  Color get textColor => _isDarkMode ? Colors.white : Colors.black;
+  
+  // Surface color based on theme
+  Color get surfaceColor => _isDarkMode ? AppColors.surfaceDark : AppColors.surfaceLight;
 
   ThemeProvider() {
     _isDarkMode = true; // Default to dark mode initially

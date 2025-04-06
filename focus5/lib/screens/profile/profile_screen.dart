@@ -6,6 +6,7 @@ import '../../models/user_model.dart';
 import '../../models/badge_model.dart';
 import 'edit_profile_screen.dart';
 import '../../utils/image_utils.dart';
+import '../explore/focus_area_courses_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -320,18 +321,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              label == 'Focus Areas' && value != 'None selected'
+                  ? _buildFocusAreasChips(value.split(', '))
+                  : Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
             ],
           ),
         ),
       ],
+    );
+  }
+  
+  Widget _buildFocusAreasChips(List<String> focusAreas) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: focusAreas.map((area) {
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => FocusAreaCoursesScreen(focusArea: area),
+              ),
+            );
+          },
+          child: Chip(
+            backgroundColor: const Color(0xFF303030),
+            side: const BorderSide(color: Color(0xFFB4FF00), width: 1),
+            label: Text(
+              area,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+        );
+      }).toList(),
     );
   }
   
@@ -402,6 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
         
         if (snapshot.hasError) {
+          debugPrint('Error loading badges: ${snapshot.error}');
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -486,11 +521,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 1,
                 ),
               ),
-              child: Icon(
-                _getBadgeIcon(badge.id),
-                color: isEarned ? const Color(0xFFB4FF00) : Colors.white38,
-                size: 32,
-              ),
+              child: isEarned
+                ? Icon(
+                    _getBadgeIcon(badge.id),
+                    color: const Color(0xFFB4FF00),
+                    size: 32,
+                  )
+                : ColorFiltered(
+                    colorFilter: const ColorFilter.matrix([
+                      0.2, 0.2, 0.2, 0, 0,
+                      0.2, 0.2, 0.2, 0, 0,
+                      0.2, 0.2, 0.2, 0, 0,
+                      0, 0, 0, 0.5, 0,
+                    ]),
+                    child: Icon(
+                      _getBadgeIcon(badge.id),
+                      color: Colors.white38,
+                      size: 32,
+                    ),
+                  ),
             ),
             const SizedBox(height: 8),
             Padding(
@@ -510,12 +559,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
               child: Text(
-                isEarned ? '+${badge.xpValue} XP' : 'Locked',
+                isEarned ? '+${badge.xpValue} XP' : 'Tap to see how to unlock',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
                   color: isEarned ? const Color(0xFFB4FF00) : Colors.white38,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -556,11 +607,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       width: 2,
                     ),
                   ),
-                  child: Icon(
-                    _getBadgeIcon(badge.id),
-                    color: isEarned ? const Color(0xFFB4FF00) : Colors.white38,
-                    size: 48,
-                  ),
+                  child: isEarned 
+                    ? Icon(
+                        _getBadgeIcon(badge.id),
+                        color: const Color(0xFFB4FF00),
+                        size: 48,
+                      )
+                    : ColorFiltered(
+                        colorFilter: const ColorFilter.matrix([
+                          0.2, 0.2, 0.2, 0, 0,
+                          0.2, 0.2, 0.2, 0, 0,
+                          0.2, 0.2, 0.2, 0, 0,
+                          0, 0, 0, 0.5, 0,
+                        ]),
+                        child: Icon(
+                          _getBadgeIcon(badge.id),
+                          color: Colors.white38,
+                          size: 48,
+                        ),
+                      ),
                 ),
                 
                 const SizedBox(height: 16),
@@ -631,20 +696,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'How to earn this badge:',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: const Color(0xFFB4FF00),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'How to earn this badge:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Text(
                           _getEarningRequirements(badge),
                           style: const TextStyle(
                             color: Colors.white70,
+                            height: 1.4,
                           ),
                         ),
+                        if (badge.xpValue > 0) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.stars,
+                                color: Colors.amber,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Earn +${badge.xpValue} XP when unlocked',
+                                style: const TextStyle(
+                                  color: Colors.amber,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -681,15 +777,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Example implementation - replace with actual badge criteria
     switch (badge.id) {
       case 'streak_7_days':
-        return 'Complete a 7-day streak of using the app.';
+        return 'Use the app for 7 consecutive days to establish a weekly routine.';
       case 'first_course':
-        return 'Complete your first course.';
+        return 'Complete your first course to start your mental performance journey.';
       case 'five_courses':
-        return 'Complete 5 courses.';
+        return 'Complete 5 courses to build a solid foundation in mental performance.';
       case 'meditation_master':
-        return 'Complete 10 meditation sessions.';
+        return 'Complete 10 meditation sessions to strengthen your mindfulness skills.';
+      case 'login_streak_30':
+        return 'Maintain a 30-day login streak to demonstrate your commitment to mental training.';
+      case 'audio_complete_10':
+        return 'Listen to 10 audio sessions to improve your focus and relaxation techniques.';
+      case 'xp_milestone_1000':
+        return 'Earn 1000 XP by completing various activities in the app.';
       default:
-        return 'Complete activities and challenges to earn this badge.';
+        return 'Complete activities and challenges throughout the app to unlock this achievement badge.';
     }
   }
   

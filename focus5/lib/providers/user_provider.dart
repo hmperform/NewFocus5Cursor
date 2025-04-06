@@ -20,7 +20,7 @@ class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorageService _storageService = FirebaseStorageService();
   final BadgeService _badgeService = BadgeService();
-  final AuthProvider? _authProvider;
+  final AuthProvider? _authProvider = null;
   
   User? _user;
   List<JournalEntry> _journalEntries = [];
@@ -447,7 +447,7 @@ class UserProvider extends ChangeNotifier {
       }
       
       // Reload user data to get the updated information including new image URL
-      await loadUser(_user!.id);
+      await loadUserData(_user!.id);
       
       notifyListeners();
     } catch (e) {
@@ -473,7 +473,7 @@ class UserProvider extends ChangeNotifier {
           name: data['name'] ?? '',
           description: data['description'] ?? '',
           imageUrl: data['imageUrl'] ?? 'assets/images/badges/default.png',
-          earnedAt: null, // Not earned yet
+          earnedAt: null, // Not earned yet (now works since earnedAt is nullable)
           xpValue: data['xpValue'] ?? 0,
         ));
       }
@@ -489,7 +489,7 @@ class UserProvider extends ChangeNotifier {
               name: '',
               description: '',
               imageUrl: '',
-              earnedAt: DateTime.now(),
+              earnedAt: null,
               xpValue: 0,
             ),
           );

@@ -20,6 +20,7 @@ import 'screens/paywall/paywall_screen.dart';
 import 'screens/settings/data_migration_screen.dart';
 import 'screens/settings/firebase_setup_screen.dart';
 import 'screens/settings/admin_management_screen.dart';
+import 'utils/migrate_modules_to_lessons.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/content_provider.dart';
@@ -28,10 +29,14 @@ import 'providers/journal_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/coach_provider.dart';
+import 'providers/badge_provider.dart';
 import 'widgets/mini_player.dart';
 import 'constants/theme.dart';
 import 'services/basic_video_service.dart';
 import 'services/initialize_database.dart';
+import 'screens/coaches/coaches_list_screen.dart';
+import 'screens/home/all_coaches_screen.dart';
+import 'screens/badges/all_badges_screen.dart';
 
 // Add global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -66,6 +71,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => JournalProvider('default_user')),
         ChangeNotifierProvider(create: (context) => BasicVideoService()),
         ChangeNotifierProvider(create: (context) => CoachProvider()),
+        ChangeNotifierProvider(create: (context) => BadgeProvider()),
       ],
       child: Focus5App(isFirstLaunch: isFirstLaunch),
     ),
@@ -178,6 +184,10 @@ class Focus5App extends StatelessWidget {
         '/data_migration': (context) => const DataMigrationScreen(),
         '/firebase_setup': (context) => const FirebaseSetupScreen(),
         '/admin-management': (context) => const AdminManagementScreen(),
+        '/coaches': (context) => const CoachesListScreen(),
+        '/all_coaches': (context) => const AllCoachesScreen(),
+        '/all_badges': (context) => const AllBadgesScreen(),
+        '/module_to_lesson_migration': (context) => const ModulesToLessonsMigrationScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/media_player') {

@@ -42,6 +42,43 @@ class DummyData {
     'Other',
   ];
 
+  // Dummy lessons
+  static final List<Lesson> dummyLessons = [
+    Lesson(
+      id: 'lesson1',
+      title: 'Mental Toughness',
+      description: 'Develop mental toughness for athletic performance',
+      imageUrl: 'https://source.unsplash.com/random/?mental,athlete',
+      categories: ['Mental', 'Performance'],
+      durationMinutes: 15,
+    ),
+    Lesson(
+      id: 'lesson2',
+      title: 'Focus Training',
+      description: 'Improve your concentration and focus',
+      imageUrl: 'https://source.unsplash.com/random/?focus,mind',
+      categories: ['Focus', 'Training'],
+      durationMinutes: 12,
+    ),
+    Lesson(
+      id: 'lesson3',
+      title: 'Visualization',
+      description: 'Master the art of visualization for better performance',
+      imageUrl: 'https://source.unsplash.com/random/?visualization',
+      categories: ['Visualization', 'Mental'],
+      durationMinutes: 10,
+    ),
+    Lesson(
+      id: 'lesson4',
+      title: 'Recovery',
+      description: 'Mental techniques for faster recovery',
+      imageUrl: 'https://source.unsplash.com/random/?recovery,relax',
+      categories: ['Recovery', 'Relax'],
+      premium: true,
+      durationMinutes: 18,
+    ),
+  ];
+
   // Universities
   static final Map<String, String> universities = {
     'UCLA': 'UCLA001',
@@ -150,17 +187,12 @@ class DummyData {
           'imageUrl': 'https://picsum.photos/100/100?random=202',
         }
       ],
-      'modules': [
+      'lessons': [
         {
-          'id': 'mod1',
+          'id': 'les1',
           'title': 'Mind Mastery',
-          'lessons': 8,
+          'count': 8,
         },
-        {
-          'id': 'mod2',
-          'title': 'Focus Training',
-          'lessons': 6,
-        }
       ],
       'articles': [
         {
@@ -196,16 +228,16 @@ class DummyData {
           'imageUrl': 'https://picsum.photos/100/100?random=203',
         }
       ],
-      'modules': [
+      'lessons': [
         {
-          'id': 'mod3',
+          'id': 'les2',
           'title': 'Growth Path',
-          'lessons': 5,
+          'count': 5,
         },
         {
-          'id': 'mod4',
+          'id': 'les3',
           'title': 'Motivation Mastery',
-          'lessons': 7,
+          'count': 7,
         }
       ],
       'articles': [
@@ -242,11 +274,11 @@ class DummyData {
           'imageUrl': 'https://picsum.photos/100/100?random=204',
         }
       ],
-      'modules': [
+      'lessons': [
         {
-          'id': 'mod5',
+          'id': 'les4',
           'title': 'Attention Training',
-          'lessons': 9,
+          'count': 9,
         }
       ],
       'articles': [
@@ -283,11 +315,11 @@ class DummyData {
           'imageUrl': 'https://picsum.photos/100/100?random=205',
         }
       ],
-      'modules': [
+      'lessons': [
         {
-          'id': 'mod6',
+          'id': 'les5',
           'title': 'Team Leadership',
-          'lessons': 6,
+          'count': 6,
         }
       ],
       'articles': [],
@@ -310,16 +342,16 @@ class DummyData {
       'experience': '11 years in mental conditioning',
       'bio': 'Specializing in helping athletes overcome setbacks and build mental resilience. Worked with Olympic medalists and professional teams to develop comeback strategies and mental toughness.',
       'podcasts': [],
-      'modules': [
+      'lessons': [
         {
-          'id': 'mod7',
+          'id': 'les6',
           'title': 'Bounce Back',
-          'lessons': 8,
+          'count': 8,
         },
         {
-          'id': 'mod8',
+          'id': 'les7',
           'title': 'Mental Toughness',
-          'lessons': 7,
+          'count': 7,
         }
       ],
       'articles': [
@@ -342,90 +374,6 @@ class DummyData {
     }
   ];
 
-  // Dummy modules
-  static final List<Module> dummyModules1 = [
-    Module(
-      id: 'module1-1',
-      title: 'Understanding Confidence',
-      description: 'Learn the foundations of athletic confidence and why it matters',
-      imageUrl: 'https://picsum.photos/800/400?random=10',
-      categories: ['Confidence', 'Psychology'],
-      type: ModuleType.video,
-      videoUrl: 'assets/videos/confidence_intro.mp4',
-      durationMinutes: 15,
-      sortOrder: 0,
-    ),
-    Module(
-      id: 'module1-2',
-      title: 'Confidence Building Exercises',
-      description: 'Practical exercises to build your confidence before competition',
-      imageUrl: 'https://picsum.photos/800/400?random=11',
-      categories: ['Confidence', 'Exercises'],
-      type: ModuleType.audio,
-      audioUrl: 'assets/audio/confidence_exercises.mp3',
-      durationMinutes: 20,
-      sortOrder: 1,
-    ),
-    Module(
-      id: 'module1-3',
-      title: 'Maintaining Confidence During Setbacks',
-      description: 'How to maintain confidence when facing challenges',
-      imageUrl: 'https://picsum.photos/800/400?random=12',
-      categories: ['Confidence', 'Resilience'],
-      type: ModuleType.video,
-      videoUrl: 'assets/videos/confidence_setbacks.mp4',
-      durationMinutes: 18,
-      sortOrder: 2,
-    ),
-  ];
-  
-  static final List<Module> dummyModules2 = [
-    Module(
-      id: 'module2-1',
-      title: 'Recognizing Anxiety Triggers',
-      description: 'Learn to identify what triggers performance anxiety',
-      imageUrl: 'https://picsum.photos/800/400?random=13',
-      categories: ['Anxiety', 'Psychology'],
-      type: ModuleType.video,
-      videoUrl: 'assets/videos/anxiety_triggers.mp4',
-      durationMinutes: 12,
-      sortOrder: 0,
-    ),
-    Module(
-      id: 'module2-2',
-      title: 'Breathing Techniques',
-      description: 'Effective breathing techniques to manage anxiety',
-      imageUrl: 'https://picsum.photos/800/400?random=14',
-      categories: ['Anxiety', 'Breathing'],
-      type: ModuleType.audio,
-      audioUrl: 'assets/audio/breathing.mp3',
-      durationMinutes: 15,
-      sortOrder: 1,
-    ),
-    Module(
-      id: 'module2-3',
-      title: 'Visualization for Anxiety Management',
-      description: 'Using visualization to reduce anxiety before competition',
-      imageUrl: 'https://picsum.photos/800/400?random=15',
-      categories: ['Anxiety', 'Visualization'],
-      type: ModuleType.video,
-      videoUrl: 'assets/videos/visualization.mp4',
-      durationMinutes: 20,
-      sortOrder: 2,
-    ),
-    Module(
-      id: 'module2-4',
-      title: 'Anxiety Management Assessment',
-      description: 'Test your understanding of anxiety management techniques',
-      imageUrl: 'https://picsum.photos/800/400?random=16',
-      categories: ['Anxiety', 'Assessment'],
-      type: ModuleType.quiz,
-      textContent: 'Quiz content here',
-      durationMinutes: 10,
-      sortOrder: 3,
-    ),
-  ];
-
   // Dummy courses
   static final List<Course> dummyCourses = [
     Course(
@@ -442,37 +390,36 @@ class DummyData {
       durationMinutes: 240,
       duration: 240,
       xpReward: 500,
-      lessons: [],
-      modules: [
-        Module(
-          id: 'module1_1',
+      lessonsList: [
+        Lesson(
+          id: 'lesson1_1',
           title: 'Understanding Mental Toughness',
           description: 'Learn the core components of mental toughness and how it affects performance.',
           imageUrl: 'https://picsum.photos/800/400?random=21',
           categories: ['Mental Toughness', 'Psychology'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/mental_toughness_intro.mp4',
           durationMinutes: 15,
           sortOrder: 1,
         ),
-        Module(
-          id: 'module1_2',
+        Lesson(
+          id: 'lesson1_2',
           title: 'Building Resilience',
           description: 'Discover practices to build resilience in the face of challenges.',
           imageUrl: 'https://picsum.photos/800/400?random=22',
           categories: ['Resilience', 'Techniques'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/building_resilience.mp4',
           durationMinutes: 20,
           sortOrder: 2,
         ),
-        Module(
-          id: 'module1_3',
+        Lesson(
+          id: 'lesson1_3',
           title: 'Daily Mental Strength Exercises',
           description: 'A collection of daily exercises to build mental strength.',
           imageUrl: 'https://picsum.photos/800/400?random=23',
           categories: ['Mental Strength', 'Exercises'],
-          type: ModuleType.audio,
+          type: LessonType.audio,
           audioUrl: 'https://example.com/audio/daily_mental_exercises.mp3',
           durationMinutes: 25,
           sortOrder: 3,
@@ -496,37 +443,36 @@ class DummyData {
       durationMinutes: 180,
       duration: 180,
       xpReward: 450,
-      lessons: [],
-      modules: [
-        Module(
-          id: 'module2_1',
+      lessonsList: [
+        Lesson(
+          id: 'lesson2_1',
           title: 'The Science of Focus',
           description: 'Understand how your brain focuses and what causes distractions.',
           imageUrl: 'https://picsum.photos/800/400?random=24',
           categories: ['Focus', 'Science'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/science_of_focus.mp4',
           durationMinutes: 18,
           sortOrder: 1,
         ),
-        Module(
-          id: 'module2_2',
+        Lesson(
+          id: 'lesson2_2',
           title: 'Mindfulness for Athletes',
           description: 'Learn mindfulness techniques specifically designed for athletes.',
           imageUrl: 'https://picsum.photos/800/400?random=25',
           categories: ['Mindfulness', 'Techniques'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/mindfulness_athletes.mp4',
           durationMinutes: 22,
           sortOrder: 2,
         ),
-        Module(
-          id: 'module2_3',
+        Lesson(
+          id: 'lesson2_3',
           title: 'Focus Under Pressure',
           description: 'Techniques to maintain focus during high-pressure situations.',
           imageUrl: 'https://picsum.photos/800/400?random=26',
           categories: ['Focus', 'Pressure'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/focus_under_pressure.mp4',
           durationMinutes: 20,
           sortOrder: 3,
@@ -550,37 +496,36 @@ class DummyData {
       durationMinutes: 210,
       duration: 210,
       xpReward: 475,
-      lessons: [],
-      modules: [
-        Module(
-          id: 'module3_1',
+      lessonsList: [
+        Lesson(
+          id: 'lesson3_1',
           title: 'Understanding Your Motivational Drivers',
           description: 'Discover what truly motivates you as an individual.',
           imageUrl: 'https://picsum.photos/800/400?random=21',
           categories: ['Motivation', 'Psychology'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/motivational_drivers.mp4',
           durationMinutes: 25,
           sortOrder: 1,
         ),
-        Module(
-          id: 'module3_2',
+        Lesson(
+          id: 'lesson3_2',
           title: 'Effective Goal Setting',
           description: 'Learn how to set goals that keep you motivated.',
           imageUrl: 'https://picsum.photos/800/400?random=22',
           categories: ['Goals', 'Planning'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/effective_goal_setting.mp4',
           durationMinutes: 20,
           sortOrder: 2,
         ),
-        Module(
-          id: 'module3_3',
+        Lesson(
+          id: 'lesson3_3',
           title: 'Overcoming Motivation Slumps',
           description: 'Strategies for maintaining motivation during challenging periods.',
           imageUrl: 'https://picsum.photos/800/400?random=23',
           categories: ['Motivation', 'Resilience'],
-          type: ModuleType.audio,
+          type: LessonType.audio,
           audioUrl: 'https://example.com/audio/motivation_slumps.mp3',
           durationMinutes: 18,
           sortOrder: 3,
@@ -604,37 +549,36 @@ class DummyData {
       durationMinutes: 190,
       duration: 190,
       xpReward: 425,
-      lessons: [],
-      modules: [
-        Module(
-          id: 'module4_1',
+      lessonsList: [
+        Lesson(
+          id: 'lesson4_1',
           title: 'The Champion\'s Mindset',
           description: 'Understanding how elite athletes think before, during, and after competition.',
           imageUrl: 'https://picsum.photos/800/400?random=27',
           categories: ['Mindset', 'Psychology'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/champions_mindset.mp4',
           durationMinutes: 22,
           sortOrder: 1,
         ),
-        Module(
-          id: 'module4_2',
+        Lesson(
+          id: 'lesson4_2',
           title: 'Mental Preparation Routines',
           description: 'Learn pre-competition mental routines used by Olympic athletes.',
           imageUrl: 'https://picsum.photos/800/400?random=28',
           categories: ['Preparation', 'Routines'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/mental_preparation.mp4',
           durationMinutes: 24,
           sortOrder: 2,
         ),
-        Module(
-          id: 'module4_3',
+        Lesson(
+          id: 'lesson4_3',
           title: 'Visualization Techniques',
           description: 'Master the art of visualization to enhance performance.',
           imageUrl: 'https://picsum.photos/800/400?random=29',
           categories: ['Visualization', 'Techniques'],
-          type: ModuleType.audio,
+          type: LessonType.audio,
           audioUrl: 'https://example.com/audio/visualization.mp3',
           durationMinutes: 20,
           sortOrder: 3,
@@ -658,37 +602,36 @@ class DummyData {
       durationMinutes: 220,
       duration: 220,
       xpReward: 480,
-      lessons: [],
-      modules: [
-        Module(
-          id: 'module5_1',
+      lessonsList: [
+        Lesson(
+          id: 'lesson5_1',
           title: 'Understanding Team Dynamics',
           description: 'Learn the psychological factors that influence team performance.',
           imageUrl: 'https://picsum.photos/800/400?random=31',
           categories: ['Team Dynamics', 'Psychology'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/team_dynamics.mp4',
           durationMinutes: 25,
           sortOrder: 1,
         ),
-        Module(
-          id: 'module5_2',
+        Lesson(
+          id: 'lesson5_2',
           title: 'Effective Communication in Teams',
           description: 'Master techniques for clear and supportive team communication.',
           imageUrl: 'https://picsum.photos/800/400?random=32',
           categories: ['Communication', 'Team'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/team_communication.mp4',
           durationMinutes: 22,
           sortOrder: 2,
         ),
-        Module(
-          id: 'module5_3',
+        Lesson(
+          id: 'lesson5_3',
           title: 'Building Team Identity',
           description: 'Strategies for creating a strong, unified team culture.',
           imageUrl: 'https://picsum.photos/800/400?random=33',
           categories: ['Team', 'Identity'],
-          type: ModuleType.video,
+          type: LessonType.video,
           videoUrl: 'https://example.com/videos/team_identity.mp4',
           durationMinutes: 20,
           sortOrder: 3,

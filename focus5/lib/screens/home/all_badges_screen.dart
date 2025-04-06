@@ -30,9 +30,15 @@ class AllBadgesScreen extends StatelessWidget {
       );
     }
     
-    // Sort badges by most recently earned
+    // Sort badges by most recently earned - fix the nullable DateTime issue
     final badges = List<AppBadge>.from(user.badges)
-      ..sort((a, b) => b.earnedAt.compareTo(a.earnedAt));
+      ..sort((a, b) {
+        // Handle null earned dates
+        if (a.earnedAt == null && b.earnedAt == null) return 0;
+        if (a.earnedAt == null) return 1; // null dates come last
+        if (b.earnedAt == null) return -1;
+        return b.earnedAt!.compareTo(a.earnedAt!);
+      });
     
     return Scaffold(
       appBar: AppBar(
@@ -188,7 +194,9 @@ class AllBadgesScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        "Earned ${_formatDate(badge.earnedAt)}",
+                        badge.earnedAt != null
+                          ? "Earned ${_formatDate(badge.earnedAt)}"
+                          : "Not yet earned",
                         style: TextStyle(
                           fontSize: 12,
                           color: secondaryTextColor,
@@ -205,7 +213,10 @@ class AllBadgesScreen extends StatelessWidget {
     );
   }
   
-  String _formatDate(DateTime date) {
+  String _formatDate(DateTime? date) {
+    if (date == null) {
+      return 'No date';
+    }
     final now = DateTime.now();
     final difference = now.difference(date);
     
