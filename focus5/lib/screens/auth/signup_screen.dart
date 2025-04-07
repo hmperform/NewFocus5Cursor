@@ -7,7 +7,6 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../providers/auth_provider.dart';
-import '../../constants/dummy_data.dart';
 import '../onboarding/sport_selection_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -397,43 +396,29 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // Sport dropdown
+                    // Sport Dropdown
                     DropdownButtonFormField<String>(
-                      style: const TextStyle(color: Colors.white),
-                      dropdownColor: const Color(0xFF1E1E1E),
-                      decoration: const InputDecoration(
-                        labelText: 'Your Sport',
-                        labelStyle: TextStyle(color: Colors.white70),
-                        prefixIcon: Icon(Icons.sports, color: Colors.white70),
-                        filled: true,
-                        fillColor: Color(0xFF1E1E1E),
+                      value: _selectedSport,
+                      decoration: InputDecoration(
+                        labelText: 'Primary Sport',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                          borderSide: BorderSide(color: Color(0xFFB4FF00), width: 2),
-                        ),
+                        filled: true,
                       ),
-                      items: DummyData.sports.map((String sport) {
+                      items: <String>['Basketball', 'Soccer', 'Football', 'Tennis', 'Other']
+                          .map((String sport) {
                         return DropdownMenuItem<String>(
                           value: sport,
-                          child: Text(sport, style: const TextStyle(color: Colors.white)),
+                          child: Text(sport),
                         );
                       }).toList(),
-                      value: _selectedSport,
                       onChanged: (String? newValue) {
                         setState(() {
                           _selectedSport = newValue;
                         });
                       },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please select your sport';
-                        }
-                        return null;
-                      },
+                      validator: (value) => value == null || value.isEmpty ? 'Please select your primary sport' : null,
                     ),
                     
                     if (_errorMessage != null) ...[

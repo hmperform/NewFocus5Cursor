@@ -3,53 +3,53 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../models/coach_model.dart';
+import 'package:flutter/foundation.dart';
 
 class CoachService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
-  final String coachesCollection = 'coaches';
+  final CollectionReference _coachesCollection = 
+      FirebaseFirestore.instance.collection('coaches');
 
   // Get all coaches
-  Stream<List<CoachModel>> getCoaches({bool activeOnly = true}) {
-    Query query = _firestore.collection(coachesCollection)
-      .orderBy('name');
-    
-    if (activeOnly) {
-      query = query.where('isActive', isEqualTo: true);
-    }
-    
-    return query.snapshots().map((snapshot) {
+  Stream<List<Coach>> getCoaches() {
+    return _coachesCollection.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
-        return CoachModel.fromJson(doc.data() as Map<String, dynamic>);
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return Coach.fromJson(data);
       }).toList();
     });
   }
 
   // Get a single coach by ID
-  Stream<CoachModel?> getCoachById(String coachId) {
-    return _firestore
-        .collection(coachesCollection)
-        .doc(coachId)
-        .snapshots()
-        .map((doc) {
-      if (doc.exists) {
-        return CoachModel.fromJson(doc.data() as Map<String, dynamic>);
-      } else {
-        return null;
-      }
-    });
+  Future<Coach?> getCoach(String id) async {
+    final doc = await _coachesCollection.doc(id).get();
+    if (!doc.exists) {
+      return null;
+    }
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Coach.fromJson(data);
   }
 
   // Get courses created by a coach
   Future<List<Map<String, dynamic>>> getCoachCourses(String coachId) async {
-    final coursesSnapshot = await _firestore
-        .collection('courses')
-        .where('coachId', isEqualTo: coachId)
-        .get();
-
-    return coursesSnapshot.docs
-        .map((doc) => doc.data() as Map<String, dynamic>)
-        .toList();
+    try {
+      final snapshot = await _firestore
+          .collection('courses')
+          .where('coachId', isEqualTo: coachId)
+          .get();
+      
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      debugPrint('Error getting coach courses: $e');
+      return [];
+    }
   }
 
   // Get audio modules created by a coach
@@ -93,9 +93,8 @@ class CoachService {
     String? twitterUrl,
     String? linkedinUrl,
     String? websiteUrl,
-    required List<String> specialties,
+    required String specialization,
     required List<String> credentials,
-    required bool isVerified,
     required bool isActive,
   }) async {
     // Generate a new ID if not provided
@@ -133,9 +132,8 @@ class CoachService {
       'twitterUrl': twitterUrl,
       'linkedinUrl': linkedinUrl,
       'websiteUrl': websiteUrl,
-      'specialties': specialties,
+      'specialization': specialization,
       'credentials': credentials,
-      'isVerified': isVerified,
       'isActive': isActive,
       'updatedAt': Timestamp.fromDate(now),
     };
@@ -146,7 +144,7 @@ class CoachService {
     }
     
     // Save to Firestore
-    await _firestore.collection(coachesCollection).doc(coachId).set(
+    await _coachesCollection.doc(coachId).set(
       coachData,
       SetOptions(merge: true),
     );
@@ -155,23 +153,30 @@ class CoachService {
   }
 
   // Delete a coach profile (admin function)
-  Future<void> deleteCoach(String coachId) async {
-    // Delete the coach document
-    await _firestore.collection(coachesCollection).doc(coachId).delete();
+  Future<void> deleteCoach(String id) async {
+    await _coachesCollection.doc(id).delete();
     
     // Delete associated storage files
     try {
-      final profileRef = _storage.ref().child('coaches/$coachId/profile.jpg');
+      final profileRef = _storage.ref().child('coaches/$id/profile.jpg');
       await profileRef.delete();
     } catch (e) {
       // File might not exist, ignore error
     }
     
     try {
-      final headerRef = _storage.ref().child('coaches/$coachId/header.jpg');
+      final headerRef = _storage.ref().child('coaches/$id/header.jpg');
       await headerRef.delete();
     } catch (e) {
       // File might not exist, ignore error
     }
+  }
+
+  // Update coach status (admin function)
+  Future<void> updateCoachStatus(String id, bool isActive) async {
+    await _coachesCollection.doc(id).update({
+      'isActive': isActive,
+      'updatedAt': Timestamp.now(),
+    });
   }
 } 

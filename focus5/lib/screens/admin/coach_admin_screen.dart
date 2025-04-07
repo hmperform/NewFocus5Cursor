@@ -1,10 +1,15 @@
-import 'dart:io';
+import 'dart:io'; // Restored import
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
-import '../../models/coach_model.dart';
+import 'package:image_picker/image_picker.dart'; // Restored import
+// import '../../models/coach.dart'; // Commented out incorrect import
+import '../../models/coach_model.dart'; // Corrected import path
 import '../../providers/coach_provider.dart';
 import 'coach_form_screen.dart';
+import 'package:focus5/services/firebase_storage_service.dart'; // Restored import
+// import 'package:focus5/services/image_service.dart'; // Still commented out (missing file)
+// import 'package:focus5/utils/image_utils.dart'; // Still commented out (likely unused here)
+// import 'package:focus5/widgets/custom_button.dart'; // Still commented out (unused here)
 
 class CoachAdminScreen extends StatefulWidget {
   const CoachAdminScreen({Key? key}) : super(key: key);
@@ -27,8 +32,7 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
   }
 
   Future<void> _loadCoaches() async {
-    await Provider.of<CoachProvider>(context, listen: false)
-        .loadCoaches(activeOnly: !_showInactiveCoaches);
+    await Provider.of<CoachProvider>(context, listen: false).loadCoaches();
   }
 
   void _toggleShowInactive() {
@@ -112,7 +116,9 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
             );
           }
 
-          final coaches = coachProvider.coaches;
+          final coaches = coachProvider.coaches
+              .where((coach) => _showInactiveCoaches || coach.isActive)
+              .toList();
 
           if (coaches.isEmpty) {
             return Center(
@@ -160,7 +166,7 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
     );
   }
 
-  Widget _buildCoachItem(BuildContext context, CoachModel coach) {
+  Widget _buildCoachItem(BuildContext context, Coach coach) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       color: const Color(0xFF1E1E1E),
@@ -186,13 +192,13 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(12),
                 ),
-                image: coach.headerImageUrl.isNotEmpty
+                image: coach.profileImageUrl.isNotEmpty
                     ? DecorationImage(
-                        image: NetworkImage(coach.headerImageUrl),
+                        image: NetworkImage(coach.profileImageUrl),
                         fit: BoxFit.cover,
                       )
                     : null,
-                color: coach.headerImageUrl.isEmpty
+                color: coach.profileImageUrl.isEmpty
                     ? const Color(0xFF2A2A2A)
                     : null,
               ),
@@ -223,24 +229,6 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
                       ),
                     ),
                   ),
-                  // Verified badge
-                  if (coach.isVerified)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.verified,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -248,123 +236,77 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
             // Coach info
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Profile image
-                  ClipOval(
-                    child: SizedBox(
-                      width: 70,
-                      height: 70,
-                      child: coach.profileImageUrl.isNotEmpty
-                          ? Image.network(
-                              coach.profileImageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.person,
-                                size: 40,
-                                color: Colors.white70,
-                              ),
-                            )
-                          : Container(
-                              color: const Color(0xFF2A2A2A),
-                              child: const Icon(
-                                Icons.person,
-                                size: 40,
-                                color: Colors.white70,
-                              ),
-                            ),
+                  Text(
+                    coach.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  
-                  // Coach details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          coach.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          coach.title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[300],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: coach.specialties
-                              .take(3)
-                              .map(
-                                (specialty) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF2A2A2A),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    specialty,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    coach.title,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (coach.specialization?.isNotEmpty ?? false)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: coach.specialization!
+                          .map((spec) => Chip(
+                                label: Text(spec),
+                                backgroundColor: const Color(0xFF2A2A2A),
+                                labelStyle: const TextStyle(color: Colors.white),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                visualDensity: VisualDensity.compact,
+                              ))
+                          .toList(),
+                    ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'ID: ${coach.id}',
+                        style: const TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Color(0xFFB4FF00), size: 20),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (ctx) => CoachFormScreen(coachId: coach.id),
                                 ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Action buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // Edit button
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (ctx) => CoachFormScreen(coachId: coach.id),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFB4FF00),
-                      side: const BorderSide(color: Color(0xFFB4FF00)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Delete button
-                  OutlinedButton.icon(
-                    onPressed: () => _showDeleteConfirmation(context, coach),
-                    icon: const Icon(Icons.delete),
-                    label: const Text('Delete'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                    ),
+                              );
+                            },
+                            tooltip: 'Edit Coach',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              coach.isActive ? Icons.toggle_on : Icons.toggle_off,
+                              color: coach.isActive ? const Color(0xFFB4FF00) : Colors.grey,
+                              size: 30,
+                            ),
+                            onPressed: () => _toggleCoachStatus(context, coach),
+                            tooltip: coach.isActive ? 'Deactivate Coach' : 'Activate Coach',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -375,58 +317,40 @@ class _CoachAdminScreenState extends State<CoachAdminScreen> {
     );
   }
 
-  Future<void> _showDeleteConfirmation(
-      BuildContext context, CoachModel coach) async {
-    return showDialog(
+  Future<void> _toggleCoachStatus(BuildContext context, Coach coach) async {
+    final coachProvider = Provider.of<CoachProvider>(context, listen: false);
+    final newStatus = !coach.isActive;
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2A2A2A),
-        title: const Text(
-          'Delete Coach',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: Text(
-          'Are you sure you want to delete ${coach.name}? This action cannot be undone.',
-          style: const TextStyle(color: Colors.white70),
-        ),
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(newStatus ? 'Activate Coach?' : 'Deactivate Coach?', style: TextStyle(color: Colors.white)),
+        content: Text('Are you sure you want to ${newStatus ? 'activate' : 'deactivate'} ${coach.name}?', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-            },
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            onPressed: () => Navigator.of(ctx).pop(false),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              final success = await Provider.of<CoachProvider>(
-                context,
-                listen: false,
-              ).deleteCoach(coach.id);
-              
-              if (!mounted) return;
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    success
-                        ? 'Coach deleted successfully'
-                        : 'Failed to delete coach',
-                  ),
-                  backgroundColor: success ? Colors.green : Colors.red,
-                ),
-              );
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: Text(newStatus ? 'Activate' : 'Deactivate', style: TextStyle(color: const Color(0xFFB4FF00))),
+            onPressed: () => Navigator.of(ctx).pop(true),
           ),
         ],
       ),
     );
+
+    if (confirm == true) {
+      try {
+        await coachProvider.updateCoachStatus(coach.id, newStatus);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${coach.name} ${newStatus ? 'activated' : 'deactivated'}')),
+        );
+        _loadCoaches();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update status: $e')),
+        );
+      }
+    }
   }
 } 

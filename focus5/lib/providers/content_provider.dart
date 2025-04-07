@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import '../models/content_models.dart';
-import '../constants/dummy_data.dart';
 import '../services/firebase_content_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -77,17 +76,16 @@ class ContentProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
       
-      _courses = await _contentService.getCourses(universityCode: _universityCode);
-      
-      if (_courses.isEmpty) {
-        debugPrint('No courses found in Firebase. This could be due to missing data or permissions.');
+      final courses = await _contentService.getCourses();
+      if (courses != null) {
+        _courses = courses;
+      } else {
+        _courses = [];
       }
-      
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load courses: ${e.toString()}';
       debugPrint('Error loading courses: $e');
+      _courses = [];
+    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -165,18 +163,12 @@ class ContentProvider with ChangeNotifier {
   }
   
   List<Course> getCoursesForFocusArea(String focusArea) {
-    // If we don't have courses loaded yet, load them
     if (_courses.isEmpty) {
-      loadCoursesSync();
+      // Trigger async load if courses aren't loaded yet
+      loadCourses();
+      return [];
     }
-    
-    // More flexible matching - check if the focus area is contained in or contains any of the course's focus areas
-    return _courses.where((course) {
-      return course.focusAreas.any((area) => 
-        area.toLowerCase().contains(focusArea.toLowerCase()) || 
-        focusArea.toLowerCase().contains(area.toLowerCase())
-      );
-    }).toList();
+    return _courses.where((course) => course.focusAreas.contains(focusArea)).toList();
   }
   
   List<Course> searchCourses(String query) {
@@ -305,20 +297,17 @@ class ContentProvider with ChangeNotifier {
   
   // Helper methods
   
-  void loadCoursesSync() {
-    _courses = DummyData.dummyCourses.where((course) {
-      // If course is not university exclusive, it's available to everyone
-      if (!course.universityExclusive) return true;
-      
-      // If course is university exclusive, check if user has access
-      if (_universityCode != null && 
-          course.universityAccess != null && 
-          course.universityAccess!.contains(_universityCode)) {
-        return true;
-      }
-      
-      return false;
-    }).toList();
+  List<Lesson>? getLessonsForCourse(String courseId) {
+    // Find the course, return null if not found
+    Course? course;
+    try {
+      course = _courses.firstWhere((c) => c.id == courseId);
+    } catch (e) {
+      course = null; // Explicitly set course to null if not found
+    }
+
+    // Return the modules (lessons) if the course exists, otherwise null
+    return course?.modules; // Use modules getter and null-safe operator
   }
   
   // Methods to create content (for admin purposes)
@@ -341,19 +330,8 @@ class ContentProvider with ChangeNotifier {
     }
   }
 
-  /// Get all lessons
-  List<Lesson> getLessons() {
-    // In a real app, this would filter by category or other criteria
-    return DummyData.dummyLessons;
-  }
-
-  // For backward compatibility
-  List<Lesson> getModules() => getLessons();
-
   /// Get featured courses
   List<Course> getFeaturedCourses() {
-    // Filter courses that are marked as featured
-    // In a real app, this would come from Firestore
     return courses.where((course) => course.featured).toList();
   }
 
@@ -415,7 +393,7 @@ class ContentProvider with ChangeNotifier {
   List<Lesson> get videos {
     List<Lesson> allLessons = [];
     for (final course in _courses) {
-      allLessons.addAll(course.modules.where((lesson) => lesson.type == LessonType.video));
+      allLessons.addAll(course.lessonsList.where((lesson) => lesson.type == LessonType.video));
     }
     return allLessons;
   }

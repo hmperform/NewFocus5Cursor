@@ -1,7 +1,7 @@
 Widget _buildLessonsTab() {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = Theme.of(context).colorScheme.onBackground;
+    final textColor = Theme.of(context).colorScheme.onSurface;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final accentColor = themeProvider.accentColor;
 

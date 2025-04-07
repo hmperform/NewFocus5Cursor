@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 // Module types enum
 enum LessonType {
   video,
@@ -152,24 +154,38 @@ class Course {
           .toList();
     }
 
+    // Helper function to safely parse creatorId
+    String _parseCreatorId(dynamic value) {
+      if (value is String) {
+        return value;
+      } else if (value is DocumentReference) {
+        // If it's a DocumentReference, extract its ID
+        return value.id;
+      }
+      // Default to empty string if null or unexpected type
+      return ''; 
+    }
+
     return Course(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
+      id: json['id'] as String? ?? '', // Assuming ID comes from data now, not doc.id
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
       imageUrl: json['imageUrl'] as String? ?? json['thumbnailUrl'] as String? ?? '',
       thumbnailUrl: json['thumbnailUrl'] as String? ?? '',
-      creatorId: json['creatorId'] as String? ?? '',
-      creatorName: json['creatorName'] as String? ?? '',
-      creatorImageUrl: json['creatorImageUrl'] as String? ?? '',
+      // Use the helper function for creatorId
+      creatorId: _parseCreatorId(json['creatorId']), 
+      creatorName: json['creatorName'] as String? ?? '', // Assuming name is string
+      creatorImageUrl: json['creatorImageUrl'] as String? ?? '', // Assuming URL is string
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       focusAreas: (json['focusAreas'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       durationMinutes: json['durationMinutes'] as int? ?? 0,
       duration: json['duration'] as int? ?? 0,
       xpReward: json['xpReward'] as int? ?? 0,
-      lessonsList: List<Lesson>.from(lessonsList),
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
+      // Ensure lessons are parsed from Map<String, dynamic>
+      lessonsList: List<Lesson>.from(lessonsList.map((l) => l is Map<String, dynamic> ? Lesson.fromJson(l) : Lesson.fromJson({}))), 
+      createdAt: json['createdAt'] is Timestamp
+          ? (json['createdAt'] as Timestamp).toDate()
+          : (json['createdAt'] is String ? DateTime.tryParse(json['createdAt']) : null) ?? DateTime.now(),
       universityExclusive: json['universityExclusive'] as bool? ?? false,
       universityAccess: json['universityAccess'] != null
           ? (json['universityAccess'] as List<dynamic>).map((e) => e as String).toList()

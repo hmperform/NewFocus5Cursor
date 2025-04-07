@@ -8,7 +8,6 @@ import '../../providers/content_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
-import '../../constants/dummy_data.dart';
 import '../../utils/basic_video_helper.dart';
 import '../../utils/image_utils.dart';
 import '../../screens/home/media_player_screen.dart';
@@ -38,7 +37,7 @@ class _MediaTabState extends State<MediaTab> with SingleTickerProviderStateMixin
   
   void _loadMediaContent() {
     // In a real app, this would come from a provider or API
-    _allMedia = DummyData.dummyMediaItems;
+    _allMedia = [];
     _filterMedia();
   }
   

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 
 import '../../providers/content_provider.dart';
 import '../../providers/user_provider.dart';
@@ -26,6 +27,9 @@ class _AudioTabState extends State<AudioTab> {
   void initState() {
     super.initState();
     _loadAudioSessions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ContentProvider>(context, listen: false).refreshTodayAudio();
+    });
   }
 
   Future<void> _loadAudioSessions() async {
@@ -34,11 +38,11 @@ class _AudioTabState extends State<AudioTab> {
     // Simulate loading delay for demo purposes
     await Future.delayed(const Duration(milliseconds: 500));
     
-    final sessions = contentProvider.getDailyAudio();
+    final todayAudio = contentProvider.todayAudio;
     
     setState(() {
-      _audioSessions = sessions;
-      _filteredSessions = sessions;
+      _audioSessions = todayAudio != null ? [todayAudio] : [];
+      _filteredSessions = todayAudio != null ? [todayAudio] : [];
       _isLoading = false;
     });
   }
@@ -52,7 +56,7 @@ class _AudioTabState extends State<AudioTab> {
       } else if (category == 'Completed') {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         _filteredSessions = _audioSessions.where(
-          (audio) => userProvider.hasCompletedAudio(audio.id)
+          (audio) => userProvider.user?.completedAudios.contains(audio.id) ?? false
         ).toList();
       } else {
         _filteredSessions = _audioSessions.where(
@@ -64,127 +68,64 @@ class _AudioTabState extends State<AudioTab> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final accentColor = themeProvider.accentColor;
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    
-    if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-        ),
-      );
-    }
+    final userProvider = Provider.of<UserProvider>(context);
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final theme = Theme.of(context);
+    final bool isDarkMode = theme.brightness == Brightness.dark;
+    final Color textColor = isDarkMode ? Colors.white : Colors.black;
+    final Color iconColor = isDarkMode ? Colors.white : Colors.black54;
+
+    final todayAudio = contentProvider.todayAudio;
+    // final hasCompleted = userProvider.hasCompletedAudio(todayAudio?.id ?? ''); // Commented out: Method doesn't exist in UserProvider
+
+    final hasCompletedToday = userProvider.user?.completedAudios.contains(todayAudio?.id ?? '') ?? false;
+    // final hasCompleted = userProvider.hasCompletedAudio(todayAudio?.id ?? ''); // Commented out: Method doesn't exist in UserProvider
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text(
-                'Daily Audio',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+        child: contentProvider.isLoading && todayAudio == null
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: () => contentProvider.refreshTodayAudio(),
+                child: ListView(
+                  padding: const EdgeInsets.all(16.0),
+                  children: [
+                    if (contentProvider.errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Text(
+                          'Error: ${contentProvider.errorMessage}',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    // Today's Audio Section
+                    if (todayAudio != null)
+                      _buildTodaysAudioSection(context, todayAudio, hasCompletedToday, iconColor, textColor)
+                    else
+                       _buildNoAudioAvailable(context, textColor),
+                    
+                    const SizedBox(height: 24),
+
+                    // Browse Categories Section
+                    Text('Browse Categories', style: theme.textTheme.headlineSmall?.copyWith(color: textColor)),
+                    const SizedBox(height: 16),
+                    _buildCategoryGrid(context, iconColor),
+
+                    const SizedBox(height: 24),
+                    
+                    // Your Library Section (Example - Adapt based on actual library data)
+                    Text('Your Library', style: theme.textTheme.headlineSmall?.copyWith(color: textColor)),
+                    const SizedBox(height: 16),
+                    _buildLibraryList(context, iconColor, textColor),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Mental training sessions to enhance your focus',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: secondaryTextColor,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Category filters
-            _buildCategoryFilters(),
-            
-            // Featured audio
-            _buildFeaturedAudio(),
-            
-            // Audio list
-            Expanded(
-              child: _filteredSessions.isEmpty
-                ? Center(
-                    child: Text(
-                      'No audio sessions found',
-                      style: TextStyle(color: secondaryTextColor),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    itemCount: _filteredSessions.length,
-                    itemBuilder: (context, index) {
-                      final audio = _filteredSessions[index];
-                      return _buildAudioListItem(audio);
-                    },
-                  ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildCategoryFilters() {
-    final categories = ['All', 'Focus', 'Breathing', 'Visualization', 'Completed'];
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final accentColor = themeProvider.accentColor;
-    
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          final isSelected = _selectedCategory == category;
-          
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(category),
-              selected: isSelected,
-              onSelected: (_) => _filterByCategory(category),
-              backgroundColor: themeProvider.isDarkMode 
-                ? Theme.of(context).colorScheme.surface 
-                : Colors.grey[200],
-              selectedColor: accentColor.withOpacity(0.2),
-              labelStyle: TextStyle(
-                color: isSelected 
-                  ? accentColor
-                  : Theme.of(context).colorScheme.onBackground,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFeaturedAudio() {
-    // Get the first Focus session for featured
-    final featuredAudio = _audioSessions.firstWhere(
-      (audio) => audio.category == 'Focus',
-      orElse: () => _audioSessions.first,
-    );
-    
+  Widget _buildTodaysAudioSection(BuildContext context, DailyAudio audio, bool hasCompleted, Color iconColor, Color textColor) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final accentColor = themeProvider.accentColor;
     final accentTextColor = themeProvider.accentTextColor;
@@ -192,7 +133,7 @@ class _AudioTabState extends State<AudioTab> {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: GestureDetector(
-        onTap: () => _navigateToAudioPlayer(featuredAudio.id),
+        onTap: () => _showAudioDetails(context, audio.id),
         child: Container(
           height: 180,
           width: double.infinity,
@@ -245,7 +186,7 @@ class _AudioTabState extends State<AudioTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          featuredAudio.title,
+                          audio.title,
                           style: TextStyle(
                             color: accentTextColor,
                             fontSize: 18,
@@ -254,7 +195,7 @@ class _AudioTabState extends State<AudioTab> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${featuredAudio.durationMinutes} min • ${featuredAudio.category}',
+                          '${audio.durationMinutes} min • ${audio.category}',
                           style: TextStyle(
                             color: accentTextColor.withOpacity(0.9),
                             fontSize: 14,
@@ -290,19 +231,88 @@ class _AudioTabState extends State<AudioTab> {
     );
   }
 
-  Widget _buildAudioListItem(DailyAudio audio) {
+  Widget _buildNoAudioAvailable(BuildContext context, Color textColor) {
+    return Center(
+      child: Text(
+        'No audio available for today',
+        style: TextStyle(color: textColor),
+      ),
+    );
+  }
+
+  Widget _buildCategoryGrid(BuildContext context, Color iconColor) {
+    final categories = ['All', 'Focus', 'Breathing', 'Visualization', 'Completed'];
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final category = categories[index];
+          final isSelected = _selectedCategory == category;
+          
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(category),
+              selected: isSelected,
+              onSelected: (_) => _filterByCategory(category),
+              backgroundColor: themeProvider.isDarkMode 
+                ? Theme.of(context).colorScheme.surface 
+                : Colors.grey[200],
+              selectedColor: accentColor.withOpacity(0.2),
+              labelStyle: TextStyle(
+                color: isSelected 
+                  ? accentColor
+                  : Theme.of(context).colorScheme.onBackground,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLibraryList(BuildContext context, Color iconColor, Color textColor) {
+    return Expanded(
+      child: _filteredSessions.isEmpty
+        ? Center(
+            child: Text(
+              'No audio sessions found',
+              style: TextStyle(color: textColor),
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            itemCount: _filteredSessions.length,
+            itemBuilder: (context, index) {
+              final audio = _filteredSessions[index];
+              return _buildAudioListItem(context, audio, iconColor, textColor);
+            },
+          ),
+    );
+  }
+
+  Widget _buildAudioListItem(BuildContext context, DailyAudio audio, Color iconColor, Color textColor) {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final isCompleted = userProvider.hasCompletedAudio(audio.id);
+    final isCompleted = userProvider.user?.completedAudios.contains(audio.id) ?? false;
     final accentColor = themeProvider.accentColor;
-    final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () => _navigateToAudioPlayer(audio.id),
+        onTap: () => _showAudioDetails(context, audio.id),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -419,22 +429,44 @@ class _AudioTabState extends State<AudioTab> {
     }
   }
 
-  void _navigateToAudioPlayer(String audioId) {
-    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-    final audio = contentProvider.getAudioById(audioId);
-    
-    if (audio != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AudioPlayerScreen(
-            title: audio.title,
-            subtitle: audio.description,
-            audioUrl: audio.audioUrl,
-            imageUrl: audio.imageUrl,
-          ),
-        ),
-      );
+  void _showAudioDetails(BuildContext context, String audioId) {
+    // Find the audio session from the loaded list using firstWhereOrNull
+    final DailyAudio? audio = _audioSessions.firstWhereOrNull(
+      (item) => item.id == audioId
+    );
+
+    if (audio == null) {
+      print('Audio with ID $audioId not found in loaded sessions');
+      return;
     }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(audio.title, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 10),
+              Text(audio.description),
+              const SizedBox(height: 10),
+              Text('By: ${audio.creatorName}'),
+              Text('Duration: ${audio.durationMinutes} min'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                child: const Text('Play Now'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).pushNamed('/audio-player', arguments: audio);
+                },
+              )
+            ],
+          ),
+        );
+      },
+    );
   }
 } 

@@ -1,12 +1,46 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/content_models.dart';
+import '../models/coach_model.dart'; // Ensure CoachModel is imported
+
+// Helper function to sanitize Firestore document data
+Map<String, dynamic> _sanitizeDocumentData(Map<String, dynamic>? data) {
+  data ??= {};
+  data.removeWhere((k, v) => v == null);
+  // Add more sanitization if needed (e.g., convert Timestamps)
+  data.forEach((key, value) {
+    if (value is Timestamp) {
+      data![key] = value.toDate();
+    } else if (value is List) {
+      data![key] = _sanitizeList(value);
+    } else if (value is Map) {
+      data![key] = _sanitizeDocumentData(Map<String, dynamic>.from(value));
+    }
+  });
+  return data;
+}
+
+List _sanitizeList(List list) {
+  return list.map((item) {
+    if (item is Timestamp) {
+      return item.toDate();
+    } else if (item is Map) {
+      return _sanitizeDocumentData(Map<String, dynamic>.from(item));
+    } else if (item is List) {
+      return _sanitizeList(item);
+    } else {
+      return item;
+    }
+  }).toList();
+}
 
 class FirebaseContentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   
   // Get the current user's ID
   String? get currentUserId => _auth.currentUser?.uid;
@@ -14,284 +48,107 @@ class FirebaseContentService {
   // Courses
   
   // Get all courses (filtered by university access if applicable)
-  Future<List<Course>> getCourses({String? universityCode}) async {
+  Future<List<Course>?> getCourses() async {
     try {
-      debugPrint('Loading courses from Firebase...');
-      QuerySnapshot coursesSnapshot = await _firestore.collection('courses').get();
-      debugPrint('Found ${coursesSnapshot.docs.length} courses in Firebase');
+      if (kDebugMode) {
+        debugPrint('Loading courses from Firebase...');
+      }
       
-      // Get all courses first
-      List<Course> courses = [];
+      final coursesSnapshot = await _firestore.collection('courses').get();
+      
+      if (kDebugMode) {
+        debugPrint('Found ${coursesSnapshot.docs.length} courses in Firebase');
+      }
+
+      final courses = <Course>[];
       for (var doc in coursesSnapshot.docs) {
+        final data = doc.data();
+        data['id'] = doc.id;
+
+        // Load lessons from subcollection
         try {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          debugPrint('Loading lessons for course: ${doc.id} - ${data['title']}');
+          final lessonsSnapshot = await _firestore
+              .collection('courses')
+              .doc(doc.id)
+              .collection('lessons')
+              .orderBy('sortOrder')
+              .get();
           
-          // First try to get lessons from the top-level lessons collection
-          List<Lesson> lessons = [];
-          
-          try {
-            QuerySnapshot lessonsSnapshot = await _firestore
-                .collection('lessons')
-                .where('courseId', isEqualTo: doc.id)
-                .orderBy('sortOrder')
-                .get();
-                
+          if (kDebugMode) {
             debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course ${doc.id}');
-            
-            if (lessonsSnapshot.docs.isNotEmpty) {
-              lessons = lessonsSnapshot.docs.map((lessonDoc) {
-                Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
-                return Lesson.fromJson(lessonData);
-              }).toList();
-            }
-          } catch (lessonsError) {
-            debugPrint('Error loading lessons for course ${doc.id}: $lessonsError');
           }
-          
-          // If no lessons in top-level collection, try the subcollection for backward compatibility
-          if (lessons.isEmpty) {
-            try {
-              debugPrint('No lessons found in top-level collection, trying subcollection');
-              QuerySnapshot moduleSnapshot = await _firestore
-                  .collection('courses')
-                  .doc(doc.id)
-                  .collection('modules')
-                  .orderBy('sortOrder')
-                  .get();
-                  
-              debugPrint('Found ${moduleSnapshot.docs.length} modules in subcollection for course ${doc.id}');
-              
-              if (moduleSnapshot.docs.isNotEmpty) {
-                lessons = moduleSnapshot.docs.map((moduleDoc) {
-                  Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
-                  // Ensure courseId is included
-                  if (!moduleData.containsKey('courseId')) {
-                    moduleData['courseId'] = doc.id;
-                  }
-                  return Lesson.fromJson(moduleData);
-                }).toList();
-              }
-            } catch (subcollectionError) {
-              debugPrint('Error loading subcollection modules for course ${doc.id}: $subcollectionError');
-            }
+          data['lessons'] = lessonsSnapshot.docs.map((doc) => doc.data()).toList();
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('Error loading lessons for course ${doc.id}: $e');
           }
-          
-          // Create course with lessons
-          courses.add(Course(
-            id: doc.id,
-            title: data['title'] ?? 'Untitled Course',
-            description: data['description'] ?? 'No description available',
-            imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-            thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-            creatorId: data['creatorId'] ?? '',
-            creatorName: data['creatorName'] ?? 'Unknown Creator',
-            creatorImageUrl: data['creatorImageUrl'] ?? '',
-            tags: List<String>.from(data['tags'] ?? []),
-            focusAreas: List<String>.from(data['focusAreas'] ?? []),
-            durationMinutes: data['durationMinutes'] ?? 0,
-            duration: data['durationMinutes'] ?? 0,
-            xpReward: data['xpReward'] ?? 0,
-            lessonsList: lessons,
-            featured: data['featured'] ?? false,
-            premium: data['premium'] ?? false,
-            createdAt: data['createdAt'] != null 
-                ? (data['createdAt'] is Timestamp 
-                   ? (data['createdAt'] as Timestamp).toDate() 
-                   : DateTime.parse(data['createdAt'] as String))
-                : DateTime.now(),
-            universityExclusive: data['universityExclusive'] ?? false,
-            universityAccess: data['universityAccess'] != null 
-                ? List<String>.from(data['universityAccess']) 
-                : null,
-          ));
-        } catch (courseError) {
-          debugPrint('Error loading lessons for course ${doc.id}: $courseError');
+          data['lessons'] = [];
         }
+
+        courses.add(Course.fromJson(data));
       }
-      
-      // Filter courses based on university access if needed
-      if (universityCode != null) {
-        courses = courses.where((course) {
-          // If not university exclusive, everyone can access
-          if (!course.universityExclusive) return true;
-          
-          // If university exclusive, check access
-          return course.universityAccess?.contains(universityCode) ?? false;
-        }).toList();
+
+      if (kDebugMode) {
+        debugPrint('Successfully loaded ${courses.length} courses with their lessons');
       }
-      
-      debugPrint('Successfully loaded ${courses.length} courses with their lessons');
       return courses;
     } catch (e) {
-      debugPrint('Error getting courses: $e');
-      
-      // Check if it's a Firestore index error and provide more helpful message
-      if (e.toString().contains('failed-precondition') && e.toString().contains('index')) {
-        debugPrint('This appears to be an index error. You may need to create an index in Firebase Console');
-        debugPrint('Make sure you have created the necessary composite index for the lessons collection');
-        debugPrint('The index should be on: courseId (ascending) and sortOrder (ascending)');
-        
-        // Call our index creation helper
-        await createLessonsIndex();
+      if (kDebugMode) {
+        debugPrint('Error getting courses: $e');
       }
-      
-      // Still return empty list to not break the app
-      return [];
+      return null;
     }
   }
   
   // Get a course by ID
   Future<Course?> getCourseById(String courseId) async {
     try {
-      debugPrint('Loading course by ID: $courseId');
+      if (kDebugMode) {
+        debugPrint('Loading course by ID: $courseId');
+      }
+      
       final doc = await _firestore.collection('courses').doc(courseId).get();
+      
       if (!doc.exists) {
-        debugPrint('Course with ID $courseId does not exist');
+        if (kDebugMode) {
+          debugPrint('Course with ID $courseId does not exist');
+        }
         return null;
       }
+
+      final data = doc.data()!;
+      data['id'] = doc.id;
       
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      debugPrint('Found course: ${data['title']}');
-      
-      // Get lessons for this course
+      if (kDebugMode) {
+        debugPrint('Found course: ${data['title']}');
+      }
+
+      // Load lessons from subcollection
       try {
-        debugPrint('Loading lessons for course: $courseId');
-        QuerySnapshot lessonsSnapshot = await _firestore
+        final lessonsSnapshot = await _firestore
+            .collection('courses')
+            .doc(courseId)
             .collection('lessons')
-            .where('courseId', isEqualTo: courseId)
             .orderBy('sortOrder')
             .get();
-            
-        debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course $courseId');
         
-        List<Lesson> lessons = lessonsSnapshot.docs.map((lessonDoc) {
-          Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
-          return Lesson.fromJson(lessonData);
-        }).toList();
-        
-        return Course(
-          id: doc.id,
-          title: data['title'] ?? 'Untitled Course',
-          description: data['description'] ?? 'No description available',
-          imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-          thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-          creatorId: data['creatorId'] ?? '',
-          creatorName: data['creatorName'] ?? 'Unknown Creator',
-          creatorImageUrl: data['creatorImageUrl'] ?? '',
-          tags: List<String>.from(data['tags'] ?? []),
-          focusAreas: List<String>.from(data['focusAreas'] ?? []),
-          durationMinutes: data['durationMinutes'] ?? 0,
-          duration: data['durationMinutes'] ?? 0,
-          xpReward: data['xpReward'] ?? 0,
-          lessonsList: lessons,
-          featured: data['featured'] ?? false,
-          premium: data['premium'] ?? false,
-          createdAt: data['createdAt'] != null 
-              ? (data['createdAt'] is Timestamp 
-                 ? (data['createdAt'] as Timestamp).toDate() 
-                 : DateTime.parse(data['createdAt'] as String))
-              : DateTime.now(),
-          universityExclusive: data['universityExclusive'] ?? false,
-          universityAccess: data['universityAccess'] != null 
-              ? List<String>.from(data['universityAccess']) 
-              : null,
-        );
-      } catch (lessonsError) {
-        debugPrint('Error loading lessons for course $courseId: $lessonsError');
-        
-        // If there was an error loading lessons, try to get modules from the subcollection
-        try {
-          debugPrint('Trying to load modules from subcollection for course: $courseId');
-          QuerySnapshot modulesSnapshot = await _firestore
-              .collection('courses')
-              .doc(courseId)
-              .collection('modules')
-              .get();
-              
-          debugPrint('Found ${modulesSnapshot.docs.length} modules in subcollection');
-          
-          List<Lesson> lessons = modulesSnapshot.docs.map((moduleDoc) {
-            Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
-            if (!moduleData.containsKey('courseId')) {
-              moduleData['courseId'] = courseId;
-            }
-            return Lesson.fromJson(moduleData);
-          }).toList();
-          
-          return Course(
-            id: doc.id,
-            title: data['title'] ?? 'Untitled Course',
-            description: data['description'] ?? 'No description available',
-            imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-            thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-            creatorId: data['creatorId'] ?? '',
-            creatorName: data['creatorName'] ?? 'Unknown Creator',
-            creatorImageUrl: data['creatorImageUrl'] ?? '',
-            tags: List<String>.from(data['tags'] ?? []),
-            focusAreas: List<String>.from(data['focusAreas'] ?? []),
-            durationMinutes: data['durationMinutes'] ?? 0,
-            duration: data['durationMinutes'] ?? 0,
-            xpReward: data['xpReward'] ?? 0,
-            lessonsList: lessons,
-            featured: data['featured'] ?? false,
-            premium: data['premium'] ?? false,
-            createdAt: data['createdAt'] != null 
-                ? (data['createdAt'] is Timestamp 
-                   ? (data['createdAt'] as Timestamp).toDate() 
-                   : DateTime.parse(data['createdAt'] as String))
-                : DateTime.now(),
-            universityExclusive: data['universityExclusive'] ?? false,
-            universityAccess: data['universityAccess'] != null 
-                ? List<String>.from(data['universityAccess']) 
-                : null,
-          );
-        } catch (subcollectionError) {
-          debugPrint('Error loading modules from subcollection: $subcollectionError');
+        if (kDebugMode) {
+          debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course $courseId');
         }
         
-        // Return course without lessons if all loading attempts failed
-        return Course(
-          id: doc.id,
-          title: data['title'] ?? 'Untitled Course',
-          description: data['description'] ?? 'No description available',
-          imageUrl: data['imageUrl'] ?? data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-          thumbnailUrl: data['thumbnailUrl'] ?? 'https://via.placeholder.com/400',
-          creatorId: data['creatorId'] ?? '',
-          creatorName: data['creatorName'] ?? 'Unknown Creator',
-          creatorImageUrl: data['creatorImageUrl'] ?? '',
-          tags: List<String>.from(data['tags'] ?? []),
-          focusAreas: List<String>.from(data['focusAreas'] ?? []),
-          durationMinutes: data['durationMinutes'] ?? 0,
-          duration: data['durationMinutes'] ?? 0,
-          xpReward: data['xpReward'] ?? 0,
-          lessonsList: [],
-          featured: data['featured'] ?? false,
-          premium: data['premium'] ?? false,
-          createdAt: data['createdAt'] != null 
-              ? (data['createdAt'] is Timestamp 
-                 ? (data['createdAt'] as Timestamp).toDate() 
-                 : DateTime.parse(data['createdAt'] as String))
-              : DateTime.now(),
-          universityExclusive: data['universityExclusive'] ?? false,
-          universityAccess: data['universityAccess'] != null 
-              ? List<String>.from(data['universityAccess']) 
-              : null,
-        );
+        data['lessons'] = lessonsSnapshot.docs.map((doc) => doc.data()).toList();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Error loading lessons for course $courseId: $e');
+        }
+        data['lessons'] = [];
       }
+
+      return Course.fromJson(data);
     } catch (e) {
-      debugPrint('Error getting course by ID: $e');
-      
-      // Check if it's a Firestore index error and provide more helpful message
-      if (e.toString().contains('failed-precondition') && e.toString().contains('index')) {
-        debugPrint('This appears to be an index error. You may need to create an index in Firebase Console');
-        debugPrint('Make sure you have created the necessary composite index for the lessons collection');
-        debugPrint('The index should be on: courseId (ascending) and sortOrder (ascending)');
-        
-        // Call our index creation helper
-        await createLessonsIndex();
+      if (kDebugMode) {
+        debugPrint('Error loading course by ID: $e');
       }
-      
       return null;
     }
   }
@@ -635,43 +492,15 @@ class FirebaseContentService {
   // Get all articles
   Future<List<Article>> getArticles({String? universityCode}) async {
     try {
-      QuerySnapshot articlesSnapshot = await _firestore.collection('articles').get();
+      final QuerySnapshot snapshot = await _firestore.collection('articles').get();
       
-      List<Article> articles = articlesSnapshot.docs.map((doc) {
+      return snapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        // Sanitize data
         data = _sanitizeDocumentData(data);
+        data['id'] = doc.id;
         
-        return Article(
-          id: doc.id,
-          title: data['title'] ?? '',
-          description: data['description'] ?? '',
-          content: data['content'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-          thumbnailUrl: data['thumbnailUrl'] ?? data['imageUrl'] ?? '',
-          creatorId: data['creatorId'] ?? '',
-          creatorName: data['creatorName'] ?? '',
-          creatorImageUrl: data['creatorImageUrl'] ?? '',
-          category: data['category'] ?? '',
-          tags: List<String>.from(data['tags'] ?? []),
-          createdAt: data['createdAt'] != null 
-              ? (data['createdAt'] is Timestamp 
-                ? (data['createdAt'] as Timestamp).toDate() 
-                : DateTime.parse(data['createdAt'] as String))
-              : DateTime.now(),
-          focusAreas: List<String>.from(data['focusAreas'] ?? data['tags'] ?? []),
-        );
+        return Article.fromJson(data);
       }).toList();
-      
-      // Filter based on university access if needed
-      if (universityCode != null) {
-        articles = articles.where((article) {
-          if (article.universityExclusive != true) return true;
-          return article.universityAccess?.contains(universityCode) ?? false;
-        }).toList();
-      }
-      
-      return articles;
     } catch (e) {
       debugPrint('Error getting articles: $e');
       return [];

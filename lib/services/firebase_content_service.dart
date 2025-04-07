@@ -423,6 +423,9 @@ Map<String, dynamic> _sanitizeDocumentData(Map<String, dynamic> data) {
     } else if (value is Map) {
       // Handle nested maps
       sanitizedData[key] = _sanitizeDocumentData(Map<String, dynamic>.from(value));
+    } else if (value is Timestamp) {
+      // Convert Timestamp to DateTime
+      sanitizedData[key] = value.toDate();
     } else {
       // Keep other values as is
       sanitizedData[key] = value;
@@ -441,8 +444,45 @@ List _sanitizeList(List list) {
       return _sanitizeDocumentData(Map<String, dynamic>.from(item));
     } else if (item is List) {
       return _sanitizeList(item);
+    } else if (item is Timestamp) {
+      return item.toDate();
     } else {
       return item;
     }
   }).toList();
+}
+
+class FirebaseContentService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  // Fix Article creation
+  Future<List<Article>> getArticles({String? universityCode}) async {
+    try {
+      final QuerySnapshot snapshot = await _firestore.collection('articles').get();
+      
+      return snapshot.docs.map((doc) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        data = _sanitizeDocumentData(data);
+        data['id'] = doc.id;
+        
+        return Article(
+          id: data['id'],
+          title: data['title'] ?? '',
+          content: data['content'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          authorId: data['authorId'] ?? '',
+          authorName: data['authorName'] ?? '',
+          focusAreas: List<String>.from(data['focusAreas'] ?? []),
+          tags: List<String>.from(data['tags'] ?? []),
+          createdAt: data['createdAt'] ?? DateTime.now(),
+          readTimeMinutes: data['readTimeMinutes'] ?? 0,
+          premium: data['premium'] ?? false,
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('Error getting articles: $e');
+      return [];
+    }
+  }
 } 

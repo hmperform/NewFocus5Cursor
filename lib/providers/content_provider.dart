@@ -15,6 +15,7 @@ class ContentProvider with ChangeNotifier {
   String? _universityCode;
   bool _isLoading = false;
   String? _errorMessage;
+  List<Lesson> _lessons = [];
   
   final FirebaseContentService _contentService = FirebaseContentService();
 
@@ -27,10 +28,13 @@ class ContentProvider with ChangeNotifier {
   Map<String, dynamic>? get dailyLessonAssignment => _dailyLessonAssignment;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  List<Lesson> get allLessons => _lessons;
 
   // For backward compatibility
   Lesson? get dailyModule => _dailyLesson;
   Map<String, dynamic>? get dailyModuleAssignment => _dailyLessonAssignment;
+
+  List<String> get focusAreas => ['Mental Toughness', 'Confidence', 'Focus', 'Resilience', 'Motivation'];
 
   // Initialize content, optionally filtering by university code
   Future<void> initContent(String? universityCode) async {
@@ -59,6 +63,9 @@ class ContentProvider with ChangeNotifier {
         
         // Load articles from Firebase
         await loadArticles();
+        
+        // Populate _lessons after loading courses
+        _lessons = _courses.expand((course) => course.lessonsList).toList();
         
         _isLoading = false;
         _errorMessage = null;
@@ -249,22 +256,32 @@ class ContentProvider with ChangeNotifier {
     }
   }
 
-  /// Get all lessons as a flattened list from all courses
-  List<Lesson> getLessons() {
-    List<Lesson> allLessons = [];
-    for (final course in _courses) {
-      allLessons.addAll(course.lessonsList);
+  /// Get featured courses
+  List<Course> getFeaturedCourses() {
+    return _courses.where((course) => course.featured).toList();
+  }
+
+  // Helper methods
+  List<Lesson>? getLessonsForCourse(String courseId) {
+    if (_courses.isEmpty) {
+       debugPrint("getLessonsForCourse called before courses loaded.");
+       return null;
     }
-    return allLessons;
+    try {
+      final course = _courses.firstWhere(
+        (c) => c.id == courseId,
+        orElse: () => Course.empty(),
+      );
+      return course.id.isNotEmpty ? course.lessonsList : null;
+    } catch (e) {
+      debugPrint("Error finding course $courseId: $e");
+      return null;
+    }
   }
 
   // For backward compatibility
-  List<Lesson> getModules() => getLessons();
-
-  /// Get featured courses
-  List<Course> getFeaturedCourses() {
-    // Filter courses that are marked as featured
-    return courses.where((course) => course.featured).toList();
+  List<Lesson> getModules() {
+    return _contentService.loadModules('') as List<Lesson>;
   }
 
   // Getter for videos extracted from course modules

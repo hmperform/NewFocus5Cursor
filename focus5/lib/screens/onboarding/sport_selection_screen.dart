@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../constants/dummy_data.dart';
 import 'profile_setup_screen.dart';
 
 class SportSelectionScreen extends StatefulWidget {

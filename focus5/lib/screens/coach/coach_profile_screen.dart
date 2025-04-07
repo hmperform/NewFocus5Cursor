@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/coach_model.dart';
 import '../../providers/coach_provider.dart';
 import '../../utils/image_utils.dart';
+// import '../../widgets/focus_area_chip.dart'; // Assuming this doesn't exist
 
 class CoachProfileScreen extends StatefulWidget {
   final String coachId;
@@ -21,7 +22,7 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  CoachModel? _coach;
+  Coach? _coach;
   List<Map<String, dynamic>> _courses = [];
   List<Map<String, dynamic>> _audioModules = [];
   List<Map<String, dynamic>> _articles = [];
@@ -178,22 +179,7 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
                             onPressed: () => Navigator.of(context).pop(),
                           ),
                           actions: [
-                            if (_coach!.isVerified)
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.verified,
-                                    color: Colors.blue,
-                                    size: 24,
-                                  ),
-                                ),
-                              ),
+                            // Removed Verified Icon section
                           ],
                         ),
                         
@@ -247,161 +233,126 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
                                 
                                 const SizedBox(height: 16),
                                 
-                                // Specialties
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _coach!.specialties.map((specialty) {
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF2A2A2A),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        specialty,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.white,
+                                // Specialization Section
+                                if (_coach!.specialization?.isNotEmpty ?? false)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Specialization',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white70,
                                         ),
                                       ),
-                                    );
-                                  }).toList(),
-                                ),
-                                
-                                const SizedBox(height: 24),
+                                      const SizedBox(height: 8),
+                                      // Display specialization joined by comma, handle null
+                                      Text(_coach!.specialization?.join(', ') ?? 'N/A', 
+                                           style: Theme.of(context).textTheme.bodyMedium),
+                                      const SizedBox(height: 16),
+                                    ],
+                                  ),
                                 
                                 // Bio
-                                const Text(
-                                  'About',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
                                 Text(
                                   _coach!.bio,
                                   style: const TextStyle(
+                                    color: Colors.white,
                                     fontSize: 16,
-                                    color: Colors.white70,
                                     height: 1.5,
                                   ),
                                 ),
-                                
                                 const SizedBox(height: 24),
                                 
                                 // Credentials
-                                if (_coach!.credentials.isNotEmpty) ...[
-                                  const Text(
-                                    'Credentials',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ...(_coach!.credentials.map((credential) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 4),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Icon(
-                                            Icons.check_circle,
-                                            color: Color(0xFFB4FF00),
-                                            size: 16,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              credential,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.white70,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                if (_coach!.credentials.isNotEmpty)
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Credentials',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white70,
+                                        ),
                                       ),
-                                    );
-                                  }).toList()),
-                                  const SizedBox(height: 24),
-                                ],
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 4,
+                                        children: _coach!.credentials
+                                            .map((credential) => Chip(
+                                                  label: Text(credential),
+                                                  backgroundColor: const Color(0xFF2A2A2A),
+                                                  labelStyle: const TextStyle(color: Colors.white),
+                                                ))
+                                            .toList(),
+                                      ),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  ),
                                 
-                                // Book a session button
+                                // Social Links
+                                _buildSocialLinks(),
+                                const SizedBox(height: 24),
+
+                                // Booking Button
                                 SizedBox(
                                   width: double.infinity,
+                                  height: 50,
                                   child: ElevatedButton(
-                                    onPressed: () {
-                                      _launchUrl(_coach!.bookingUrl);
-                                    },
+                                    onPressed: _coach!.bookingUrl.isNotEmpty
+                                        ? () => _launchUrl(_coach!.bookingUrl)
+                                        : null,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFB4FF00),
                                       foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      disabledBackgroundColor: Colors.grey[700],
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
-                                    child: const Text(
-                                      'BOOK A SESSION',
-                                      style: TextStyle(
-                                        fontSize: 16,
+                                    child: Text(
+                                      _coach!.bookingUrl.isNotEmpty
+                                          ? 'Book a Session'
+                                          : 'Booking Unavailable',
+                                      style: const TextStyle(
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
                                 ),
-                                
                                 const SizedBox(height: 24),
-                                
-                                // Social links
-                                _buildSocialLinks(),
-                                
-                                const SizedBox(height: 24),
+
+                                // TabBar
+                                TabBar(
+                                  controller: _tabController,
+                                  tabs: const [
+                                    Tab(text: 'Courses'),
+                                    Tab(text: 'Audio'),
+                                    Tab(text: 'Articles'),
+                                  ],
+                                  labelColor: Colors.white,
+                                  unselectedLabelColor: Colors.white70,
+                                  indicatorColor: const Color(0xFFB4FF00),
+                                  indicatorWeight: 3,
+                                ),
                               ],
                             ),
                           ),
                         ),
-                        
-                        // Tab bar for content
-                        SliverPersistentHeader(
-                          delegate: _SliverAppBarDelegate(
-                            TabBar(
-                              controller: _tabController,
-                              indicatorColor: const Color(0xFFB4FF00),
-                              indicatorWeight: 3,
-                              labelColor: Colors.white,
-                              unselectedLabelColor: Colors.white60,
-                              tabs: const [
-                                Tab(text: 'Courses'),
-                                Tab(text: 'Audio'),
-                                Tab(text: 'Articles'),
-                              ],
-                            ),
-                          ),
-                          pinned: true,
-                        ),
-                        
-                        // Tab content
+
+                        // Tab Content
                         SliverFillRemaining(
                           child: TabBarView(
                             controller: _tabController,
                             children: [
-                              // Courses tab
-                              _buildCoursesTab(),
-                              
-                              // Audio tab
-                              _buildAudioTab(),
-                              
-                              // Articles tab
-                              _buildArticlesTab(),
+                              _buildContentList(_courses, 'No courses found.', 'course'),
+                              _buildContentList(_audioModules, 'No audio modules found.', 'audio'),
+                              _buildContentList(_articles, 'No articles found.', 'article'),
                             ],
                           ),
                         ),
@@ -474,21 +425,21 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
     );
   }
 
-  Widget _buildCoursesTab() {
-    if (_courses.isEmpty) {
-      return const Center(
+  Widget _buildContentList(List<dynamic> contentList, String noContentMessage, String contentType) {
+    if (contentList.isEmpty) {
+      return Center(
         child: Text(
-          'No courses available',
-          style: TextStyle(color: Colors.white70),
+          noContentMessage,
+          style: const TextStyle(color: Colors.white70),
         ),
       );
     }
     
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _courses.length,
+      itemCount: contentList.length,
       itemBuilder: (context, index) {
-        final course = _courses[index];
+        final content = contentList[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
           color: const Color(0xFF1E1E1E),
@@ -497,21 +448,21 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
           ),
           child: InkWell(
             onTap: () {
-              // Navigate to course detail screen
-              // Using course['id'] or similar
+              // Navigate to content detail screen
+              // Using content['id'] or similar
             },
             borderRadius: BorderRadius.circular(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Course image
-                if (course['imageUrl'] != null)
+                // Content image
+                if (content['imageUrl'] != null)
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(12),
                     ),
                     child: Image.network(
-                      course['imageUrl'],
+                      content['imageUrl'],
                       height: 150,
                       width: double.infinity,
                       fit: BoxFit.cover,
@@ -528,223 +479,30 @@ class _CoachProfileScreenState extends State<CoachProfileScreen>
                     ),
                   ),
                 
-                // Course info
+                // Content info
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        course['title'] ?? 'Untitled Course',
+                        content['title'] ?? 'Untitled $contentType',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      if (course['description'] != null) ...[
+                      if (content['description'] != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          course['description'],
+                          content['description'],
                           style: const TextStyle(
                             fontSize: 14,
                             color: Colors.white70,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAudioTab() {
-    if (_audioModules.isEmpty) {
-      return const Center(
-        child: Text(
-          'No audio modules available',
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _audioModules.length,
-      itemBuilder: (context, index) {
-        final audio = _audioModules[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          color: const Color(0xFF1E1E1E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            onTap: () {
-              // Navigate to audio player screen
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Audio thumbnail or play icon
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2A2A2A),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.headphones,
-                      color: Color(0xFFB4FF00),
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  
-                  // Audio info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          audio['title'] ?? 'Untitled Audio',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (audio['duration'] != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '${audio['duration']} min',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  
-                  // Play button
-                  IconButton(
-                    icon: const Icon(
-                      Icons.play_circle_fill,
-                      color: Color(0xFFB4FF00),
-                      size: 36,
-                    ),
-                    onPressed: () {
-                      // Play audio
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildArticlesTab() {
-    if (_articles.isEmpty) {
-      return const Center(
-        child: Text(
-          'No articles available',
-          style: TextStyle(color: Colors.white70),
-        ),
-      );
-    }
-    
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _articles.length,
-      itemBuilder: (context, index) {
-        final article = _articles[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          color: const Color(0xFF1E1E1E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            onTap: () {
-              // Navigate to article detail screen
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Article image (optional)
-                if (article['imageUrl'] != null)
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                    child: Image.network(
-                      article['imageUrl'],
-                      height: 150,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 150,
-                        color: const Color(0xFF2A2A2A),
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            color: Colors.white54,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                
-                // Article info
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        article['title'] ?? 'Untitled Article',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      if (article['summary'] != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          article['summary'],
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      if (article['date'] != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          article['date'],
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white54,
-                          ),
                         ),
                       ],
                     ],

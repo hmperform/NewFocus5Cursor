@@ -40,7 +40,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     
     if (user != null) {
       setState(() {
-        _nameController.text = user.name ?? '';
+        _nameController.text = user.fullName ?? '';
         _universityController.text = user.university ?? '';
         _currentImageUrl = user.profileImageUrl;
       });
@@ -303,7 +303,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     // User Credentials (display only)
                     Consumer<AuthProvider>(
                       builder: (context, authProvider, child) {
-                        final user = authProvider.user;
+                        final user = authProvider.currentUser;
                         return user != null
                             ? Container(
                                 width: double.infinity,

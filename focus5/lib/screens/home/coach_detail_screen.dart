@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
-import '../../models/coach_model.dart';
+import '../../models/coach_model.dart' as coachModel;
+import '../../providers/coach_provider.dart';
+// import '../../widgets/coach/coach_profile_header.dart';
+// import '../../widgets/course/course_card.dart';
+// import '../../widgets/media/media_card.dart';
+// import 'package:focus5/models/content_models.dart';
 
 class CoachDetailScreen extends StatelessWidget {
-  final CoachModel coach;
-  
-  const CoachDetailScreen({
-    Key? key,
-    required this.coach,
-  }) : super(key: key);
+  final String coachId;
+
+  const CoachDetailScreen({Key? key, required this.coachId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -18,13 +20,38 @@ class CoachDetailScreen extends StatelessWidget {
     final textColor = themeProvider.textColor;
     final accentColor = themeProvider.accentColor;
     
+    final coachProvider = Provider.of<CoachProvider>(context);
+    final coach = coachProvider.getCoachById(coachId);
+
+    if (coach == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Fetch related content (courses, media) using coach.id
+    // Replace dummy lists with actual data fetched based on coach.id
+    final courses = []; // TODO: Fetch courses by coachId
+    final mediaItems = []; // TODO: Fetch media by coachId
+
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: backgroundColor,
-        title: Text(
-          'About ${coach.name}',
-          style: TextStyle(color: textColor),
+        title: FutureBuilder<coachModel.Coach?>(
+          future: Future.value(coach),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Text('Loading...');
+            } else if (snapshot.hasError) {
+              return const Text('Error');
+            } else if (snapshot.hasData && snapshot.data != null) {
+              return Text(snapshot.data!.name);
+            } else {
+              return const Text('Coach Profile');
+            }
+          },
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: textColor),
@@ -32,123 +59,71 @@ class CoachDetailScreen extends StatelessWidget {
         ),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Coach details
-            Text(
-              'Background',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              coach.bio,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 16,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Coach credentials
-            Text(
-              'Credentials',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildCredential(
-              icon: Icons.school,
-              title: 'Education',
-              description: coach.education ?? 'Ph.D. in Sports Psychology',
-              textColor: textColor,
-            ),
-            _buildCredential(
-              icon: Icons.workspace_premium,
-              title: 'Certifications',
-              description: coach.certifications ?? 'Certified Mental Performance Consultant',
-              textColor: textColor,
-            ),
-            _buildCredential(
-              icon: Icons.history_edu,
-              title: 'Experience',
-              description: coach.experience ?? '15+ years of experience',
-              textColor: textColor,
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Coaching approach
-            Text(
-              'Coaching Approach',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              coach.approach ?? 'My coaching approach focuses on building mental resilience, improving focus, and developing strategies to perform under pressure. I combine evidence-based techniques with practical exercises tailored to your specific needs and goals.',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 16,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildCredential({
-    required IconData icon,
-    required String title,
-    required String description,
-    required Color textColor,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: textColor, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+      body: FutureBuilder<coachModel.Coach?>(
+        future: Future.value(coach),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error loading coach: ${snapshot.error}'));
+          } else if (snapshot.hasData && snapshot.data != null) {
+            final coachModel.Coach coach = snapshot.data!;
+
+            return SingleChildScrollView(
+              child: Column(
+                children: [
+                  // TODO: Replace with actual Coach Profile Header implementation using coach data
+                  // CoachProfileHeader(
+                  //   name: coach.name,
+                  //   title: coach.title ?? '',
+                  //   profileImageUrl: coach.profileImageUrl ?? '',
+                  // ),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                         Text(coach.name, style: Theme.of(context).textTheme.headlineMedium),
+                         if (coach.title != null) Text(coach.title!, style: Theme.of(context).textTheme.titleLarge),
+                         if (coach.bio != null) ...[
+                            const SizedBox(height: 8),
+                            Text(coach.bio!),
+                         ],
+                         const SizedBox(height: 16),
+                         if (coach.specialization != null && coach.specialization!.isNotEmpty) ...[
+                            Text('Specialization:', style: Theme.of(context).textTheme.titleMedium),
+                            Wrap(
+                                spacing: 8.0,
+                                children: coach.specialization!.map((spec) => Chip(label: Text(spec))).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                         ],
+                         // Placeholder for Courses Section
+                         Text('Courses', style: Theme.of(context).textTheme.titleMedium),
+                         const SizedBox(height: 8),
+                         // TODO: Fetch and display coach's courses
+                         // Replace with actual course list/cards when available
+                         Container(height: 100, color: Colors.grey[200], child: Center(child: Text('Course List Placeholder'))),
+                         // Placeholder for Media Section
+                         const SizedBox(height: 16),
+                         Text('Media', style: Theme.of(context).textTheme.titleMedium),
+                         const SizedBox(height: 8),
+                         // TODO: Fetch and display coach's media
+                         // Replace with actual media list/cards when available
+                         Container(height: 100, color: Colors.grey[200], child: Center(child: Text('Media List Placeholder'))),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+                  // TODO: Add Courses and Media sections here
+                  // Potentially using ListView.builder with CourseCard/MediaCard if they existed
+                  // For now, maybe just list titles or show placeholders
+                ],
+              ),
+            );
+          } else {
+            return const Center(child: Text('Coach not found.'));
+          }
+        },
       ),
     );
   }

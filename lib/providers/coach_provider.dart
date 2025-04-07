@@ -1,87 +1,79 @@
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/coach_model.dart';
+import '../models/course_model.dart';
+import '../services/coach_service.dart';
 
 class CoachProvider with ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  List<CoachModel> _coaches = [];
+  final CoachService _coachService = CoachService();
+  List<Coach> _coaches = [];
+  Coach? _selectedCoach;
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<CoachModel> get coaches => _coaches;
+  // Getters
+  List<Coach> get coaches => _coaches;
+  Coach? get selectedCoach => _selectedCoach;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadCoaches() async {
-    try {
-      _isLoading = true;
-      notifyListeners();
+  // Methods
+  void setSelectedCoach(Coach coach) {
+    _selectedCoach = coach;
+    notifyListeners();
+  }
 
-      final QuerySnapshot coachesSnapshot = await _firestore.collection('coaches').get();
-      
-      _coaches = coachesSnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        // Sanitize data to handle document references
-        data = _sanitizeDocumentData(data);
-        return CoachModel.fromJson({...data, 'id': doc.id});
-      }).toList();
-      
-      _isLoading = false;
-      _errorMessage = null;
-      notifyListeners();
+  void clearSelectedCoach() {
+    _selectedCoach = null;
+    notifyListeners();
+  }
+
+  // Load coaches
+  Future<void> loadCoaches({bool activeOnly = true}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _coachService.getCoaches().listen(
+        (coaches) {
+          _coaches = coaches;
+          notifyListeners();
+        },
+        onError: (error) {
+          _errorMessage = 'Failed to load coaches: $error';
+          debugPrint('Error loading coaches: $error');
+          notifyListeners();
+        },
+      );
     } catch (e) {
+      _errorMessage = 'Failed to load coaches: $e';
+      debugPrint('Error in loadCoaches: $e');
+    } finally {
       _isLoading = false;
-      _errorMessage = 'Failed to load coaches: ${e.toString()}';
-      debugPrint('Error loading coaches: $e');
       notifyListeners();
     }
   }
-  
+
+  // Get coach by ID
   Future<CoachModel?> getCoachById(String coachId) async {
+    if (_isLoading) return null; // Avoid fetching if already loading
+    
+    _isLoading = true;
+    _errorMessage = null;
+
     try {
-      // Check if we have already loaded this coach
-      final existingCoach = _coaches.firstWhere(
-        (coach) => coach.id == coachId,
-        orElse: () => CoachModel(
-          id: '',
-          name: '',
-          title: '',
-          bio: '',
-          profileImageUrl: '',
-          headerImageUrl: '',
-          bookingUrl: '',
-          specialties: [],
-          credentials: [],
-          isVerified: false, 
-          isActive: false,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
-      
-      if (existingCoach.id.isNotEmpty) {
-        return existingCoach;
-      }
-      
-      // Load from Firestore
-      final DocumentSnapshot coachDoc = await _firestore.collection('coaches').doc(coachId).get();
-      
-      if (!coachDoc.exists) {
-        return null;
-      }
-      
-      Map<String, dynamic> data = coachDoc.data() as Map<String, dynamic>;
-      // Sanitize data to handle document references
-      data = _sanitizeDocumentData(data);
-      
-      return CoachModel.fromJson({...data, 'id': coachDoc.id});
+      // Call the correct service method: getCoach
+      final CoachModel? coach = await _coachService.getCoach(coachId);
+      _isLoading = false;
+      return coach;
     } catch (e) {
-      _errorMessage = 'Failed to get coach: ${e.toString()}';
-      debugPrint('Error getting coach: $e');
+      _errorMessage = "Failed to get coach details: $e";
+      _isLoading = false;
+      notifyListeners(); // Notify listeners about the error
       return null;
     }
   }
-  
+
   List<CoachModel> getCoachesBySpecialty(String specialty) {
     return _coaches.where((coach) => 
       coach.specialties.any((s) => s.toLowerCase().contains(specialty.toLowerCase()))

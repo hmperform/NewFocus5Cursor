@@ -2,23 +2,26 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/coach_model.dart';
 import '../services/coach_service.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 
 class CoachProvider with ChangeNotifier {
   final CoachService _coachService = CoachService();
   
-  List<CoachModel> _coaches = [];
-  CoachModel? _selectedCoach;
+  List<Coach> _coaches = [];
+  Coach? _selectedCoach;
   bool _isLoading = false;
   String? _error;
+  StreamSubscription? _coachesSubscription;
 
   // Getters
-  List<CoachModel> get coaches => _coaches;
-  CoachModel? get selectedCoach => _selectedCoach;
+  List<Coach> get coaches => _coaches;
+  Coach? get selectedCoach => _selectedCoach;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
   // Set selected coach
-  void setSelectedCoach(CoachModel coach) {
+  void setSelectedCoach(Coach coach) {
     _selectedCoach = coach;
     notifyListeners();
   }
@@ -30,45 +33,38 @@ class CoachProvider with ChangeNotifier {
   }
 
   // Load all coaches
-  Future<void> loadCoaches({bool activeOnly = true}) async {
-    _setLoading(true);
+  Future<void> loadCoaches() async {
+    if (_isLoading) return;
+    
+    _isLoading = true;
     _error = null;
-
-    try {
-      // Set up a stream subscription to the coaches collection
-      _coachService.getCoaches(activeOnly: activeOnly).listen(
-        (coaches) {
-          _coaches = coaches;
-          _setLoading(false);
-          notifyListeners();
-        },
-        onError: (error) {
-          _error = "Failed to load coaches: $error";
-          _setLoading(false);
-          notifyListeners();
-        },
-      );
-    } catch (e) {
-      _error = "Failed to load coaches: $e";
-      _setLoading(false);
+    notifyListeners();
+    
+    _coachesSubscription?.cancel();
+    _coachesSubscription = _coachService.getCoaches().listen((coaches) {
+      _coaches = coaches;
+      _isLoading = false;
       notifyListeners();
-    }
+    }, onError: (error) {
+      _error = 'Failed to load coaches: $error';
+      _isLoading = false;
+      notifyListeners();
+    });
   }
 
   // Get coach by ID
-  Future<CoachModel?> getCoachById(String coachId) async {
+  Future<Coach?> getCoachById(String coachId) async {
     _setLoading(true);
     _error = null;
 
     try {
       // Get coach data
-      CoachModel? coach;
-      await _coachService.getCoachById(coachId).first.then((value) {
-        coach = value;
-        if (value != null) {
-          _selectedCoach = value;
-        }
-      });
+      Coach? coach = await _coachService.getCoach(coachId);
+      
+      if (coach != null) {
+        _selectedCoach = coach;
+      }
+      
       _setLoading(false);
       notifyListeners();
       return coach;
@@ -148,9 +144,8 @@ class CoachProvider with ChangeNotifier {
     String? twitterUrl,
     String? linkedinUrl,
     String? websiteUrl,
-    required List<String> specialties,
+    required String specialization,
     required List<String> credentials,
-    required bool isVerified,
     required bool isActive,
   }) async {
     _setLoading(true);
@@ -173,15 +168,14 @@ class CoachProvider with ChangeNotifier {
         twitterUrl: twitterUrl,
         linkedinUrl: linkedinUrl,
         websiteUrl: websiteUrl,
-        specialties: specialties,
+        specialization: specialization,
         credentials: credentials,
-        isVerified: isVerified,
         isActive: isActive,
       );
       
       _setLoading(false);
       // Refresh coaches list after creating/updating a coach
-      loadCoaches(activeOnly: false);
+      loadCoaches();
       return coachId;
     } catch (e) {
       _error = "Failed to save coach: $e";
@@ -200,7 +194,7 @@ class CoachProvider with ChangeNotifier {
       await _coachService.deleteCoach(coachId);
       _setLoading(false);
       // Refresh coaches list after deleting a coach
-      loadCoaches(activeOnly: false);
+      loadCoaches();
       return true;
     } catch (e) {
       _error = "Failed to delete coach: $e";
@@ -210,9 +204,37 @@ class CoachProvider with ChangeNotifier {
     }
   }
 
+  // Admin function: Update coach status
+  Future<void> updateCoachStatus(String coachId, bool isActive) async {
+    _setLoading(true);
+    _error = null;
+
+    try {
+      await _coachService.updateCoachStatus(coachId, isActive);
+      // Update local state
+      final index = _coaches.indexWhere((coach) => coach.id == coachId);
+      if (index != -1) {
+        _coaches[index] = _coaches[index].copyWith(isActive: isActive);
+      }
+      _setLoading(false);
+      notifyListeners();
+    } catch (e) {
+      _error = "Failed to update coach status: $e";
+      _setLoading(false);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   // Helper method to set loading state
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _coachesSubscription?.cancel();
+    super.dispose();
   }
 } 

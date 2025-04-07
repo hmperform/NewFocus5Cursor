@@ -171,7 +171,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
           await _migrationService.migrateCoaches();
           break;
         case 'courses':
-          await _migrationService.migrateCoursesAndModules();
+          await _migrationService.migrateCoursesAndLessons();
           break;
         case 'audio':
           await _migrationService.migrateDailyAudios();

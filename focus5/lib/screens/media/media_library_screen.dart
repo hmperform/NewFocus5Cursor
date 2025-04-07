@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
-import 'video_player_screen.dart';
-import 'audio_player_screen.dart';
+// import 'video_player_screen.dart'; // Target of URI doesn't exist
+// import 'audio_player_screen.dart'; // Target of URI doesn't exist
 import '../../constants/theme.dart';
 
 class MediaLibraryScreen extends StatefulWidget {
@@ -58,6 +58,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     final themeProvider = Provider.of<ThemeProvider>(context);
     final contentProvider = Provider.of<ContentProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+    final secondaryTextColor = themeProvider.isDarkMode ? Colors.grey : Colors.grey.shade700;
     
     return Scaffold(
       backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
@@ -129,11 +130,12 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
             child: TabBar(
               controller: _tabController,
               indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                color: accentColor,
+                borderRadius: BorderRadius.circular(20),
+                color: Theme.of(context).colorScheme.primary,
               ),
-              labelColor: Colors.black,
-              unselectedLabelColor: isDarkMode ? Colors.white70 : Colors.black54,
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor: secondaryTextColor,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               tabs: const [
                 Tab(text: 'Videos'),
@@ -192,9 +194,9 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
       child: FilterChip(
         label: Text(category),
         selected: isSelected,
-        selectedColor: accentColor,
+        selectedColor: Theme.of(context).colorScheme.primary,
         labelStyle: TextStyle(
-          color: isSelected ? Colors.black : null,
+          color: isSelected ? Theme.of(context).colorScheme.primary : null,
           fontWeight: isSelected ? FontWeight.bold : null,
         ),
         onSelected: (selected) {
@@ -215,8 +217,12 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     // Filter by category if not "All"
     final filteredVideos = _selectedCategory == 'All'
         ? videos
-        : videos.where((video) => 
-            video.categories.contains(_selectedCategory)).toList();
+        : videos.where((item) {
+            if (item is Lesson && item.type == LessonType.video) {
+              return item.categories.contains(_selectedCategory);
+            }
+            return false;
+          }).toList();
     
     if (filteredVideos.isEmpty) {
       return Center(
@@ -239,22 +245,23 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
       itemCount: filteredVideos.length,
       itemBuilder: (context, index) {
         final video = filteredVideos[index];
-        return _buildMediaCard(
-          title: video.title,
-          description: video.description,
-          duration: video.duration,
-          xpReward: video.xpReward,
-          instructor: video.creatorName,
-          categories: video.categories,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VideoPlayerScreen(video: video),
-              ),
-            );
-          },
-        );
+        if (video is Lesson) {
+          return _buildMediaCard(
+            title: video.title,
+            description: video.description,
+            duration: video.durationMinutes,
+            xpReward: 0,
+            instructor: "Unknown",
+            categories: video.categories,
+            imageUrl: video.thumbnailUrl,
+            item: video,
+            onTap: () {
+              print('Tapped Video: ${video.title}');
+            },
+          );
+        } else {
+          return const SizedBox.shrink();
+        }
       },
     );
   }
@@ -268,8 +275,12 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     // Filter by category if not "All"
     final filteredAudios = _selectedCategory == 'All'
         ? audios
-        : audios.where((audio) => 
-            audio.categories.contains(_selectedCategory)).toList();
+        : audios.where((item) {
+           if (item is DailyAudio) {
+             return item.categories.contains(_selectedCategory);
+           }
+           return false;
+          }).toList();
     
     if (filteredAudios.isEmpty) {
       return Center(
@@ -292,23 +303,23 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
       itemCount: filteredAudios.length,
       itemBuilder: (context, index) {
         final audio = filteredAudios[index];
-        return _buildMediaCard(
-          title: audio.title,
-          description: audio.description,
-          duration: audio.duration,
-          xpReward: audio.xpReward,
-          instructor: audio.creatorName,
-          categories: audio.categories,
-          isAudio: true,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AudioPlayerScreen(audio: audio),
-              ),
-            );
-          },
-        );
+        if (audio is DailyAudio) {
+          return _buildMediaCard(
+            title: audio.title,
+            description: audio.description,
+            duration: audio.durationMinutes,
+            xpReward: audio.xpReward,
+            instructor: audio.creatorName,
+            categories: audio.categories,
+            imageUrl: audio.imageUrl,
+            item: audio,
+            onTap: () {
+              print('Tapped Audio: ${audio.title}');
+            },
+          );
+        } else {
+          return const SizedBox.shrink();
+        }
       },
     );
   }
@@ -320,11 +331,17 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
     required int xpReward,
     required String instructor,
     required List<String> categories,
-    bool isAudio = false,
     required VoidCallback onTap,
+    String? imageUrl,
+    required dynamic item,
   }) {
-    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-    
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final bool isVideo = item is Lesson && item.type == LessonType.video;
+    final bool isAudio = item is DailyAudio;
+
+    print("Building card for: $title, isVideo: $isVideo, isAudio: $isAudio");
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16.0),
       color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
@@ -354,7 +371,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
                 icon: Icon(
                   isAudio ? Icons.play_circle_filled : Icons.play_arrow,
                   size: 64,
-                  color: accentColor,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 onPressed: onTap,
               ),
@@ -417,13 +434,13 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
                     Icon(
                       Icons.star,
                       size: 16,
-                      color: accentColor,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '$xpReward XP',
                       style: TextStyle(
-                        color: accentColor,
+                        color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -443,7 +460,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
                         color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey[200],
                         borderRadius: BorderRadius.circular(30),
                         border: category == _selectedCategory
-                            ? Border.all(color: accentColor, width: 1)
+                            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 1)
                             : null,
                       ),
                       child: Text(
@@ -451,7 +468,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
                         style: TextStyle(
                           fontSize: 14,
                           color: category == _selectedCategory
-                              ? accentColor
+                              ? Theme.of(context).colorScheme.primary
                               : (isDarkMode ? Colors.white70 : Colors.black54),
                         ),
                       ),

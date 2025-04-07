@@ -17,7 +17,6 @@ import 'profile_tab.dart';
 import 'more_tab.dart';
 import 'media_tab.dart';
 import 'journal_search_screen.dart';
-import '../../widgets/mini_player.dart';
 import '../../widgets/basic_mini_player.dart';
 
 class HomeScreen extends StatefulWidget {

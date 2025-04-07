@@ -8,8 +8,7 @@ import '../../providers/coach_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/theme_provider.dart';
 
-import '../../models/content_models.dart';
-import '../../models/coach_model.dart';
+import '../../models/coach_model.dart' as coachModel;
 import '../../models/user_model.dart';
 
 import '../../constants/theme.dart';
@@ -40,14 +39,17 @@ class CoachProfileScreen extends StatefulWidget {
 class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
-  CoachModel? _coach;
+  coachModel.Coach? _coach;
   String? _error;
+  List<dynamic> _coachContent = [];
   
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _loadCoachData();
+    WidgetsBinding.instance.addPostFrameCallback((_) { 
+      _loadCoachData();
+    });
   }
   
   Future<void> _loadCoachData() async {
@@ -58,7 +60,7 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
       });
       
       final coachProvider = Provider.of<CoachProvider>(context, listen: false);
-      final coach = await coachProvider.getCoachById(widget.coachId);
+      final coachModel.Coach? coach = await coachProvider.getCoachById(widget.coachId);
       
       setState(() {
         _coach = coach;

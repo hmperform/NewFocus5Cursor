@@ -62,7 +62,7 @@ class CoachesSection extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => CoachProfileScreen(
-                        coachId: coach['id'],
+                        coachId: coach['id']?.toString() ?? '',
                       ),
                     ),
                   );
@@ -88,9 +88,9 @@ class CoachesSection extends StatelessWidget {
                           topLeft: Radius.circular(12),
                           topRight: Radius.circular(12),
                         ),
-                        child: coach['imageUrl'] != null && coach['imageUrl'].isNotEmpty
+                        child: (coach['imageUrl'] is String && (coach['imageUrl'] as String).isNotEmpty)
                             ? Image.network(
-                                coach['imageUrl'],
+                                coach['imageUrl'] as String,
                                 height: 120,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
@@ -108,7 +108,7 @@ class CoachesSection extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              coach['name'],
+                              coach['name']?.toString() ?? 'Unknown Coach',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -118,7 +118,7 @@ class CoachesSection extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              coach['specialization'],
+                              coach['specialization']?.toString() ?? 'No Specialization',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

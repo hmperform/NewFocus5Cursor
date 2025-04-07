@@ -28,10 +28,8 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
   final _linkedinController = TextEditingController();
   final _websiteController = TextEditingController();
   
-  final List<String> _specialties = [];
   final List<String> _credentials = [];
   
-  bool _isVerified = false;
   bool _isActive = true;
   bool _isLoading = false;
   bool _isInit = false;
@@ -41,10 +39,10 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
   String? _existingProfileUrl;
   String? _existingHeaderUrl;
   
-  final _specialtyController = TextEditingController();
+  final _specializationController = TextEditingController();
   final _credentialController = TextEditingController();
   
-  CoachModel? _existingCoach;
+  Coach? _existingCoach;
 
   @override
   void initState() {
@@ -84,10 +82,10 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
         _linkedinController.text = coach.linkedinUrl ?? '';
         _websiteController.text = coach.websiteUrl ?? '';
         
+        _specializationController.text = coach.specialization?.join(', ') ?? '';
+        
         setState(() {
-          _specialties.addAll(coach.specialties);
           _credentials.addAll(coach.credentials);
-          _isVerified = coach.isVerified;
           _isActive = coach.isActive;
           _existingProfileUrl = coach.profileImageUrl;
           _existingHeaderUrl = coach.headerImageUrl;
@@ -130,22 +128,6 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
     }
   }
   
-  void _addSpecialty() {
-    final specialty = _specialtyController.text.trim();
-    if (specialty.isNotEmpty && !_specialties.contains(specialty)) {
-      setState(() {
-        _specialties.add(specialty);
-        _specialtyController.clear();
-      });
-    }
-  }
-  
-  void _removeSpecialty(String specialty) {
-    setState(() {
-      _specialties.remove(specialty);
-    });
-  }
-  
   void _addCredential() {
     final credential = _credentialController.text.trim();
     if (credential.isNotEmpty && !_credentials.contains(credential)) {
@@ -166,13 +148,6 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please correct the errors in the form')),
-      );
-      return;
-    }
-    
-    if (_specialties.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one specialty')),
       );
       return;
     }
@@ -206,9 +181,8 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
         twitterUrl: _twitterController.text.trim().isNotEmpty ? _twitterController.text.trim() : null,
         linkedinUrl: _linkedinController.text.trim().isNotEmpty ? _linkedinController.text.trim() : null,
         websiteUrl: _websiteController.text.trim().isNotEmpty ? _websiteController.text.trim() : null,
-        specialties: _specialties,
+        specialization: _specializationController.text.trim(),
         credentials: _credentials,
-        isVerified: _isVerified,
         isActive: _isActive,
       );
       
@@ -249,7 +223,7 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
     _twitterController.dispose();
     _linkedinController.dispose();
     _websiteController.dispose();
-    _specialtyController.dispose();
+    _specializationController.dispose();
     _credentialController.dispose();
     super.dispose();
   }
@@ -370,12 +344,32 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
                       ),
                       const SizedBox(height: 24),
                       
-                      // Specialties
-                      _buildSpecialtiesSection(),
+                      // Specialization Field
+                      const Text(
+                        'Specialization',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _specializationController,
+                        decoration: _buildInputDecoration('Enter primary specialization (e.g., Mental Toughness)'),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter specialization';
+                          }
+                          return null;
+                        },
+                      ),
                       const SizedBox(height: 24),
                       
                       // Credentials
-                      _buildCredentialsSection(),
+                      _buildListManagementSection(
+                        title: 'Credentials',
+                        controller: _credentialController,
+                        items: _credentials,
+                        onAdd: _addCredential,
+                        onRemove: _removeCredential,
+                        hintText: 'Enter a credential (e.g., PhD, CMPC)',
+                      ),
                       const SizedBox(height: 24),
                       
                       // Contact Info
@@ -617,120 +611,47 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
     );
   }
   
-  Widget _buildSpecialtiesSection() {
+  Widget _buildListManagementSection({
+    required String title,
+    required TextEditingController controller,
+    required List<String> items,
+    required VoidCallback onAdd,
+    required ValueChanged<String> onRemove,
+    required String hintText,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Specialties',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: items.map((item) => Chip(
+            label: Text(item),
+            onDeleted: () => onRemove(item),
+          )).toList(),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Add areas of expertise (e.g. Performance Anxiety, Focus, etc.)',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white70,
-          ),
-        ),
-        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: TextFormField(
-                controller: _specialtyController,
-                decoration: _buildInputDecoration('Add specialty'),
-                style: const TextStyle(color: Colors.white),
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: hintText,
+                  border: const OutlineInputBorder(),
+                ),
+                onFieldSubmitted: (_) => onAdd(),
               ),
             ),
-            const SizedBox(width: 16),
-            ElevatedButton(
-              onPressed: _addSpecialty,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB4FF00),
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Add'),
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: onAdd,
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _specialties.map((specialty) {
-            return Chip(
-              label: Text(specialty),
-              backgroundColor: const Color(0xFF2A2A2A),
-              labelStyle: const TextStyle(color: Colors.white),
-              deleteIconColor: Colors.white70,
-              onDeleted: () => _removeSpecialty(specialty),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildCredentialsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Credentials',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Add professional credentials (e.g. MBA, Ph.D., Former Athlete)',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white70,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _credentialController,
-                decoration: _buildInputDecoration('Add credential'),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(width: 16),
-            ElevatedButton(
-              onPressed: _addCredential,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB4FF00),
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _credentials.map((credential) {
-            return Chip(
-              label: Text(credential),
-              backgroundColor: const Color(0xFF2A2A2A),
-              labelStyle: const TextStyle(color: Colors.white),
-              deleteIconColor: Colors.white70,
-              onDeleted: () => _removeCredential(credential),
-            );
-          }).toList(),
-        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -763,28 +684,6 @@ class _CoachFormScreenState extends State<CoachFormScreen> {
           onChanged: (value) {
             setState(() {
               _isActive = value;
-            });
-          },
-          activeColor: const Color(0xFFB4FF00),
-          activeTrackColor: const Color(0xFF8BC34A).withOpacity(0.5),
-          inactiveThumbColor: Colors.grey,
-          inactiveTrackColor: Colors.grey.withOpacity(0.5),
-        ),
-        
-        // Verified Switch
-        SwitchListTile(
-          title: const Text(
-            'Verified',
-            style: TextStyle(color: Colors.white),
-          ),
-          subtitle: const Text(
-            'Verified coaches will display a verification badge',
-            style: TextStyle(color: Colors.white70, fontSize: 12),
-          ),
-          value: _isVerified,
-          onChanged: (value) {
-            setState(() {
-              _isVerified = value;
             });
           },
           activeColor: const Color(0xFFB4FF00),

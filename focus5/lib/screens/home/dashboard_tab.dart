@@ -11,12 +11,15 @@ import '../../providers/content_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
-import '../../constants/dummy_data.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
 import 'media_player_screen.dart';
 import '../../utils/basic_video_helper.dart';
+// import '../../constants/dummy_data.dart'; // Commented out unused import
+// import '../../widgets/loaders/loading_indicator.dart'; // Commented out unused import
+// import '../../widgets/quick_action_card.dart'; // Commented out unused import
+// import '../../widgets/sections/section_header.dart'; // Commented out unused import
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({Key? key}) : super(key: key);
@@ -28,6 +31,13 @@ class DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<DashboardTab> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
+  List<Course> _featuredCourses = [];
+  List<dynamic> _recentMedia = []; // Combine recent videos and audios
+  // final List<String> quickActions = DummyData.quickActions;
+  // final List<Map<String, dynamic>> forYouItems = DummyData.forYouItems;
+
+  bool _isLoadingFeatured = true;
+  bool _isLoadingRecent = true;
 
   @override
   void initState() {
@@ -49,15 +59,15 @@ class _DashboardTabState extends State<DashboardTab> {
       
       // Also preload a couple of videos from DummyData for Media tab
       final List<String> additionalVideos = [];
-      if (DummyData.dummyMediaItems.isNotEmpty) {
-        for (var item in DummyData.dummyMediaItems) {
-          if (item.mediaType == MediaType.video && 
-              additionalVideos.length < 2 && // Limit to 2 additional videos
-              !additionalVideos.contains(item.mediaUrl)) {
-            additionalVideos.add(item.mediaUrl);
-          }
-        }
-      }
+      // if (DummyData.dummyMediaItems.isNotEmpty) { // Commented out DummyData usage
+      //   for (var item in DummyData.dummyMediaItems) {
+      //     if (item.mediaType == MediaType.video && 
+      //         additionalVideos.length < 2 && // Limit to 2 additional videos
+      //         !additionalVideos.contains(item.mediaUrl)) {
+      //       additionalVideos.add(item.mediaUrl);
+      //     }
+      //   }
+      // } // Commented out DummyData usage
       
       // Create combined list with featured video first
       final videosToPreload = [featuredVideoUrl, ...additionalVideos];
@@ -189,7 +199,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     const SizedBox(height: 8),
                     _buildDayStreak(),
                     _buildDailyVideo(context),
-                    _buildFocusAreas(),
+                    _buildRecentCourses(),
                     _buildFeaturedCourses(context),
                     _buildStartYourDay(context),
                     const SizedBox(height: 24),
@@ -285,35 +295,34 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
-  Widget _buildFocusAreas() {
+  Widget _buildRecentCourses() {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final textColor = Theme.of(context).colorScheme.onBackground;
     final surfaceColor = Theme.of(context).colorScheme.surface;
-    final secondaryTextColor = themeProvider.isDarkMode 
-        ? Colors.white70 
-        : Colors.black87;
+    final contentProvider = Provider.of<ContentProvider>(context);
     
-    // Expanded list of focus areas
-    final focusAreas = [
-      'Mental toughness', 
-      'Discipline', 
-      'Responsibility', 
-      'Visualization', 
-      'Concentration', 
-      'Goal setting', 
-      'Resilience', 
-      'Mindfulness', 
-      'Flow state', 
-      'Leadership'
-    ];
+    // Determine how many courses are featured (max 2)
+    final int featuredCount = contentProvider.courses.length >= 2 ? 2 : contentProvider.courses.length;
     
+    // Get courses for the "Recent" list, skipping those shown in "Featured"
+    final recentCourses = contentProvider.courses.skip(featuredCount).take(4).toList();
+
+    if (contentProvider.isLoading && recentCourses.isEmpty && featuredCount == 0) { // Only show loading if nothing else is loaded
+      return Container(
+        height: 230, // Adjusted height? Check UI
+        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
+      );
+    } else if (recentCourses.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
-            'Focus Areas',
+            'Recent Courses',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -322,23 +331,66 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
         ),
         SizedBox(
-          height: 50,
+          height: 200,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: focusAreas.length,
+            itemCount: recentCourses.length,
             itemBuilder: (context, index) {
+              final course = recentCourses[index];
               return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Chip(
-                  label: Text(
-                    focusAreas[index],
-                    style: TextStyle(color: secondaryTextColor),
-                  ),
-                  backgroundColor: surfaceColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CourseDetailScreen(courseId: course.id),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 160,
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            topRight: Radius.circular(12),
+                          ),
+                          child: FadeInImage.memoryNetwork(
+                            placeholder: kTransparentImage,
+                            image: course.thumbnailUrl,
+                            height: 100,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            imageErrorBuilder: (ctx, err, st) => Container(
+                              height: 100,
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.image_not_supported, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            course.title,
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -558,11 +610,44 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildStartYourDay(BuildContext context) {
-    final containerWidth = MediaQuery.of(context).size.width - 32; // Full width minus padding
-    final containerHeight = containerWidth * 0.5; // Make height 50% of width for a better aspect ratio
+    final contentProvider = Provider.of<ContentProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+
+    final featuredVideo = contentProvider.todayAudio;
+
+    if (contentProvider.isLoading && featuredVideo == null) {
+      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+    }
+
+    if (featuredVideo == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Text(
+          'No daily content available today.', 
+          style: TextStyle(color: secondaryTextColor)
+        ),
+      );
+    }
+
+    final courses = contentProvider.courses;
+    bool isFeatured = false;
+    if (courses.isNotEmpty && courses[0].title == featuredVideo.title) {
+      isFeatured = true;
+    }
+    if (courses.length > 1 && courses[1].title == featuredVideo.title) {
+      isFeatured = true;
+    }
+
+    if (isFeatured) {
+      return const SizedBox.shrink();
+    }
+
+    final containerWidth = MediaQuery.of(context).size.width - 32; // Full width minus padding
+    final containerHeight = containerWidth * 0.5; // Make height 50% of width for a better aspect ratio
     
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -1031,8 +1116,33 @@ class _DashboardTabState extends State<DashboardTab> {
       ],
     );
   }
-}
 
+  Widget _buildRecentMediaSection() {
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final List<dynamic> recentMedia = []; // Replace DummyData
+    // Fetch recent media, e.g., last 5 videos/audios
+    // recentMedia.addAll(contentProvider.videos.take(3)); 
+    // recentMedia.addAll(contentProvider.audios.take(2));
+    // recentMedia.shuffle(); // Optional: Mix them up
+
+    if (recentMedia.isEmpty) {
+      return const SizedBox.shrink(); // Return empty space if no media
+    }
+
+    // TODO: Implement the UI for displaying recent media items
+    return Column(
+      // Add children here based on recentMedia list
+      children: [], // Placeholder
+    ); // Close Column
+  } // Close _buildRecentMediaSection
+
+  Widget _buildForYouSection() {
+    // Return an empty container to satisfy the return type
+    return Container();
+  }
+} // Close _DashboardTabState class
+
+// Moved CourseCard class definition outside _DashboardTabState
 class CourseCard extends StatelessWidget {
   final String title;
   final String sport;

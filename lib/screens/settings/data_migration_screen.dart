@@ -4,7 +4,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
 import 'package:focus5/providers/content_provider.dart';
-import 'package:focus5/data/dummy_data.dart';
 import 'package:focus5/utils/ui_utils.dart';
 import 'package:focus5/services/firebase_content_service.dart';
 
@@ -245,11 +244,28 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
     }
   }
 
+  void _showContentDetails(BuildContext context, String title, List<dynamic> items) {
+    // Remove DummyData refs from here if any remain
+  }
+
+  Widget _buildContentSection(String title, IconData icon, List<dynamic> items) {
+    // Ensure items are passed, not DummyData
+    return Column(
+      // ...
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Remove direct DummyData usage here
+    // final courses = []; // DummyData.dummyCourses;
+    // final audioModules = []; // DummyData.dummyAudioModules;
+    // final articles = []; // DummyData.dummyArticles;
+    // final coaches = []; // DummyData.dummyCoaches;
+
     final themeProvider = Provider.of<ThemeProvider>(context);
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final textColor = Theme.of(context).colorScheme.onBackground;
+    final textColor = Theme.of(context).colorScheme.onSurface;
     final accentColor = themeProvider.accentColor;
     
     return Scaffold(

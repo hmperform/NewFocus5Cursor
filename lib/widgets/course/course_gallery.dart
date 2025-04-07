@@ -51,7 +51,7 @@ class _CourseGalleryState extends State<CourseGallery> {
     }
 
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
+    final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,7 +144,7 @@ class _CourseGalleryState extends State<CourseGallery> {
 
   Widget _buildCourseCard(BuildContext context, Course course) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
+    final textColor = Theme.of(context).colorScheme.onSurface;
     final accentColor = themeProvider.accentColor;
 
     return GestureDetector(

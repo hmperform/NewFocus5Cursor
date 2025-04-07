@@ -30,12 +30,11 @@ import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/coach_provider.dart';
 import 'providers/badge_provider.dart';
-import 'widgets/mini_player.dart';
+import 'widgets/basic_mini_player.dart';
 import 'constants/theme.dart';
 import 'services/basic_video_service.dart';
 import 'services/initialize_database.dart';
 import 'screens/coaches/coaches_list_screen.dart';
-import 'screens/home/all_coaches_screen.dart';
 import 'screens/badges/all_badges_screen.dart';
 
 // Add global navigator key
@@ -185,7 +184,6 @@ class Focus5App extends StatelessWidget {
         '/firebase_setup': (context) => const FirebaseSetupScreen(),
         '/admin-management': (context) => const AdminManagementScreen(),
         '/coaches': (context) => const CoachesListScreen(),
-        '/all_coaches': (context) => const AllCoachesScreen(),
         '/all_badges': (context) => const AllBadgesScreen(),
         '/module_to_lesson_migration': (context) => const ModulesToLessonsMigrationScreen(),
       },

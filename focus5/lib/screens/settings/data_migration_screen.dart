@@ -4,7 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
 import 'package:focus5/providers/content_provider.dart';
-import 'package:focus5/data/dummy_data.dart';
+import 'package:focus5/services/data_migration_service.dart';
 import 'package:focus5/utils/ui_utils.dart';
 
 class DataMigrationScreen extends StatefulWidget {
@@ -20,6 +20,15 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
   bool _isLoading = false;
   String _statusMessage = 'Ready to migrate data.';
   double _progress = 0.0;
+  final DataMigrationService _migrationService = DataMigrationService();
+
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
 
   Future<void> _migrateAllData() async {
     setState(() {
@@ -72,149 +81,19 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
   }
 
   Future<void> _migrateCourses() async {
-    final courses = DummyData.dummyCourses;
-    final db = FirebaseFirestore.instance;
-    final batch = db.batch();
-    
-    // Create courses collection
-    final coursesCollection = db.collection('courses');
-    
-    for (final course in courses) {
-      final courseDoc = coursesCollection.doc(course.id);
-      batch.set(courseDoc, {
-        'id': course.id,
-        'title': course.title,
-        'description': course.description,
-        'thumbnailUrl': course.thumbnailUrl,
-        'creatorId': course.creatorId,
-        'creatorName': course.creatorName,
-        'creatorImageUrl': course.creatorImageUrl,
-        'tags': course.tags,
-        'focusAreas': course.focusAreas,
-        'durationMinutes': course.durationMinutes,
-        'xpReward': course.xpReward,
-        'universityExclusive': course.universityExclusive,
-        'universityAccess': course.universityAccess,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      
-      // Create modules subcollection for each course
-      final modulesCollection = courseDoc.collection('modules');
-      
-      for (final module in course.modules) {
-        final moduleDoc = modulesCollection.doc(module.id);
-        batch.set(moduleDoc, {
-          'id': module.id,
-          'title': module.title,
-          'description': module.description,
-          'type': module.type.toString().split('.').last,
-          'videoUrl': module.videoUrl,
-          'audioUrl': module.audioUrl,
-          'textContent': module.textContent,
-          'durationMinutes': module.durationMinutes,
-          'sortOrder': module.sortOrder,
-          'thumbnailUrl': module.thumbnailUrl,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-    }
-    
-    // Commit the batch
-    await batch.commit();
+    debugPrint('TODO: Course migration logic depends on DummyData which is commented out.');
   }
 
   Future<void> _migrateAudioModules() async {
-    final audioModules = DummyData.dummyAudioModules;
-    final db = FirebaseFirestore.instance;
-    final batch = db.batch();
-    
-    // Create audio_modules collection
-    final audioCollection = db.collection('audio_modules');
-    
-    for (final audio in audioModules) {
-      final audioDoc = audioCollection.doc(audio.id);
-      batch.set(audioDoc, {
-        'id': audio.id,
-        'title': audio.title,
-        'description': audio.description,
-        'category': audio.category,
-        'imageUrl': audio.imageUrl,
-        'audioUrl': audio.audioUrl,
-        'durationMinutes': audio.durationMinutes,
-        'creatorId': audio.creatorId,
-        'creatorName': audio.creatorName,
-        'datePublished': audio.datePublished.toIso8601String(),
-        'focusAreas': audio.focusAreas,
-        'xpReward': audio.xpReward,
-        'universityExclusive': audio.universityExclusive,
-        'universityAccess': audio.universityAccess,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    
-    // Commit the batch
-    await batch.commit();
+    debugPrint('TODO: Audio module migration logic depends on DummyData which is commented out.');
   }
 
   Future<void> _migrateArticles() async {
-    final articles = DummyData.dummyArticles;
-    final db = FirebaseFirestore.instance;
-    final batch = db.batch();
-    
-    // Create articles collection
-    final articlesCollection = db.collection('articles');
-    
-    for (final article in articles) {
-      final articleDoc = articlesCollection.doc(article.id);
-      batch.set(articleDoc, {
-        'id': article.id,
-        'title': article.title,
-        'authorId': article.authorId,
-        'authorName': article.authorName,
-        'authorImageUrl': article.authorImageUrl,
-        'content': article.content,
-        'thumbnailUrl': article.thumbnailUrl,
-        'publishedDate': article.publishedDate.toIso8601String(),
-        'tags': article.tags,
-        'readTimeMinutes': article.readTimeMinutes,
-        'focusAreas': article.focusAreas,
-        'universityExclusive': article.universityExclusive,
-        'universityAccess': article.universityAccess ?? [],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    
-    // Commit the batch
-    await batch.commit();
+    debugPrint('TODO: Article migration logic depends on DummyData which is commented out.');
   }
 
   Future<void> _migrateCoaches() async {
-    final coaches = DummyData.dummyCoaches;
-    final db = FirebaseFirestore.instance;
-    final batch = db.batch();
-    
-    // Create coaches collection
-    final coachesCollection = db.collection('coaches');
-    
-    for (final coach in coaches) {
-      final coachDoc = coachesCollection.doc(coach['id'] as String);
-      batch.set(coachDoc, {
-        'id': coach['id'],
-        'name': coach['name'],
-        'title': coach['title'],
-        'bio': coach['bio'],
-        'imageUrl': coach['imageUrl'],
-        'rating': coach['rating'],
-        'reviewCount': coach['reviewCount'],
-        'specialization': coach['specialization'],
-        'experience': coach['experience'],
-        'courses': coach['courses'],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    
-    // Commit the batch
-    await batch.commit();
+    debugPrint('TODO: Coach migration logic depends on DummyData which is commented out.');
   }
 
   @override
@@ -292,28 +171,28 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
                     _buildDataItem(
                       icon: Icons.video_library,
                       title: 'Courses & Modules',
-                      description: '${DummyData.dummyCourses.length} courses with multiple modules',
+                      description: 'TODO: Get course count',
                       textColor: textColor,
                       accentColor: accentColor,
                     ),
                     _buildDataItem(
                       icon: Icons.headphones,
                       title: 'Audio Modules',
-                      description: '${DummyData.dummyAudioModules.length} audio modules',
+                      description: 'TODO: Get audio count',
                       textColor: textColor,
                       accentColor: accentColor,
                     ),
                     _buildDataItem(
                       icon: Icons.article,
                       title: 'Articles',
-                      description: '${DummyData.dummyArticles.length} articles',
+                      description: 'TODO: Get article count',
                       textColor: textColor,
                       accentColor: accentColor,
                     ),
                     _buildDataItem(
                       icon: Icons.person,
                       title: 'Coaches',
-                      description: '${DummyData.dummyCoaches.length} coaches',
+                      description: 'TODO: Get coach count',
                       textColor: textColor,
                       accentColor: accentColor,
                     ),

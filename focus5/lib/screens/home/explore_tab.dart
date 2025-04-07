@@ -10,17 +10,13 @@ import '../../providers/theme_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../constants/theme.dart';
 import '../../models/content_models.dart';
-import '../../constants/dummy_data.dart';
-import '../../widgets/article/article_card.dart';
 import 'course_detail_screen.dart';
 import 'coach_profile_screen.dart';
 import 'articles_list_screen.dart';
-import 'all_coaches_screen.dart';
-import 'all_courses_screen.dart';
-import 'all_modules_screen.dart';
 import '../../services/paywall_service.dart';
 import 'article_detail_screen.dart';
 import '../explore/focus_area_courses_screen.dart';
+import '../../widgets/article/article_card.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -61,18 +57,22 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         _selectedTabIndex = _tabController.index;
       });
     });
-    
+
     // Initialize content data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-      if (contentProvider.courses.isEmpty) {
-        contentProvider.initContent(null);
-      }
-      if (contentProvider.articles.isEmpty) {
-        contentProvider.loadArticles();
-      }
-      
-      // Load coaches from CoachProvider instead of directly from Firestore
+      // *** Always call initContent to handle loading of all content types ***
+      contentProvider.initContent(null); 
+
+      // *** REMOVED redundant checks and calls ***
+      // if (contentProvider.courses.isEmpty) {
+      //   contentProvider.initContent(null);
+      // }
+      // if (contentProvider.articles.isEmpty) {
+      //  contentProvider.loadArticles(); // REMOVED
+      // }
+
+      // Load coaches separately as before
       final coachProvider = Provider.of<CoachProvider>(context, listen: false);
       coachProvider.loadCoaches();
     });
@@ -180,8 +180,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               // Focus Areas (Modules) Section - Now third
               _buildModulesSection(),
               
-              // Articles Section - Now last
-              _buildArticlesSection(),
+              // Renamed Articles Section to Trending Courses - Now last
+              _buildTrendingCoursesSection(),
               
               const SizedBox(height: 80), // Bottom padding
             ]),
@@ -221,10 +221,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AllCoachesScreen()),
-                  );
+                  // TODO: Implement navigation to All Coaches Screen
+                  // Navigator.push(
+                  //   context,
+                  //   MaterialPageRoute(builder: (context) => const AllCoachesScreen()),
+                  // );
+                  log('Navigate to All Coaches');
                 },
                 child: Row(
                   children: [
@@ -319,7 +321,10 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                               ? coach.profileImageUrl
                               : 'https://via.placeholder.com/70',
                           ),
-                          onBackgroundImageError: (_, __) {},
+                          onBackgroundImageError: (exception, stackTrace) {
+                            // Log the error if the image fails to load
+                            print('Error loading coach image for ${coach.name}: $exception');
+                          },
                           backgroundColor: Colors.grey.shade200,
                         ),
                         
@@ -333,51 +338,24 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                             children: [
                               Text(
                                 coach.name,
-                                style: TextStyle(
-                                  fontSize: 18,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: textColor,
+                                  fontSize: 16,
+                                  color: Colors.white,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 coach.title,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontStyle: FontStyle.italic,
-                                  color: isDarkMode ? Colors.white60 : Colors.black45,
-                                ),
                               ),
-                              const SizedBox(height: 12),
-                              // Check if coach has verified badge
-                              if (coach.isVerified)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.blue.shade300, width: 1),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.verified, size: 16, color: Colors.blue.shade300),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Verified',
-                                        style: TextStyle(
-                                          color: Colors.blue.shade300,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -392,79 +370,127 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     );
   }
   
-  Widget _buildArticlesSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
+  Widget _buildTrendingCoursesSection() {
     final contentProvider = Provider.of<ContentProvider>(context);
-    final articles = contentProvider.articles;
-    
-    if (articles.isEmpty) {
-      return const SizedBox.shrink(); // Hide if no articles
+    final courses = contentProvider.courses; // Get all courses
+    final isLoading = contentProvider.isLoading;
+    final error = contentProvider.errorMessage;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    // Handle loading and error states specifically for courses
+    if (isLoading && courses.isEmpty) {
+      return Container(
+        height: 260, // Approx height for course cards
+        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
+      );
+    } 
+
+    if (error != null && courses.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Error loading courses: $error', style: TextStyle(color: Colors.red)),
+      );
     }
-    
+
+    if (courses.isEmpty) {
+      return const SizedBox.shrink(); // No courses to show
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16), // Match padding of other sections
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Articles',
+                'Trending Courses', // UPDATED TITLE
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
               ),
+              // Optional: Add a "View All" button if needed
+              // TextButton(...)
+            ],
+          ),
+        ),
+        // Use horizontal ListView similar to Featured Courses
+        SizedBox(
+          height: 260, // Match height of _buildFeaturedCoursesSection
+          child: ListView.builder(
+            padding: const EdgeInsets.only(left: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: courses.length, // Show all courses
+            itemBuilder: (context, index) {
+              final course = courses[index];
+              // Reuse the existing course card builder from Featured Courses
+              return _buildCourseCard(course); 
+            },
+          ),
+        ),
+         const SizedBox(height: 24), // Add spacing after the section
+      ],
+    );
+  }
+  
+  Widget _buildArticlesSection() {
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final articles = contentProvider.articles;
+    final isLoading = contentProvider.isLoading;
+    final error = contentProvider.errorMessage;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+
+    if (isLoading && articles.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    } 
+
+    if (error != null && articles.isEmpty) {
+      return Center(child: Text('Error loading articles: $error', style: TextStyle(color: Colors.red)));
+    }
+
+    if (articles.isEmpty) {
+      return const SizedBox.shrink(); // No articles to show
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Latest Articles',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ArticlesListScreen(),
-                    ),
-                  );
+                  Navigator.of(context).pushNamed('/articles-list');
                 },
-                child: Row(
-                  children: [
-                    Text(
-                      'View all',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: themeProvider.accentColor,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: themeProvider.accentColor,
-                    ),
-                  ],
-                ),
+                child: Text('See All', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
               ),
             ],
           ),
         ),
-        SizedBox(
-          height: 280,
-          child: ListView.builder(
-            padding: const EdgeInsets.only(left: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: articles.length > 5 ? 5 : articles.length,
-            itemBuilder: (context, index) {
-              final article = articles[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: ArticleCard(
-                  article: article,
-                ),
-              );
-            },
-          ),
+        // Use ListView.builder for potentially many articles
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(), // Disable scrolling within the parent scroll view
+          itemCount: articles.length > 3 ? 3 : articles.length, // Show max 3 articles here
+          itemBuilder: (context, index) {
+            final article = articles[index];
+            return ArticleCard(article: article); // Correctly using the imported ArticleCard widget
+          },
         ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -497,12 +523,14 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AllCoursesScreen(),
-                    ),
-                  );
+                  // TODO: Implement navigation to All Courses Screen
+                  // Navigator.push(
+                  //   context,
+                  //   MaterialPageRoute(
+                  //     builder: (context) => const AllCoursesScreen(),
+                  //   ),
+                  // );
+                  log('Navigate to All Courses');
                 },
                 child: Row(
                   children: [
@@ -713,7 +741,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final themeProvider = Provider.of<ThemeProvider>(context);
     final textColor = Theme.of(context).colorScheme.onBackground;
     final contentProvider = Provider.of<ContentProvider>(context);
-    final modules = contentProvider.getModules();
+    final modules = contentProvider.courses.expand((course) => course.modules).toList();
     
     if (modules.isEmpty) {
       return const SizedBox.shrink(); // Hide if no modules
@@ -737,12 +765,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AllModulesScreen(),
-                    ),
-                  );
+                  // TODO: Implement navigation to All Modules Screen
+                  // Navigator.push(
+                  //   context,
+                  //   MaterialPageRoute(builder: (context) => const AllModulesScreen()),
+                  // );
+                  log('Navigate to All Modules');
                 },
                 child: Row(
                   children: [

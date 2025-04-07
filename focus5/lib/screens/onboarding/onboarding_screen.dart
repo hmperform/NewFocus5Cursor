@@ -5,7 +5,6 @@ import 'package:confetti/confetti.dart';
 import 'dart:math' as Math;
 
 import '../../providers/auth_provider.dart';
-import '../../constants/dummy_data.dart';
 import '../auth/signup_screen.dart';
 import 'mindset_assessment_screen.dart';
 import 'sport_selection_screen.dart';
