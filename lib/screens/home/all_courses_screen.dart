@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
                   // Course meta info (lessons, duration)
                   Row(
                     children: [

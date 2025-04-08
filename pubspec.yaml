@@ -1,4 +1,16 @@
+name: focus5
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: '^3.6.0' # Added SDK constraint
+  flutter: ">=3.0.0"
+
 # Firebase
 firebase_core: ^2.15.0
 firebase_auth: ^4.7.2
-cloud_firestore: ^4.8.4 
+cloud_firestore: ^4.8.4
+transparent_image: ^2.0.0 # For FadeInImage placeholder
+
+# ... (dev_dependencies) 

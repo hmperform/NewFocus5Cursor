@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:focus5/models/content_models.dart';
+import 'package:focus5/providers/theme_provider.dart';
+import 'package:focus5/screens/home/course_detail_screen.dart';
 import 'package:transparent_image/transparent_image.dart';
-import '../../models/content_models.dart';
-import '../../providers/theme_provider.dart';
-import '../../screens/home/course_detail_screen.dart';
 
 class CourseGallery extends StatefulWidget {
-  final List<Course> courses;
   final String title;
+  final List<Course> courses;
   final VoidCallback? onViewAllPressed;
 
   const CourseGallery({
     Key? key,
-    required this.courses,
     required this.title,
+    required this.courses,
     this.onViewAllPressed,
   }) : super(key: key);
 
   @override
-  State<CourseGallery> createState() => _CourseGalleryState();
+  _CourseGalleryState createState() => _CourseGalleryState();
 }
 
 class _CourseGalleryState extends State<CourseGallery> {
@@ -28,20 +28,20 @@ class _CourseGalleryState extends State<CourseGallery> {
   @override
   void initState() {
     super.initState();
-    _pageController.addListener(_onPageChanged);
+    _pageController.addListener(() {
+      int next = _pageController.page!.round();
+      if (_currentPage != next) {
+        setState(() {
+          _currentPage = next;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
-    _pageController.removeListener(_onPageChanged);
     _pageController.dispose();
     super.dispose();
-  }
-
-  void _onPageChanged() {
-    setState(() {
-      _currentPage = _pageController.page?.round() ?? 0;
-    });
   }
 
   @override
@@ -64,9 +64,9 @@ class _CourseGalleryState extends State<CourseGallery> {
               Text(
                 widget.title,
                 style: TextStyle(
+                  color: textColor,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: textColor,
                 ),
               ),
               if (widget.onViewAllPressed != null)
@@ -75,17 +75,17 @@ class _CourseGalleryState extends State<CourseGallery> {
                   child: Row(
                     children: [
                       Text(
-                        'View all',
+                        'View All',
                         style: TextStyle(
-                          fontSize: 14,
                           color: themeProvider.accentColor,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(width: 4),
                       Icon(
                         Icons.arrow_forward,
-                        size: 16,
                         color: themeProvider.accentColor,
+                        size: 16,
                       ),
                     ],
                   ),
@@ -94,28 +94,26 @@ class _CourseGalleryState extends State<CourseGallery> {
           ),
         ),
         SizedBox(
-          height: 350,
+          height: 350, // Adjusted height for course card content
           child: PageView.builder(
             controller: _pageController,
             itemCount: widget.courses.length,
             itemBuilder: (context, index) {
               final course = widget.courses[index];
-              final isActive = index == _currentPage;
-              
+              final bool isActive = index == _currentPage;
+              final double scale = isActive ? 1.0 : 0.9;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutQuint,
-                margin: EdgeInsets.only(
-                  right: 15,
-                  top: isActive ? 0 : 10,
-                  bottom: isActive ? 0 : 10,
-                ),
+                margin: EdgeInsets.only(right: 8, left: 8, top: isActive ? 0 : 15, bottom: isActive ? 0 : 15),
+                transform: Matrix4.identity()..scale(scale),
+                transformAlignment: Alignment.center,
                 child: _buildCourseCard(context, course),
               );
             },
           ),
         ),
-        // Page indicator dots
+        // Dots Indicator
         if (widget.courses.length > 1)
           Padding(
             padding: const EdgeInsets.only(top: 16),
@@ -124,14 +122,14 @@ class _CourseGalleryState extends State<CourseGallery> {
               children: List.generate(
                 widget.courses.length,
                 (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
+                  duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   height: 8,
-                  width: index == _currentPage ? 24 : 8,
+                  width: _currentPage == index ? 24 : 8,
                   decoration: BoxDecoration(
-                    color: index == _currentPage
+                    color: _currentPage == index
                         ? themeProvider.accentColor
-                        : themeProvider.accentColor.withOpacity(0.3),
+                        : Colors.grey.shade400,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -144,18 +142,15 @@ class _CourseGalleryState extends State<CourseGallery> {
 
   Widget _buildCourseCard(BuildContext context, Course course) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onSurface;
-    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onSurface; // Use onSurface for better contrast
+    // final secondaryTextColor = themeProvider.secondaryTextColor;
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => CourseDetailScreen(
-              courseId: course.id,
-              course: course,
-            ),
+            builder: (context) => CourseDetailScreen(courseId: course.id),
           ),
         );
       },
@@ -174,33 +169,33 @@ class _CourseGalleryState extends State<CourseGallery> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Course image with gradient overlay
+            // Image Section
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(24),
                 topRight: Radius.circular(24),
               ),
               child: Stack(
+                alignment: Alignment.bottomLeft,
                 children: [
-                  // Image
                   SizedBox(
-                    height: 180,
+                    height: 180, // Fixed height for image area
                     width: double.infinity,
                     child: FadeInImage.memoryNetwork(
                       placeholder: kTransparentImage,
-                      image: course.thumbnailUrl,
+                      image: course.thumbnailUrl, // Use thumbnailUrl
                       fit: BoxFit.cover,
+                      height: 180,
                       imageErrorBuilder: (context, error, stackTrace) {
                         return Container(
                           height: 180,
-                          width: double.infinity,
-                          color: Colors.grey.shade200,
+                          color: Colors.grey.shade200, // Placeholder color
                           child: const Icon(Icons.image, color: Colors.grey, size: 40),
                         );
                       },
                     ),
                   ),
-                  // Gradient overlay
+                  // Gradient overlay for text visibility
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
@@ -211,22 +206,22 @@ class _CourseGalleryState extends State<CourseGallery> {
                             Colors.transparent,
                             Colors.black.withOpacity(0.7),
                           ],
-                          stops: const [0.6, 1.0],
                         ),
                       ),
                     ),
                   ),
-                  // Course title on the image
+                  // Course Title on Image
                   Positioned(
-                    bottom: 12,
-                    left: 12,
-                    right: 12,
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
                     child: Text(
                       course.title,
                       style: const TextStyle(
-                        fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        fontSize: 20,
                         color: Colors.white,
+                        shadows: [Shadow(blurRadius: 2, color: Colors.black54)],
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -235,19 +230,19 @@ class _CourseGalleryState extends State<CourseGallery> {
                 ],
               ),
             ),
-            
+            // Info Section
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Creator info
+                  // Creator Row
                   Row(
                     children: [
                       ClipOval(
-                        child: course.creatorImageUrl.isNotEmpty 
+                        child: course.creatorImageUrl.isNotEmpty // Use creatorImageUrl
                             ? Image.network(
-                                course.creatorImageUrl,
+                                course.creatorImageUrl, // Use creatorImageUrl
                                 width: 24,
                                 height: 24,
                                 fit: BoxFit.cover,
@@ -255,7 +250,7 @@ class _CourseGalleryState extends State<CourseGallery> {
                                   return Container(
                                     width: 24,
                                     height: 24,
-                                    color: accentColor,
+                                    color: Colors.grey.shade300,
                                     child: const Icon(Icons.person, color: Colors.white, size: 16),
                                   );
                                 },
@@ -263,75 +258,51 @@ class _CourseGalleryState extends State<CourseGallery> {
                             : Container(
                                 width: 24,
                                 height: 24,
-                                color: accentColor,
+                                color: Colors.grey.shade300,
                                 child: const Icon(Icons.person, color: Colors.white, size: 16),
                               ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        course.creatorName,
+                        course.creatorName, // Use creatorName
                         style: TextStyle(
-                          fontSize: 14,
-                          color: textColor.withOpacity(0.8),
+                          color: textColor,
+                          fontSize: 13,
                         ),
                       ),
                     ],
                   ),
-                  
                   const SizedBox(height: 12),
-                  
-                  // Course meta info (lessons, duration)
+                  // Lessons and Duration Row
                   Row(
                     children: [
-                      Icon(
-                        Icons.play_circle_outline,
-                        size: 16,
-                        color: textColor.withOpacity(0.7),
-                      ),
+                      Icon(Icons.play_circle_outline, size: 16, color: textColor.withOpacity(0.7)),
                       const SizedBox(width: 6),
-                      Text(
-                        '${course.lessonsList.length} lessons',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: textColor.withOpacity(0.7),
-                        ),
-                      ),
+                      Text('${course.lessonsList.length} Lessons', style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 12)), // Use lessonsList
                       const SizedBox(width: 16),
-                      Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: textColor.withOpacity(0.7),
-                      ),
+                      Icon(Icons.access_time, size: 16, color: textColor.withOpacity(0.7)),
                       const SizedBox(width: 6),
-                      Text(
-                        '${course.duration} mins',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: textColor.withOpacity(0.7),
-                        ),
-                      ),
+                      Text('${course.durationMinutes} mins', style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 12)), // Use durationMinutes
                     ],
                   ),
-                  
                   const SizedBox(height: 12),
-                  
-                  // Focus areas tags
-                  if (course.focusAreas.isNotEmpty)
+                  // Tags Row (optional)
+                  if (course.tags.isNotEmpty)
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: course.focusAreas.take(2).map((area) {
+                      children: course.tags.take(3).map((tag) {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: accentColor.withOpacity(0.1),
+                            color: themeProvider.accentColor.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            area,
+                            tag,
                             style: TextStyle(
-                              fontSize: 12,
-                              color: accentColor,
+                              color: themeProvider.accentColor,
+                              fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
