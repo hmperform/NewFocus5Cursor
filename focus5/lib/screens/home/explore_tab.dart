@@ -6,7 +6,7 @@ import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/coach_provider.dart';
 import 'package:focus5/providers/content_provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
-import 'package:focus5/screens/article/article_detail_screen.dart';
+import '../../screens/home/article_detail_screen.dart';
 import 'package:focus5/screens/coach/coach_profile_screen.dart';
 import 'package:focus5/screens/explore/focus_area_courses_screen.dart';
 import 'package:focus5/screens/home/course_detail_screen.dart';
@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 import '../../providers/user_provider.dart';
 import '../../constants/theme.dart';
@@ -22,6 +23,8 @@ import 'articles_list_screen.dart';
 import '../../services/paywall_service.dart';
 import '../explore/focus_area_courses_screen.dart';
 import '../../widgets/article/article_card.dart';
+import 'all_coaches_screen.dart';
+import '../../utils/image_utils.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -214,24 +217,28 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       ];
     }
     
-    // Get section order from app config, with fallback to default
+    // Always show coaches first, regardless of config
+    final List<Widget> orderedSections = [
+      _buildCoachesSection(),
+      const SizedBox(height: 24), // Add spacing after coaches
+    ];
+    
+    // Get section order from app config for other sections
     final List<dynamic> sectionOrder = 
         _appConfig['section_order'] as List<dynamic>? ?? 
-        ['focus_areas', 'featured_courses', 'articles', 'trending_courses', 'coaches'];
+        ['focus_areas', 'featured_courses', 'articles', 'trending_courses'];
     
-    // Map section IDs to their builder methods
+    // Map section IDs to their builder methods (excluding coaches since it's already added)
     final Map<String, Widget> sectionWidgets = {
       'focus_areas': _buildModulesSection(),
       'featured_courses': _buildFeaturedCoursesSection(),
       'articles': _buildArticlesSection(),
       'trending_courses': _buildTrendingCoursesSection(),
-      'coaches': _buildCoachesSection(),
     };
     
-    // Create ordered list of sections based on config
-    final orderedSections = <Widget>[];
+    // Add remaining sections in configured order
     for (final sectionId in sectionOrder) {
-      if (sectionWidgets.containsKey(sectionId)) {
+      if (sectionId != 'coaches' && sectionWidgets.containsKey(sectionId)) {
         orderedSections.add(sectionWidgets[sectionId]!);
       }
     }
@@ -243,17 +250,15 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildCoachesSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    
-    // Use CoachProvider instead of directly querying Firestore
     final coachProvider = Provider.of<CoachProvider>(context);
     final coaches = coachProvider.coaches;
-    final isLoading = coachProvider.isLoading;
-    final error = coachProvider.error;
-    
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    if (coaches.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -263,21 +268,21 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Top Coaches',
+                'Featured Coaches',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 24, // Larger font size
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
               ),
               TextButton(
                 onPressed: () {
-                  // TODO: Implement navigation to All Coaches Screen
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(builder: (context) => const AllCoachesScreen()),
-                  // );
-                  log('Navigate to All Coaches');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllCoachesScreen(),
+                    ),
+                  );
                 },
                 child: Row(
                   children: [
@@ -300,109 +305,74 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             ],
           ),
         ),
-        
-        if (isLoading)
-          SizedBox(
-            height: 120,
-            child: Center(
-              child: CircularProgressIndicator(
-                color: themeProvider.accentColor,
-              ),
-            ),
-          )
-        else if (error != null)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Error loading coaches: $error',
-              style: TextStyle(color: Colors.red.shade300),
-            ),
-          )
-        else if (coaches.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'No coaches available at this time',
-              style: TextStyle(color: textColor.withOpacity(0.7)),
-            ),
-          )
-        else
-          SizedBox(
-            height: 150,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(left: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: coaches.length,
-              itemBuilder: (context, index) {
-                final coach = coaches[index];
-                
-                return GestureDetector(
+        SizedBox(
+          height: 280, // Increased height for larger coach cards
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: coaches.length,
+            itemBuilder: (context, index) {
+              final coach = coaches[index];
+              return Container(
+                width: MediaQuery.of(context).size.width * 0.5, // Changed from 0.7 to 0.5
+                margin: const EdgeInsets.only(right: 16),
+                child: GestureDetector(
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => CoachProfileScreen(
-                          coachId: coach.id,
-                        ),
+                        builder: (context) => CoachProfileScreen(coachId: coach.id),
                       ),
                     );
                   },
-                  child: Container(
-                    width: 300,
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Coach image
-                        CircleAvatar(
-                          radius: 35,
-                          backgroundImage: NetworkImage(
-                            coach.profileImageUrl.isNotEmpty
-                              ? coach.profileImageUrl
-                              : 'https://via.placeholder.com/70',
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16),
                           ),
-                          onBackgroundImageError: (exception, stackTrace) {
-                            // Log the error if the image fails to load
-                            print('Error loading coach image for ${coach.name}: $exception');
-                          },
-                          backgroundColor: Colors.grey.shade200,
+                          child: Image.network(
+                            coach.profileImageUrl,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 180,
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.person, size: 50),
+                              );
+                            },
+                          ),
                         ),
-                        
-                        const SizedBox(width: 16),
-                        
-                        // Coach info
-                        Expanded(
+                        Padding(
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 coach.name,
-                                style: const TextStyle(
+                                style: TextStyle(
+                                  fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Colors.white,
+                                  color: textColor,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
                                 coach.title,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: textColor.withOpacity(0.7),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -413,10 +383,11 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                       ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
+        ),
       ],
     );
   }
@@ -494,6 +465,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final isLoading = contentProvider.isLoading;
     final error = contentProvider.errorMessage;
     final textColor = Theme.of(context).colorScheme.onBackground;
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     if (isLoading && articles.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -528,20 +500,186 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                 onPressed: () {
                   Navigator.of(context).pushNamed('/articles-list');
                 },
-                child: Text('See All', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                child: Text('See All', style: TextStyle(color: themeProvider.accentColor)),
               ),
             ],
           ),
         ),
-        // Use ListView.builder for potentially many articles
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(), // Disable scrolling within the parent scroll view
-          itemCount: articles.length > 3 ? 3 : articles.length, // Show max 3 articles here
-          itemBuilder: (context, index) {
-            final article = articles[index];
-            return ArticleCard(article: article); // Correctly using the imported ArticleCard widget
-          },
+        // Replace vertical ListView with horizontal SizedBox and ListView
+        SizedBox(
+          height: 300, // Adjusted height for the article cards
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: articles.length,
+            itemBuilder: (context, index) {
+              final article = articles[index];
+              
+              // Create a card with proper sizing for horizontal scrolling
+              final formattedDate = DateFormat('MMM d, yyyy').format(article.publishedDate);
+              final userProvider = Provider.of<UserProvider>(context);
+              final isCompleted = userProvider.completedArticleIds.contains(article.id);
+              
+              return GestureDetector(
+                onTap: () async {
+                  // Check if user has access or show paywall
+                  final paywallService = PaywallService();
+                  final hasAccess = await paywallService.showPaywallIfNeeded(
+                    context,
+                    source: 'article',
+                  );
+                  
+                  // If user has access, navigate to article
+                  if (hasAccess && context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ArticleDetailScreen(articleId: article.id),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  width: 280,
+                  margin: const EdgeInsets.only(right: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(12),
+                    border: isCompleted 
+                        ? Border.all(color: Colors.green, width: 2)
+                        : null,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Article image
+                      Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              topRight: Radius.circular(12),
+                            ),
+                            child: ImageUtils.networkImageWithFallback(
+                              imageUrl: article.thumbnailUrl,
+                              width: double.infinity,
+                              height: 160,
+                              fit: BoxFit.cover,
+                              backgroundColor: const Color(0xFF2A2A2A),
+                              errorColor: Colors.white54,
+                            ),
+                          ),
+                          if (isCompleted)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      
+                      // Article info
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title
+                            Text(
+                              article.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Author info
+                            Row(
+                              children: [
+                                ImageUtils.avatarWithFallback(
+                                  imageUrl: article.authorImageUrl,
+                                  radius: 12,
+                                  name: article.authorName,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    article.authorName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Date and read time
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 12,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  formattedDate,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Icon(
+                                  Icons.access_time,
+                                  size: 12,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${article.readTimeMinutes} min read',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ),
         // Add more bottom spacing
         const SizedBox(height: 40),

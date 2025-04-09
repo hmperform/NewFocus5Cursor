@@ -13,34 +13,37 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase - Assuming these are the versions you intend to use
-  firebase_core: ^2.15.0
-  firebase_auth: ^4.7.2
-  cloud_firestore: ^4.8.4
-  firebase_storage: ^11.2.5 # Added based on FirebaseStorageService usage
+  # Firebase (Updated Versions)
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.20.0
+  cloud_firestore: ^4.17.5
+  firebase_storage: ^11.7.7
+  # Removed firebase_auth_web - handled by firebase_auth
+  # Removed firebase_storage_web - handled by firebase_storage
 
   # State Management
-  provider: ^6.0.5 # Added based on Provider usage
+  provider: ^6.0.5 # Consider updating if needed
 
   # UI/UX
-  cupertino_icons: ^1.0.2 # Standard for iOS icons
-  transparent_image: ^2.0.0 # For FadeInImage placeholder
+  cupertino_icons: ^1.0.2
+  transparent_image: ^2.0.0
+  url_launcher: ^6.0.0 # Add url_launcher if not present or update
 
   # Video
-  video_player: ^2.7.0 # Added based on BasicVideoService usage
+  video_player: ^2.7.0 # Consider updating if needed
 
   # Storage
-  shared_preferences: ^2.2.0 # Added based on BasicVideoService usage
+  shared_preferences: ^2.2.0 # Consider updating if needed
 
   # Other utilities
-  uuid: ^4.0.0 # For generating unique IDs
-  path: ^1.8.3 # For path manipulation (used in FirebaseStorageService)
-  flutter_app_badger: ^1.5.0 # Corrected package name for badge functionality
+  uuid: ^4.0.0
+  path: ^1.8.3 # Consider updating if needed
+  flutter_app_badger: ^1.5.0 # This package is discontinued, consider replacement
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0 # Recommended lints
+  flutter_lints: ^3.0.0 # Consider updating
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

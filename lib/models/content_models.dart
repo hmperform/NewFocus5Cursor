@@ -15,7 +15,13 @@ class Course {
   final DateTime createdAt;
   final bool universityExclusive;
   final List<Lesson> _lessons;
+  final List<String> learningPoints;
+  final List<String> universityCodes;
 
+  String get creatorName => coachName;
+  String get creatorId => coachId;
+  String get creatorImageUrl => coachImageUrl;
+  
   Course({
     required this.id,
     required this.title,
@@ -33,10 +39,54 @@ class Course {
     required this.createdAt,
     required this.universityExclusive,
     List<Lesson>? lessons,
+    this.learningPoints = const [],
+    this.universityCodes = const [],
   }) : _lessons = lessons ?? [];
 
   List<Lesson> get lessons => _lessons;
   List<Lesson> get lessonsList => _lessons;
+
+  Course copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? imageUrl,
+    String? coachId,
+    String? coachName,
+    String? coachImageUrl,
+    List<String>? tags,
+    List<String>? focusAreas,
+    int? durationMinutes,
+    int? xpReward,
+    bool? featured,
+    bool? premium,
+    DateTime? createdAt,
+    bool? universityExclusive,
+    List<Lesson>? lessonsList,
+    List<String>? learningPoints,
+    List<String>? universityCodes,
+  }) {
+    return Course(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      coachId: coachId ?? this.coachId,
+      coachName: coachName ?? this.coachName,
+      coachImageUrl: coachImageUrl ?? this.coachImageUrl,
+      tags: tags ?? this.tags,
+      focusAreas: focusAreas ?? this.focusAreas,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      xpReward: xpReward ?? this.xpReward,
+      featured: featured ?? this.featured,
+      premium: premium ?? this.premium,
+      createdAt: createdAt ?? this.createdAt,
+      universityExclusive: universityExclusive ?? this.universityExclusive,
+      lessons: lessonsList ?? this._lessons,
+      learningPoints: learningPoints ?? this.learningPoints,
+      universityCodes: universityCodes ?? this.universityCodes,
+    );
+  }
 
   factory Course.empty() => Course(
     id: '',
@@ -55,6 +105,8 @@ class Course {
     createdAt: DateTime.now(),
     universityExclusive: false,
     lessons: [],
+    learningPoints: [],
+    universityCodes: [],
   );
 
   // ... rest of the class stays the same ...
@@ -199,4 +251,66 @@ class Lesson {
   }
 
   // ... rest of the class stays the same ...
-} 
+}
+
+enum MediaType { article, video, audio, podcast, infographic }
+
+class MediaItem {
+  final String id;
+  final String title;
+  final String description;
+  final String imageUrl;
+  final String creatorId;
+  final String creatorName;
+  final String creatorImageUrl;
+  final List<String> focusAreas;
+  final List<String> tags;
+  final DateTime createdAt;
+  final int durationMinutes;
+  final bool premium;
+  final MediaType type;
+  final String contentUrl;
+  final List<String> universityCodes;
+  
+  MediaItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.imageUrl,
+    required this.creatorId,
+    required this.creatorName,
+    required this.creatorImageUrl,
+    required this.focusAreas,
+    required this.tags,
+    required this.createdAt,
+    required this.durationMinutes,
+    required this.premium,
+    required this.type,
+    required this.contentUrl,
+    this.universityCodes = const [],
+  });
+
+  factory MediaItem.fromJson(Map<String, dynamic> json, String id, MediaType type) {
+    return MediaItem(
+      id: id,
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      imageUrl: json['imageUrl'] ?? '',
+      creatorId: json['creatorId'] ?? json['authorId'] ?? '',
+      creatorName: json['creatorName'] ?? json['authorName'] ?? '',
+      creatorImageUrl: json['creatorImageUrl'] ?? json['authorImageUrl'] ?? '',
+      focusAreas: List<String>.from(json['focusAreas'] ?? []),
+      tags: List<String>.from(json['tags'] ?? []),
+      createdAt: json['createdAt'] is DateTime 
+          ? json['createdAt'] 
+          : DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
+      durationMinutes: json['durationMinutes'] ?? json['readTimeMinutes'] ?? 0,
+      premium: json['premium'] ?? false,
+      type: type,
+      contentUrl: json['contentUrl'] ?? json['videoUrl'] ?? json['audioUrl'] ?? '',
+      universityCodes: List<String>.from(json['universityCodes'] ?? []),
+    );
+  }
+}
+
+enum LessonType { video, audio, text, quiz, other } 

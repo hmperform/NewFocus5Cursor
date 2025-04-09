@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import '../models/content_models.dart';
@@ -390,6 +391,20 @@ class ContentProvider with ChangeNotifier {
       _errorMessage = 'Failed to load media content: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<List<Course>> getAllCourses() async {
+    try {
+      // Optionally re-fetch or return cached if already loaded
+      if (_courses.isEmpty) {
+        await loadCourses();
+      }
+      return _courses;
+    } catch (e) {
+      log('Error in getAllCourses: $e');
+      _errorMessage = 'Failed to retrieve courses: $e';
+      return []; // Return empty list on error
     }
   }
 } 

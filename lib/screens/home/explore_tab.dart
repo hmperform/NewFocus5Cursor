@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer';
+import 'package:flutter/foundation.dart';
 
 import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
@@ -25,6 +26,7 @@ import '../explore/focus_area_courses_screen.dart';
 import '../../widgets/custom_button.dart';
 import 'coach_detail_screen.dart';
 import '../../widgets/coach/coach_list_tile.dart';
+import 'package:focus5/screens/home/coach_profile_screen.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);

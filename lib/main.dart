@@ -6,6 +6,7 @@ import 'providers/auth_provider.dart';
 import 'providers/coach_provider.dart';
 import 'providers/content_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/theme_provider.dart';
 import 'routes.dart';
 import 'theme.dart';
 
@@ -29,11 +30,14 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => CoachProvider()),
         ChangeNotifierProvider(create: (_) => ContentProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: MaterialApp(
         title: 'Focus5',
         theme: appTheme,
         routes: routes,
+        onGenerateRoute: generateRoute,
+        initialRoute: '/',
         debugShowCheckedModeBanner: false,
       ),
     );

@@ -553,15 +553,53 @@ class FirebaseContentService {
   // Get all articles
   Future<List<Article>> getArticles({String? universityCode}) async {
     try {
+      debugPrint('Fetching articles from Firestore...');
       final QuerySnapshot snapshot = await _firestore.collection('articles').get();
+      debugPrint('Found ${snapshot.docs.length} articles in Firestore');
       
-      return snapshot.docs.map((doc) {
+      final articles = snapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
         data = _sanitizeDocumentData(data);
         data['id'] = doc.id;
         
+        // Ensure required fields are present
+        if (data['publishedDate'] == null) {
+          data['publishedDate'] = DateTime.now().toIso8601String();
+        }
+        if (data['authorImageUrl'] == null) {
+          data['authorImageUrl'] = '';
+        }
+        if (data['thumbnailUrl'] == null) {
+          data['thumbnailUrl'] = data['imageUrl'] ?? '';
+        }
+        if (data['tags'] == null) {
+          data['tags'] = [];
+        }
+        if (data['focusAreas'] == null) {
+          data['focusAreas'] = [];
+        }
+        if (data['universityExclusive'] == null) {
+          data['universityExclusive'] = false;
+        }
+        if (data['universityAccess'] == null) {
+          data['universityAccess'] = [];
+        }
+        
+        debugPrint('Parsing article: ${data['title']}');
         return Article.fromJson(data);
       }).toList();
+      
+      // Filter based on university access if needed
+      if (universityCode != null) {
+        final filteredArticles = articles.where((article) {
+          if (!article.universityExclusive) return true;
+          return article.universityAccess?.contains(universityCode) ?? false;
+        }).toList();
+        debugPrint('Filtered to ${filteredArticles.length} articles for university $universityCode');
+        return filteredArticles;
+      }
+      
+      return articles;
     } catch (e) {
       debugPrint('Error getting articles: $e');
       return [];

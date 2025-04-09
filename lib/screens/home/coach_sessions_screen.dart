@@ -40,8 +40,8 @@ class _CoachSessionsScreenState extends State<CoachSessionsScreen> {
                     shape: BoxShape.circle,
                     image: DecorationImage(
                       fit: BoxFit.cover,
-                      image: widget.coach.imageUrl.isNotEmpty
-                          ? NetworkImage(widget.coach.imageUrl)
+                      image: widget.coach.profileImageUrl.isNotEmpty
+                          ? NetworkImage(widget.coach.profileImageUrl)
                           : const AssetImage('assets/images/default_avatar.png') as ImageProvider,
                     ),
                   ),

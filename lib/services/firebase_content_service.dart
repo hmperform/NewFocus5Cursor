@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/content_models.dart';
+import '../models/coach_model.dart'; // Assuming Coach model is defined here
 
 // In the createCourse method, update to create modules as a subcollection
 

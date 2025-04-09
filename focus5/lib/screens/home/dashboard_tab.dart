@@ -345,7 +345,10 @@ class _DashboardTabState extends State<DashboardTab> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => CourseDetailScreen(courseId: course.id),
+                        builder: (context) => CourseDetailScreen(
+                          courseId: course.id,
+                          course: course,
+                        ),
                       ),
                     );
                   },
@@ -447,6 +450,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       MaterialPageRoute(
                         builder: (context) => CourseDetailScreen(
                           courseId: courses[0].id,
+                          course: courses[0],
                         ),
                       ),
                     );
@@ -467,6 +471,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       MaterialPageRoute(
                         builder: (context) => CourseDetailScreen(
                           courseId: courses[1].id,
+                          course: courses[1],
                         ),
                       ),
                     );
@@ -496,6 +501,7 @@ class _DashboardTabState extends State<DashboardTab> {
           MaterialPageRoute(
             builder: (context) => CourseDetailScreen(
               courseId: 'course1', // Replace with actual course ID when available
+              course: null,
             ),
           ),
         );
@@ -1104,6 +1110,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       MaterialPageRoute(
                         builder: (context) => CourseDetailScreen(
                           courseId: course.id,
+                          course: course,
                         ),
                       ),
                     );

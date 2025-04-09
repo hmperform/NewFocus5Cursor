@@ -43,8 +43,8 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> {
                 decoration: BoxDecoration(
                   image: DecorationImage(
                     fit: BoxFit.cover,
-                    image: _coach.imageUrl.isNotEmpty
-                        ? NetworkImage(_coach.imageUrl)
+                    image: _coach.profileImageUrl.isNotEmpty
+                        ? NetworkImage(_coach.profileImageUrl)
                         : const AssetImage('assets/images/default_coach_header.png') as ImageProvider,
                   ),
                 ),

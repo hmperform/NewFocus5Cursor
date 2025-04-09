@@ -14,15 +14,9 @@ class CoachDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fetch coach details using the provider
-    // Note: Provider.of might not be ideal here if the coach data isn't 
-    // already loaded or if you need to handle loading/error states.
-    // Consider using FutureBuilder or Consumer with a method in CoachProvider 
-    // that specifically fetches a single coach.
     final coachProvider = Provider.of<CoachProvider>(context, listen: false);
     
-    // Using FutureBuilder to handle async loading of coach details
-    return FutureBuilder<CoachModel?>(
+    return FutureBuilder<Map<String, dynamic>?>(
       future: coachProvider.getCoachById(coachId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -38,7 +32,7 @@ class CoachDetailScreen extends StatelessWidget {
           );
         }
 
-        final CoachModel coach = snapshot.data!;
+        final Map<String, dynamic> coach = snapshot.data!;
 
         // TODO: Fetch related content (courses, media) based on coach.id
         final courses = []; 
@@ -53,20 +47,24 @@ class CoachDetailScreen extends StatelessWidget {
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
                   background: CoachProfileHeader(
-                    name: coach.name,
-                    title: coach.title,
-                    imageUrl: coach.imageUrl,
-                    bio: 'TODO: Fetch bio',
-                    specializations: [],
+                    name: coach['name'] ?? '',
+                    title: coach['title'] ?? '',
+                    imageUrl: coach['profileImageUrl'] ?? '',
+                    bio: coach['bio'] ?? 'Bio not available',
+                    specializations: List<String>.from(coach['specializations'] ?? []),
                   ),
                 ),
               ),
               SliverList(
                 delegate: SliverChildListDelegate([
                   // Placeholder sections
-                  const ListTile(title: Text('Coach's Courses')), 
+                  const ListTile(
+                    title: Text("Coach\'s Courses"),
+                  ), 
                   // TODO: Display courses list using `courses`
-                  const ListTile(title: Text('Media by Coach')), 
+                  const ListTile(
+                    title: Text("Media by Coach"),
+                  ), 
                   // TODO: Display media list using `mediaItems`
                   const SizedBox(height: 20), // Add some padding
                 ]),

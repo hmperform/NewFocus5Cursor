@@ -232,14 +232,21 @@ class ContentProvider with ChangeNotifier {
   // Article methods
   
   Future<void> loadArticles() async {
-    if (_articles.isNotEmpty) return;
-    
     try {
+      debugPrint('Loading articles from Firebase...');
+      _isLoading = true;
+      notifyListeners();
+      
       _articles = await _contentService.getArticles(universityCode: _universityCode);
+      debugPrint('Loaded ${_articles.length} articles');
+      
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading articles: $e');
+      _errorMessage = 'Failed to load articles: ${e.toString()}';
       _articles = [];
+      _isLoading = false;
       notifyListeners();
     }
   }

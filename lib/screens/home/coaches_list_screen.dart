@@ -57,7 +57,7 @@ class _CoachesListScreenState extends State<CoachesListScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: NetworkImage(coach.imageUrl),
+                    backgroundImage: NetworkImage(coach.profileImageUrl),
                     onBackgroundImageError: (e, s) => const Icon(Icons.person),
                   ),
                   title: Text(coach.name),

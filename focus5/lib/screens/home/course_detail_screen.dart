@@ -10,6 +10,7 @@ import '../../models/content_models.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/basic_video_helper.dart';
 import '../../services/media_completion_service.dart';
+import '../../services/firebase_content_service.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -22,28 +23,20 @@ class CourseDetailScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<CourseDetailScreen> createState() => _CourseDetailScreenState();
+  _CourseDetailScreenState createState() => _CourseDetailScreenState();
 }
 
 class _CourseDetailScreenState extends State<CourseDetailScreen> {
   int _selectedTabIndex = 0;
   final List<String> _tabs = ['LESSONS', 'OVERVIEW', 'RESOURCES'];
   bool _showDownloadButton = false;
-  Course? _course;
+  late Course _course;
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    
-    // If course was passed in, use it directly
-    if (widget.course != null) {
-      _course = widget.course;
-      _isLoading = false;
-      return;
-    }
-    
-    // Otherwise load the course from provider
     _loadCourse();
   }
   
@@ -53,46 +46,32 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
   
   Future<void> _loadCourse() async {
-    await _loadCourseData();
-  }
+    if (widget.course != null) {
+      setState(() {
+        _course = widget.course!;
+        _isLoading = false;
+      });
+      return;
+    }
 
-  Future<void> _loadCourseData() async {
-    if (!mounted) return;
-    
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Add a small delay to simulate network request
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (!mounted) return;
-    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-    
     try {
-      // Properly await the Future returned by getCourseById
-      final course = await contentProvider.getCourseById(widget.courseId);
-
-      if (mounted) {
+      final course = await FirebaseContentService().getCourseById(widget.courseId);
+      if (course != null) {
         setState(() {
-          _course = course; // This could be null if course not found
+          _course = course;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = 'Course not found';
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _course = null;
-          _isLoading = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading course: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      setState(() {
+        _error = 'Failed to load course: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -116,7 +95,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
     }
 
-    if (_course == null) {
+    if (_error != null) {
       return Scaffold(
         backgroundColor: backgroundColor,
         appBar: AppBar(
@@ -138,7 +117,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Course not found',
+                _error!,
                 style: TextStyle(
                   color: textColor,
                   fontSize: 24,
@@ -168,14 +147,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           onPressed: () {
             // Start the course
             // Navigate to first module
-            if (_course!.modules.isNotEmpty) {
+            if (_course.modules.isNotEmpty) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
-                    lesson: _course!.modules[0],
+                    lesson: _course.modules[0],
                     courseId: widget.courseId,
-                    courseTitle: _course!.title,
+                    courseTitle: _course.title,
                   ),
                 ),
               );
@@ -201,9 +180,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     children: [
                       // Course image
                       Hero(
-                        tag: 'course-image-${_course!.id}',
+                        tag: 'course-image-${_course.id}',
                         child: ImageUtils.networkImageWithFallback(
-                          imageUrl: _course!.thumbnailUrl,
+                          imageUrl: _course.thumbnailUrl,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
@@ -237,7 +216,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             // Course tags
                             Wrap(
                               spacing: 8,
-                              children: _course!.tags.take(3).map((tag) {
+                              children: _course.tags.take(3).map((tag) {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                   decoration: BoxDecoration(
@@ -260,7 +239,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             
                             // Course title
                             Text(
-                              _course!.title,
+                              _course.title,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 28,
@@ -275,13 +254,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             Row(
                               children: [
                                 ImageUtils.avatarWithFallback(
-                                  imageUrl: _course!.creatorImageUrl,
+                                  imageUrl: _course.creatorImageUrl,
                                   radius: 14,
-                                  name: _course!.creatorName,
+                                  name: _course.creatorName,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  _course!.creatorName,
+                                  _course.creatorName,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -337,9 +316,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatItem(Icons.access_time, '${_course!.durationMinutes ~/ 60}h ${_course!.durationMinutes % 60}m', 'Duration'),
-                      _buildStatItem(Icons.menu_book, '${_course!.lessonsList.length}', 'Lessons'),
-                      _buildStatItem(Icons.bolt, '${_course!.xpReward}', 'XP'),
+                      _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
+                      _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
+                      _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
                     ],
                   ),
                 ),
@@ -425,9 +404,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         padding: EdgeInsets.zero, // No bottom padding needed here
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(), // Disable scrolling since parent handles it
-        itemCount: _course!.lessonsList.length,
+        itemCount: _course.lessonsList.length,
         itemBuilder: (context, index) {
-          final lesson = _course!.lessonsList[index];
+          final lesson = _course.lessonsList[index];
           // Check if the lesson is completed using the user provider
           final bool isCompleted = userProvider.completedLessonIds.contains(lesson.id);
           
@@ -456,7 +435,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       builder: (context) => VideoPlayerScreen(
                         lesson: lesson,
                         courseId: widget.courseId,
-                        courseTitle: _course!.title,
+                        courseTitle: _course.title,
                       ),
                     ),
                   );
@@ -659,7 +638,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            _course!.description,
+            _course.description,
             style: TextStyle(
               color: secondaryTextColor,
               fontSize: 16,
@@ -679,10 +658,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           ),
           const SizedBox(height: 16),
           // Dynamically build learning points from the course data
-          if (_course != null && _course!.learningPoints.isNotEmpty)
+          if (_course.learningPoints.isNotEmpty)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: _course!.learningPoints
+              children: _course.learningPoints
                   .map((point) => _buildLearningPoint(point))
                   .toList(),
             )
@@ -710,7 +689,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _course!.focusAreas.map((area) {
+            children: _course.focusAreas.map((area) {
               return Chip(
                 label: Text(area),
                 backgroundColor: surfaceColor,
@@ -749,9 +728,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 Row(
                   children: [
                     ImageUtils.avatarWithFallback(
-                      imageUrl: _course!.creatorImageUrl,
+                      imageUrl: _course.creatorImageUrl,
                       radius: 36,
-                      name: _course!.creatorName,
+                      name: _course.creatorName,
                     ),
                     const SizedBox(width: 20),
                     Expanded(
@@ -759,7 +738,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _course!.creatorName,
+                            _course.creatorName,
                             style: TextStyle(
                               color: textColor,
                               fontSize: 20,

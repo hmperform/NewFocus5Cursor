@@ -11,6 +11,8 @@ import 'coach_detail_screen.dart';
 import 'article_detail_screen.dart';
 import 'audio_player_screen.dart';
 import '../../widgets/course/course_card.dart';
+import '../../models/content_models.dart';
+import '../../widgets/media/media_card.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -29,10 +31,12 @@ void _logError(String message) {
 class _DashboardTabState extends State<DashboardTab> {
   @override
   Widget build(BuildContext context) {
-    // Use Consumers for providers where needed in build methods
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
-
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -61,35 +65,40 @@ class _DashboardTabState extends State<DashboardTab> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 16),
-            _buildDailyStreakSection(context),
-            const SizedBox(height: 24),
-            _buildTodaysVideoSection(context),
-            const SizedBox(height: 24),
-            Consumer<ContentProvider>(
-              builder: (context, contentProvider, _) =>
-                  _buildFeaturedCoursesSection(contentProvider),
-            ),
-            Consumer<ContentProvider>(
-              builder: (context, contentProvider, _) =>
-                  _buildRecentMediaSection(contentProvider),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: Text(
-                'No daily content available today.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+      body: contentProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () => contentProvider.loadInitialContent(),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    _buildDailyStreakSection(context),
+                    const SizedBox(height: 24),
+                    _buildTodaysVideoSection(context),
+                    const SizedBox(height: 24),
+                    Consumer<ContentProvider>(
+                      builder: (context, contentProvider, _) =>
+                          _buildFeaturedCoursesSection(contentProvider),
+                    ),
+                    Consumer<ContentProvider>(
+                      builder: (context, contentProvider, _) =>
+                          _buildRecentMediaSection(contentProvider),
+                    ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: Text(
+                        'No daily content available today.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
     );
   }
 
