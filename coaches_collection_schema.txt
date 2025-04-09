@@ -1,0 +1,91 @@
+// Coaches Collection Schema
+
+/*
+The coaches collection contains detailed coach profiles that are referenced by user documents.
+Regular users can only view coach profiles, but cannot modify them.
+Only admins can create/delete coach profiles, and coaches can only edit their own profiles.
+*/
+
+// Document structure for a coach in the 'coaches' collection
+{
+  // Basic information
+  "id": "coach-001",                  // Match the ID referenced in user.coachRef.id
+  "name": "John Smith",               // Coach's full name
+  "title": "Performance Coach",       // Professional title
+  "bio": "Former athlete with 10+ years of coaching experience...",  // Longer bio
+  "specialties": ["Mental Focus", "Performance Enhancement", "Stress Management"],
+  "education": [
+    {
+      "degree": "M.S. Sports Psychology",
+      "institution": "University of Sport Science",
+      "year": 2010
+    }
+  ],
+  "certifications": [
+    {
+      "name": "Certified Mental Performance Consultant",
+      "organization": "Association for Applied Sport Psychology",
+      "year": 2012
+    }
+  ],
+  
+  // Contact & Media
+  "email": "john.coach@example.com",  // Public contact email
+  "phone": "+1234567890",             // Optional contact phone
+  "socialMedia": {
+    "twitter": "@johncoach",
+    "instagram": "johncoach",
+    "linkedin": "johnsmith-coach"
+  },
+  "website": "https://johnsmithcoaching.com",
+  
+  // Media
+  "profileImageUrl": "https://firebasestorage.googleapis.com/...",  // Profile photo
+  "coverImageUrl": "https://firebasestorage.googleapis.com/...",    // Cover/banner image
+  "introVideoUrl": "https://firebasestorage.googleapis.com/...",    // Intro video URL
+  
+  // Availability
+  "isAcceptingClients": true,         // Whether accepting new clients
+  "availableHours": {
+    "monday": ["9:00-12:00", "14:00-17:00"],
+    "tuesday": ["9:00-12:00", "14:00-17:00"],
+    "wednesday": ["9:00-12:00"],
+    "thursday": ["9:00-12:00", "14:00-17:00"],
+    "friday": ["9:00-12:00", "14:00-17:00"],
+    "saturday": [],
+    "sunday": []
+  },
+  
+  // Experience
+  "yearsExperience": 15,
+  "clientCount": 500,                 // Approx number of clients coached
+  
+  // Content created by this coach
+  "courseIds": ["course-101", "course-202"],  // Courses created by this coach
+  "articleIds": ["article-001", "article-002"],  // Articles written
+  
+  // Administrative
+  "featured": true,                   // If coach should be featured in app
+  "verified": true,                   // If coach credentials are verified
+  "displayOrder": 1,                  // For ordering featured coaches
+  "createdAt": "2025-01-15T10:30:00.000Z",
+  "updatedAt": "2025-03-20T14:45:00.000Z"
+}
+
+// Sample security rules for this collection
+/*
+match /coaches/{coachId} {
+  // Anyone authenticated can read coach profiles
+  allow read: if request.auth != null;
+  
+  // Only admins or the coach themselves can update coach profiles
+  allow update: if request.auth != null && 
+                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true || 
+                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isCoach == true && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coachRef.id == coachId));
+  
+  // Only admins can create or delete coach profiles
+  allow create, delete: if request.auth != null && 
+                           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+}
+*/ 

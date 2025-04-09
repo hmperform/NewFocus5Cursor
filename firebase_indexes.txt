@@ -1,0 +1,66 @@
+// Firebase Indexes for Chat System
+
+// Collection: chats
+// Composite index for finding chats by participant and sorting by last message time
+{
+  "collectionGroup": "chats",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+    { "fieldPath": "lastMessageTime", "order": "DESCENDING" }
+  ]
+}
+
+// Collection: chats
+// Composite index for finding non-group chats by participant
+{
+  "collectionGroup": "chats",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+    { "fieldPath": "isGroupChat", "order": "ASCENDING" }
+  ]
+}
+
+// Collection: messages
+// Composite index for finding messages by chat ID and sorting by timestamp
+{
+  "collectionGroup": "messages",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "chatId", "order": "ASCENDING" },
+    { "fieldPath": "timestamp", "order": "DESCENDING" }
+  ]
+}
+
+// Collection: messages
+// Composite index for finding unread messages by chat ID and sender
+{
+  "collectionGroup": "messages",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "chatId", "order": "ASCENDING" },
+    { "fieldPath": "senderId", "order": "ASCENDING" },
+    { "fieldPath": "isRead", "order": "ASCENDING" }
+  ]
+}
+
+// Collection: users
+// Composite index for searching users by fullName
+{
+  "collectionGroup": "users",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "fullName", "order": "ASCENDING" }
+  ]
+}
+
+// Collection: users
+// Composite index for searching users by username
+{
+  "collectionGroup": "users",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "username", "order": "ASCENDING" }
+  ]
+} 

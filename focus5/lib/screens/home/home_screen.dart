@@ -12,7 +12,7 @@ import '../../services/basic_video_service.dart';
 import '../auth/login_screen.dart';
 import 'dashboard_tab.dart';
 import 'explore_tab.dart';
-import 'dms_tab.dart';
+import '../chat/chat_list_screen.dart';
 import 'profile_tab.dart';
 import 'more_tab.dart';
 import 'media_tab.dart';
@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final List<Widget> _tabs = [
     const DashboardTab(),
     const ExploreTab(),
-    const DMsTab(),
+    const ChatListScreen(),
     const ProfileTab(),
     const MoreTab(),
   ];

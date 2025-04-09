@@ -15,6 +15,9 @@ import 'package:focus5/screens/auth/signup_screen.dart';
 import 'package:focus5/screens/onboarding/profile_setup_screen.dart';
 import 'package:focus5/screens/splash_screen.dart';
 import 'package:focus5/models/content_models.dart';
+import 'screens/chat/chat_list_screen.dart';
+import 'screens/chat/chat_screen.dart';
+import 'screens/chat/new_chat_screen.dart';
 
 // Use named routes for simple navigation
 final Map<String, WidgetBuilder> routes = {
@@ -28,6 +31,8 @@ final Map<String, WidgetBuilder> routes = {
   '/coaches': (context) => const CoachesListScreen(),
   '/profile': (context) => const ProfileScreen(),
   '/settings': (context) => const SettingsScreen(),
+  '/messages': (context) => const ChatListScreen(),
+  '/messages/new': (context) => const NewChatScreen(),
 };
 
 // For routes with parameters, create a separate function that handles proper typing
@@ -62,6 +67,13 @@ Route<dynamic> generateRoute(RouteSettings settings) {
       final String audioId = settings.arguments as String;
       return MaterialPageRoute(
         builder: (context) => AudioDetailScreen(audioId: audioId),
+      );
+    
+    case '/messages/chat':
+      final args = settings.arguments as Map<String, dynamic>?;
+      final chatId = args?['chatId'] as String? ?? '';
+      return MaterialPageRoute(
+        builder: (context) => ChatScreen(chatId: chatId),
       );
     
     default:
