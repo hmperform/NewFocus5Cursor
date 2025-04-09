@@ -1,4 +1,65 @@
-Widget _buildLessonsTab() {
+import 'package:flutter/foundation.dart';
+
+class CourseDetailScreen extends StatefulWidget {
+  // ... (existing code)
+}
+
+class _CourseDetailScreenState extends State<CourseDetailScreen> {
+  int _selectedTabIndex = 0;
+  final List<String> _tabs = ['LESSONS', 'OVERVIEW', 'RESOURCES'];
+  bool _showDownloadButton = false;
+  Course? _course;
+  bool _isLoading = true;
+
+  // Add a ContentProvider instance variable
+  late ContentProvider _contentProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Get the ContentProvider instance - **don't listen here**
+    _contentProvider = Provider.of<ContentProvider>(context, listen: false);
+
+    // If course was passed in, use it directly
+    if (widget.course != null) {
+      _course = widget.course;
+      _isLoading = false;
+      debugPrint('>>> CourseDetailScreen.initState: Using passed-in course: ${_course?.id}, Lessons: ${_course?.lessonsList.length}');
+    } else {
+      // Otherwise load the course from provider asynchronously
+      _loadCourse();
+    }
+  }
+  
+  Future<void> _loadCourse() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final course = await _contentProvider.getCourseById(widget.courseId);
+      if (mounted) {
+        setState(() {
+          _course = course; 
+          _isLoading = false;
+          // DEBUG PRINT after fetching
+          debugPrint('>>> CourseDetailScreen._loadCourse: Fetched course: ${_course?.id}, Lessons: ${_course?.lessonsList.length}');
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _course = null;
+          _isLoading = false;
+          debugPrint('>>> CourseDetailScreen._loadCourse: Error fetching course: $e');
+        });
+      }
+    }
+  }
+
+  Widget _buildLessonsTab() {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
     final textColor = Theme.of(context).colorScheme.onSurface;
@@ -82,7 +143,7 @@ Widget _buildLessonsTab() {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              lesson.description,
+                              lesson.description ?? '',
                               style: TextStyle(
                                 color: secondaryTextColor,
                                 fontSize: 14,
@@ -151,4 +212,10 @@ Widget _buildLessonsTab() {
         },
       ),
     );
-  } 
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ... (rest of the existing build method)
+  }
+} 

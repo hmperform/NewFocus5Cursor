@@ -65,19 +65,47 @@ class FirebaseContentService {
         final data = doc.data();
         data['id'] = doc.id;
 
-        // Load lessons from subcollection
+        // Correctly load lessons from the top-level 'lessons' collection
+        // using multiple query approaches to handle different data formats
         try {
-          final lessonsSnapshot = await _firestore
-              .collection('courses')
-              .doc(doc.id)
-              .collection('lessons')
-              .orderBy('sortOrder')
+          // Try three different query approaches and combine results
+          // 1. Query by courseId.id field (nested object format)
+          final lessonsQueryByNestedId = await _firestore
+              .collection('lessons') 
+              .where('courseId.id', isEqualTo: doc.id) 
+              .orderBy('sortOrder') 
               .get();
           
-          if (kDebugMode) {
-            debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course ${doc.id}');
+          // 2. Query by courseId as DocumentReference (reference format)
+          final courseRef = _firestore.collection('courses').doc(doc.id);
+          final lessonsQueryByRef = await _firestore
+              .collection('lessons') 
+              .where('courseId', isEqualTo: courseRef) 
+              .get();
+          
+          // 3. Query by courseId as String (legacy string format)
+          final lessonsQueryByString = await _firestore
+              .collection('lessons') 
+              .where('courseId', isEqualTo: doc.id) 
+              .get();
+          
+          // Combine results, keeping lessons with unique IDs
+          final Map<String, Map<String, dynamic>> uniqueLessons = {};
+          
+          // Process all query results to find unique lessons
+          for (var snapshot in [lessonsQueryByNestedId, lessonsQueryByRef, lessonsQueryByString]) {
+            for (var lessonDoc in snapshot.docs) {
+              Map<String, dynamic> lessonData = lessonDoc.data();
+              lessonData['id'] = lessonDoc.id;
+              uniqueLessons[lessonDoc.id] = lessonData;
+            }
           }
-          data['lessons'] = lessonsSnapshot.docs.map((doc) => doc.data()).toList();
+              
+          if (kDebugMode) {
+            debugPrint('Found ${uniqueLessons.length} unique lessons for course ${doc.id}');
+          }
+              
+          data['lessons'] = uniqueLessons.values.toList();
         } catch (e) {
           if (kDebugMode) {
             debugPrint('Error loading lessons for course ${doc.id}: $e');
@@ -85,11 +113,15 @@ class FirebaseContentService {
           data['lessons'] = [];
         }
 
+        // Now call Course.fromJson with the course data including the fetched lessons
         courses.add(Course.fromJson(data));
       }
 
       if (kDebugMode) {
         debugPrint('Successfully loaded ${courses.length} courses with their lessons');
+        for (var course in courses) {
+          debugPrint('Course ${course.id} has ${course.lessonsList.length} lessons');
+        }
       }
       return courses;
     } catch (e) {
@@ -123,20 +155,46 @@ class FirebaseContentService {
         debugPrint('Found course: ${data['title']}');
       }
 
-      // Load lessons from subcollection
+      // Correctly load lessons from the top-level 'lessons' collection using multiple query approaches
       try {
-        final lessonsSnapshot = await _firestore
-            .collection('courses')
-            .doc(courseId)
-            .collection('lessons')
-            .orderBy('sortOrder')
+        // Try three different query approaches and combine results
+        // 1. Query by courseId.id field (nested object format)
+        final lessonsQueryByNestedId = await _firestore
+            .collection('lessons') 
+            .where('courseId.id', isEqualTo: courseId) 
+            .orderBy('sortOrder') 
             .get();
         
-        if (kDebugMode) {
-          debugPrint('Found ${lessonsSnapshot.docs.length} lessons for course $courseId');
-        }
+        // 2. Query by courseId as DocumentReference (reference format)
+        final courseRef = _firestore.collection('courses').doc(courseId);
+        final lessonsQueryByRef = await _firestore
+            .collection('lessons') 
+            .where('courseId', isEqualTo: courseRef) 
+            .get();
         
-        data['lessons'] = lessonsSnapshot.docs.map((doc) => doc.data()).toList();
+        // 3. Query by courseId as String (legacy string format)
+        final lessonsQueryByString = await _firestore
+            .collection('lessons') 
+            .where('courseId', isEqualTo: courseId) 
+            .get();
+        
+        // Combine results, keeping lessons with unique IDs
+        final Map<String, Map<String, dynamic>> uniqueLessons = {};
+        
+        // Process all query results to find unique lessons
+        for (var snapshot in [lessonsQueryByNestedId, lessonsQueryByRef, lessonsQueryByString]) {
+          for (var lessonDoc in snapshot.docs) {
+            Map<String, dynamic> lessonData = lessonDoc.data();
+            lessonData['id'] = lessonDoc.id;
+            uniqueLessons[lessonDoc.id] = lessonData;
+          }
+        }
+            
+        if (kDebugMode) {
+          debugPrint('Found ${uniqueLessons.length} unique lessons for course $courseId');
+        }
+            
+        data['lessons'] = uniqueLessons.values.toList();
       } catch (e) {
         if (kDebugMode) {
           debugPrint('Error loading lessons for course $courseId: $e');
@@ -186,7 +244,10 @@ class FirebaseContentService {
         final lessonRef = _firestore.collection('lessons').doc(lesson.id);
         final lessonData = {
           'id': lesson.id,
-          'courseId': course.id,
+          'courseId': {
+            'id': course.id,
+            'path': 'courses/${course.id}'
+          }, // Store as nested object for consistency
           'title': lesson.title,
           'description': lesson.description,
           'type': lesson.type.toString().split('.').last,
@@ -542,7 +603,7 @@ class FirebaseContentService {
         // Check for lessons in the top-level collection
         final topLevelLessonsSnapshot = await _firestore
             .collection('lessons')
-            .where('courseId', isEqualTo: courseId)
+            .where('courseId.id', isEqualTo: courseId)
             .get();
             
         debugPrint('Found ${subcollectionModulesSnapshot.docs.length} modules in subcollection');
@@ -590,7 +651,7 @@ class FirebaseContentService {
       try {
         QuerySnapshot lessonsSnapshot = await _firestore
             .collection('lessons')
-            .where('courseId', isEqualTo: courseId)
+            .where('courseId.id', isEqualTo: courseId)
             .orderBy('sortOrder')
             .get();
             
@@ -618,7 +679,7 @@ class FirebaseContentService {
       try {
         QuerySnapshot modulesSnapshot = await _firestore
             .collection('modules')
-            .where('courseId', isEqualTo: courseId)
+            .where('courseId.id', isEqualTo: courseId)
             .orderBy('sortOrder')
             .get();
             

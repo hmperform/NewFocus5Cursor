@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/content_models.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/user_provider.dart';
 import 'coach_profile_screen.dart';
 import '../../utils/image_utils.dart';
 
@@ -316,6 +317,11 @@ class ArticleDetailScreen extends StatelessWidget {
                 
                 const SizedBox(height: 32),
                 
+                // Article completion checkbox
+                _buildArticleCompletionCheckbox(context, article),
+                
+                const SizedBox(height: 24),
+                
                 // Related articles
                 Padding(
                   padding: const EdgeInsets.all(16),
@@ -452,6 +458,59 @@ class ArticleDetailScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildArticleCompletionCheckbox(BuildContext context, Article article) {
+    final userProvider = Provider.of<UserProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isCompleted = userProvider.completedArticleIds.contains(article.id);
+    final accentColor = themeProvider.accentColor;
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            userProvider.toggleArticleCompletion(article.id, !isCompleted, context: context);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                isCompleted
+                  ? Icon(
+                      Icons.check_box,
+                      color: Colors.green,
+                      size: 28,
+                    )
+                  : Icon(
+                      Icons.check_box_outline_blank,
+                      color: accentColor,
+                      size: 28,
+                    ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    isCompleted ? 'Marked as completed' : 'Mark as completed',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 } 

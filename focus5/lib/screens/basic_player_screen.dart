@@ -60,19 +60,14 @@ class _BasicPlayerScreenState extends State<BasicPlayerScreen> {
     _hideTimer?.cancel();
     _positionSubscription?.cancel();
     
-    // Store the isPlaying state before disposing
-    final isCurrentlyPlaying = _videoService?.isPlaying ?? false;
+    // Instead of trying to update after disposal, save the state before
+    final videoService = _videoService;
     
     // Complete dispose first
     super.dispose();
     
-    // Then schedule mini player visibility update for next frame
-    if (_videoService != null && isCurrentlyPlaying) {
-      // Use microtask to avoid widget tree locked errors
-      Future.microtask(() {
-        _videoService!.setMiniPlayerVisibility(true);
-      });
-    }
+    // Don't try to modify UI state after disposal
+    // This was causing the infinite loading issue
   }
   
   void _setFullScreenMode(bool isFullScreen) {
@@ -132,6 +127,43 @@ class _BasicPlayerScreenState extends State<BasicPlayerScreen> {
     return duration.inHours > 0
         ? '$hours:$minutes:$seconds'
         : '$minutes:$seconds';
+  }
+
+  // Show a cheeky popup message when user tries to skip forward too many times
+  void _showSkipLimitPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black.withOpacity(0.8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.lime.shade400, width: 2),
+        ),
+        title: const Text('Whoa there, skipper!',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.not_interested, color: Colors.lime.shade400, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'You\'ve skipped forward 10 times already! \n'
+              'Maybe try watching some of the content? 😉',
+              style: TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Fine...', style: TextStyle(color: Colors.lime.shade400)),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -205,7 +237,13 @@ class _BasicPlayerScreenState extends State<BasicPlayerScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: _buildGlassButton(
                   icon: Icons.close,
-                  onTap: () => Navigator.pop(context),
+                  onTap: () {
+                    // Use the new cleanup method to properly handle exiting
+                    videoService.cleanupBeforeExit().then((_) {
+                      // Navigate back only after cleanup is complete
+                      Navigator.of(context).pop();
+                    });
+                  },
                 ),
               ),
             ),
@@ -243,7 +281,22 @@ class _BasicPlayerScreenState extends State<BasicPlayerScreen> {
                       // Forward 10 seconds
                       _buildGlassButton(
                         icon: Icons.forward_10_rounded,
-                        onTap: () => videoService.seekForward(seconds: 10),
+                        onTap: () {
+                          // Check if reached skip limit
+                          if (videoService.forwardSkipCount >= 10) {
+                            _showSkipLimitPopup(context);
+                          } else {
+                            videoService.seekForward(seconds: 10);
+                            
+                            // If this skip reaches the limit, show the popup
+                            if (videoService.forwardSkipCount == 10) {
+                              // Small delay to let the seek complete before showing popup
+                              Future.delayed(const Duration(milliseconds: 200), () {
+                                _showSkipLimitPopup(context);
+                              });
+                            }
+                          }
+                        },
                       ),
                     ],
                   ),

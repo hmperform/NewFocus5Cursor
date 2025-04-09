@@ -316,4 +316,66 @@ service firebase.storage {
       return false;
     }
   }
+  
+  /// Retrieves the app configuration settings from Firestore
+  Future<Map<String, dynamic>> getAppConfig() async {
+    try {
+      // Check if the app_config document exists
+      final configDoc = await _firestore.collection('app_config').doc('explore_screen').get();
+      
+      if (configDoc.exists) {
+        return configDoc.data() ?? {};
+      } else {
+        // If no config exists, create a default one
+        final defaultConfig = {
+          'section_order': [
+            'focus_areas',
+            'featured_courses',
+            'articles',
+            'trending_courses',
+            'coaches'
+          ],
+          'last_updated': FieldValue.serverTimestamp(),
+          'updated_by': _auth.currentUser?.uid
+        };
+        
+        await _firestore.collection('app_config').doc('explore_screen').set(defaultConfig);
+        return defaultConfig;
+      }
+    } catch (e) {
+      debugPrint('Error getting app config: $e');
+      // Return a default config if there's an error
+      return {
+        'section_order': [
+          'focus_areas',
+          'featured_courses',
+          'articles',
+          'trending_courses',
+          'coaches'
+        ]
+      };
+    }
+  }
+  
+  /// Updates the explore screen section order
+  Future<bool> updateExploreSectionOrder(List<String> sectionOrder) async {
+    try {
+      if (!await isCurrentUserAdmin()) {
+        debugPrint('Only admins can update app configuration');
+        return false;
+      }
+      
+      await _firestore.collection('app_config').doc('explore_screen').update({
+        'section_order': sectionOrder,
+        'last_updated': FieldValue.serverTimestamp(),
+        'updated_by': _auth.currentUser?.uid
+      });
+      
+      debugPrint('Explore screen section order updated successfully');
+      return true;
+    } catch (e) {
+      debugPrint('Error updating explore section order: $e');
+      return false;
+    }
+  }
 } 

@@ -19,6 +19,8 @@ class User {
   final List<AppBadge> badges;
   final List<String> completedCourses;
   final List<String> completedAudios;
+  final List<String> completedLessons;
+  final List<String> completedArticles;
   final DateTime lastLoginDate;
   final DateTime createdAt;
   final Map<String, dynamic>? preferences;
@@ -42,6 +44,8 @@ class User {
     this.badges = const [],
     this.completedCourses = const [],
     this.completedAudios = const [],
+    this.completedLessons = const [],
+    this.completedArticles = const [],
     DateTime? lastLoginDate,
     DateTime? createdAt,
     this.preferences,
@@ -55,9 +59,27 @@ class User {
     // Get list of badges
     List<AppBadge> badgesList = [];
     if (data['badges'] != null) {
-      badgesList = List<AppBadge>.from(
-        (data['badges'] as List).map((badge) => AppBadge.fromJson(badge))
-      );
+      // Handle the case where badges is a reference object instead of an array
+      if (data['badges'] is Map<String, dynamic>) {
+        // If badges is a reference object with id and path
+        final badgeRef = data['badges'] as Map<String, dynamic>;
+        if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
+          // Create a single badge from the reference
+          badgesList.add(AppBadge(
+            id: badgeRef['id'],
+            name: 'Badge',
+            description: 'A badge',
+            imageUrl: '',
+            earnedAt: DateTime.now(),
+            xpValue: 0,
+          ));
+        }
+      } else if (data['badges'] is List) {
+        // Normal case - badges is a list
+        badgesList = List<AppBadge>.from(
+          (data['badges'] as List).map((badge) => AppBadge.fromJson(badge))
+        );
+      }
     }
     
     // Parse date fields
@@ -102,6 +124,12 @@ class User {
       completedAudios: data['completedAudios'] != null 
           ? List<String>.from(data['completedAudios']) 
           : [],
+      completedLessons: data['completedLessons'] != null 
+          ? List<String>.from(data['completedLessons']) 
+          : [],
+      completedArticles: data['completedArticles'] != null 
+          ? List<String>.from(data['completedArticles']) 
+          : [],
       lastLoginDate: lastLogin,
       createdAt: created,
       preferences: data['preferences'] as Map<String, dynamic>?,
@@ -127,6 +155,8 @@ class User {
       'badges': badges.map((badge) => badge.toJson()).toList(),
       'completedCourses': completedCourses,
       'completedAudios': completedAudios,
+      'completedLessons': completedLessons,
+      'completedArticles': completedArticles,
       'lastLoginDate': Timestamp.fromDate(lastLoginDate),
       'createdAt': Timestamp.fromDate(createdAt),
       if (preferences != null) 'preferences': preferences,
@@ -152,6 +182,8 @@ class User {
     List<AppBadge>? badges,
     List<String>? completedCourses,
     List<String>? completedAudios,
+    List<String>? completedLessons,
+    List<String>? completedArticles,
     DateTime? lastLoginDate,
     DateTime? createdAt,
     Map<String, dynamic>? preferences,
@@ -175,6 +207,8 @@ class User {
       badges: badges ?? this.badges,
       completedCourses: completedCourses ?? this.completedCourses,
       completedAudios: completedAudios ?? this.completedAudios,
+      completedLessons: completedLessons ?? this.completedLessons,
+      completedArticles: completedArticles ?? this.completedArticles,
       lastLoginDate: lastLoginDate ?? this.lastLoginDate,
       createdAt: createdAt ?? this.createdAt,
       preferences: preferences ?? this.preferences,

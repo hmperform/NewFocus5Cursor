@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 // Module types enum
 enum LessonType {
@@ -11,34 +12,42 @@ enum LessonType {
 class Lesson {
   final String id;
   final String title;
-  final String description;
+  final String? description;
   final String? videoUrl;
   final String? audioUrl;
   final String? imageUrl;
   final String? thumbnailUrl;
+  final String? textContent;
   final int durationMinutes;
   final bool completed;
   final int sortOrder;
   final LessonType type;
-  final String? textContent;
   final List<String> categories;
   final bool premium;
+  final Map<String, dynamic>? courseId;
+  // Add a convenience getter to access the course ID string
+  String get courseIdString => courseId != null && courseId!.containsKey('id') ? courseId!['id'] as String : '';
+  // Add a getter to create a DocumentReference from the courseId map
+  DocumentReference? get courseRef => courseId != null && courseId!.containsKey('id') 
+      ? FirebaseFirestore.instance.collection('courses').doc(courseId!['id'] as String)
+      : null;
 
   Lesson({
     required this.id,
     required this.title,
-    required this.description,
+    this.description,
     this.videoUrl,
     this.audioUrl,
-    this.textContent,
     this.imageUrl,
     this.thumbnailUrl,
-    this.durationMinutes = 0,
-    this.completed = false,
-    this.sortOrder = 0,
-    this.type = LessonType.video,
+    this.textContent,
+    required this.durationMinutes,
+    required this.completed,
+    required this.sortOrder,
+    required this.type,
     this.categories = const [],
     this.premium = false,
+    required this.courseId,
   });
 
   factory Lesson.fromJson(Map<String, dynamic> json) {
@@ -54,21 +63,44 @@ class Lesson {
       }
     }
     
+    // Parse courseId field safely - handle all possible formats
+    Map<String, dynamic>? parsedCourseId;
+    if (json['courseId'] is Map) {
+      // This handles the nested courseId object format: {id: "course-001", path: "courses"}
+      parsedCourseId = Map<String, dynamic>.from(json['courseId']);
+    } else if (json['courseId'] is String) {
+      // Handle legacy string format
+      parsedCourseId = {"id": json['courseId']};
+    } else if (json['courseId'] is DocumentReference) {
+      // Handle DocumentReference type
+      DocumentReference ref = json['courseId'] as DocumentReference;
+      parsedCourseId = {"id": ref.id, "path": ref.path};
+    } else if (json['courseId'] == null) {
+      // Handle null case
+      parsedCourseId = null;
+      debugPrint("Warning: Lesson ${json['id']} has null courseId");
+    } else {
+      // Handle unexpected type
+      debugPrint("Warning: Lesson ${json['id']} has courseId of unexpected type: ${json['courseId'].runtimeType}");
+      parsedCourseId = null;
+    }
+    
     return Lesson(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      videoUrl: json['videoUrl'],
-      audioUrl: json['audioUrl'],
-      imageUrl: json['imageUrl'],
-      thumbnailUrl: json['thumbnailUrl'],
-      textContent: json['textContent'],
-      durationMinutes: json['durationMinutes'] ?? 0,
-      completed: json['completed'] ?? false,
-      sortOrder: json['sortOrder'] ?? 0,
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String?,
+      videoUrl: json['videoUrl'] as String?,
+      audioUrl: json['audioUrl'] as String?,
+      imageUrl: json['imageUrl'] as String?,
+      thumbnailUrl: json['thumbnailUrl'] as String?,
+      textContent: json['textContent'] as String?,
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+      completed: json['completed'] as bool? ?? false,
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
       type: type,
-      categories: json['categories'] != null ? List<String>.from(json['categories']) : [],
-      premium: json['premium'] ?? false,
+      categories: (json['categories'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      premium: json['premium'] as bool? ?? false,
+      courseId: parsedCourseId,
     );
   }
 
@@ -88,6 +120,7 @@ class Lesson {
       'type': type.toString().split('.').last,
       'categories': categories,
       'premium': premium,
+      'courseId': courseId,
     };
   }
 }
@@ -112,6 +145,7 @@ class Course {
   final List<String>? universityAccess;
   final bool featured;
   final bool premium;
+  final List<String> learningPoints;
 
   // Getter for modules to maintain backward compatibility
   List<Lesson> get modules => lessonsList;
@@ -136,53 +170,117 @@ class Course {
     this.universityAccess,
     this.featured = false,
     this.premium = false,
+    this.learningPoints = const [],
   });
 
+  // Empty constructor for Course
+  Course.empty() : 
+    id = '',
+    title = '',
+    description = '',
+    imageUrl = '',
+    thumbnailUrl = '',
+    creatorId = '',
+    creatorName = '',
+    creatorImageUrl = '',
+    tags = [],
+    focusAreas = [],
+    durationMinutes = 0,
+    duration = 0,
+    xpReward = 0,
+    lessonsList = [],
+    createdAt = DateTime.now(),
+    universityExclusive = false,
+    universityAccess = null,
+    featured = false,
+    premium = false,
+    learningPoints = [];
+
   factory Course.fromJson(Map<String, dynamic> json) {
-    List<dynamic> lessonsList = [];
-    if (json['modules'] != null) {
-      lessonsList = (json['modules'] as List)
-          .map((moduleJson) => Lesson.fromJson(moduleJson))
+    // This list will hold the parsed Lesson objects
+    List<Lesson> parsedLessons = []; 
+    
+    // Check multiple keys and parse into Lesson objects
+    if (json['lessons'] != null && json['lessons'] is List) {
+      parsedLessons = (json['lessons'] as List)
+          .map((lessonJson) {
+            // Ensure lessonJson has an 'id' before parsing
+            if (lessonJson is Map<String, dynamic> && lessonJson['id'] != null) {
+              return Lesson.fromJson(lessonJson);
+            } else {
+              // Handle cases where lesson data is invalid or missing ID
+              debugPrint('>>> Course.fromJson: Invalid lesson data encountered: $lessonJson');
+              // Return a default/empty lesson or skip it
+              return null; // Or return Lesson.empty() if you have an empty constructor
+            }
+          })
+          .where((lesson) => lesson != null) // Filter out nulls from invalid data
+          .cast<Lesson>() // Cast to List<Lesson>
           .toList();
-    } else if (json['lessons'] != null) {
-      lessonsList = (json['lessons'] as List)
-          .map((lessonJson) => Lesson.fromJson(lessonJson))
+    } 
+    // Add checks for 'modules' and 'lessonsList' if needed, similar to above
+    else if (json['modules'] != null && json['modules'] is List) {
+      // Similar parsing logic as above, ensuring 'id' exists
+      parsedLessons = (json['modules'] as List)
+          .map((moduleJson) {
+             if (moduleJson is Map<String, dynamic> && moduleJson['id'] != null) {
+              return Lesson.fromJson(moduleJson);
+            } else {
+              debugPrint('>>> Course.fromJson: Invalid module data encountered: $moduleJson');
+              return null;
+            }
+          })
+          .where((lesson) => lesson != null)
+          .cast<Lesson>()
           .toList();
-    } else if (json['lessonsList'] != null) {
-      lessonsList = (json['lessonsList'] as List)
-          .map((lessonJson) => Lesson.fromJson(lessonJson))
+    }
+    else if (json['lessonsList'] != null && json['lessonsList'] is List) {
+       // Similar parsing logic as above, ensuring 'id' exists
+      parsedLessons = (json['lessonsList'] as List)
+          .map((lessonJson) {
+            if (lessonJson is Map<String, dynamic> && lessonJson['id'] != null) {
+              return Lesson.fromJson(lessonJson);
+            } else {
+              debugPrint('>>> Course.fromJson: Invalid lessonsList data encountered: $lessonJson');
+              return null;
+            }
+          })
+          .where((lesson) => lesson != null)
+          .cast<Lesson>()
           .toList();
     }
 
-    // Helper function to safely parse creatorId
+    // Helper function to safely parse creatorId (Now handles Map too)
     String _parseCreatorId(dynamic value) {
       if (value is String) {
         return value;
       } else if (value is DocumentReference) {
-        // If it's a DocumentReference, extract its ID
         return value.id;
+      } else if (value is Map && value.containsKey('id') && value['id'] is String) {
+        return value['id'];
       }
-      // Default to empty string if null or unexpected type
       return ''; 
     }
 
+    // debugPrint(">>> Course.fromJson: Input json['lessons'] type: ${json['lessons']?.runtimeType}, Length: ${(json['lessons'] as List?)?.length}");
+    // debugPrint(">>> Course.fromJson: Parsed lessons list length before return: ${parsedLessons.length}");
+
     return Course(
-      id: json['id'] as String? ?? '', // Assuming ID comes from data now, not doc.id
+      id: json['id'] as String? ?? '', 
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       imageUrl: json['imageUrl'] as String? ?? json['thumbnailUrl'] as String? ?? '',
       thumbnailUrl: json['thumbnailUrl'] as String? ?? '',
-      // Use the helper function for creatorId
+      // Use the updated helper function for creatorId
       creatorId: _parseCreatorId(json['creatorId']), 
-      creatorName: json['creatorName'] as String? ?? '', // Assuming name is string
-      creatorImageUrl: json['creatorImageUrl'] as String? ?? '', // Assuming URL is string
+      creatorName: json['creatorName'] as String? ?? '', 
+      creatorImageUrl: json['creatorImageUrl'] as String? ?? '', 
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       focusAreas: (json['focusAreas'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
-      durationMinutes: json['durationMinutes'] as int? ?? 0,
-      duration: json['duration'] as int? ?? 0,
-      xpReward: json['xpReward'] as int? ?? 0,
-      // Ensure lessons are parsed from Map<String, dynamic>
-      lessonsList: List<Lesson>.from(lessonsList.map((l) => l is Map<String, dynamic> ? Lesson.fromJson(l) : Lesson.fromJson({}))), 
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+      duration: (json['duration'] as num?)?.toInt() ?? 0, 
+      xpReward: (json['xpReward'] as num?)?.toInt() ?? 0,
+      lessonsList: parsedLessons, 
       createdAt: json['createdAt'] is Timestamp
           ? (json['createdAt'] as Timestamp).toDate()
           : (json['createdAt'] is String ? DateTime.tryParse(json['createdAt']) : null) ?? DateTime.now(),
@@ -192,6 +290,7 @@ class Course {
           : null,
       featured: json['featured'] as bool? ?? false,
       premium: json['premium'] as bool? ?? false,
+      learningPoints: (json['learningPoints'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
     );
   }
 
@@ -217,6 +316,7 @@ class Course {
       'universityAccess': universityAccess,
       'featured': featured,
       'premium': premium,
+      'learningPoints': learningPoints,
     };
   }
 }

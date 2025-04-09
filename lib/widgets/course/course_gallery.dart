@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:focus5/models/content_models.dart';
-import 'package:focus5/providers/theme_provider.dart';
 import 'package:focus5/screens/home/course_detail_screen.dart';
+import 'package:focus5/providers/theme_provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 class CourseGallery extends StatefulWidget {

@@ -67,6 +67,12 @@ class ContentProvider with ChangeNotifier {
         // Populate _lessons after loading courses
         _lessons = _courses.expand((course) => course.lessonsList).toList();
         
+        // DEBUG PRINT: Check final state after loading
+        debugPrint('>>> ContentProvider.initContent: Finished loading. Courses count: ${_courses.length}');
+        if (_courses.isNotEmpty) {
+          debugPrint('>>> ContentProvider.initContent: First course (${_courses.first.id}) lessons count: ${_courses.first.lessonsList.length}');
+        }
+
         _isLoading = false;
         _errorMessage = null;
       } catch (e) {
@@ -313,11 +319,21 @@ class ContentProvider with ChangeNotifier {
       }).toList();
     } else {
       List<Lesson> filteredLessons = [];
+      List<Lesson> allLessons = [];
       for (final course in _courses) {
-        filteredLessons.addAll(course.lessonsList.where((lesson) {
-          return lesson.title.toLowerCase().contains(lowerQuery) ||
-                 lesson.description.toLowerCase().contains(lowerQuery);
-        }));
+        allLessons.addAll(course.lessonsList);
+      }
+      if (query.isEmpty) {
+        filteredLessons = allLessons;
+      } else {
+        String lowerQuery = query.toLowerCase();
+        filteredLessons = allLessons.where((lesson) {
+          // Check title and description safely
+          bool titleMatch = lesson.title.toLowerCase().contains(lowerQuery);
+          // Force apply null-aware check and default value for description
+          bool descriptionMatch = (lesson.description ?? '').toLowerCase().contains(lowerQuery);
+          return titleMatch || descriptionMatch;
+        }).toList();
       }
       return filteredLessons;
     }

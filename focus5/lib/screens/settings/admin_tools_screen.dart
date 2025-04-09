@@ -3,6 +3,8 @@ import 'package:focus5/screens/admin/coach_admin_screen.dart'; // Assuming coach
 import 'package:focus5/screens/settings/admin_management_screen.dart'; // Assuming this manages universities/permissions or similar
 import 'package:focus5/screens/settings/data_migration_screen.dart'; // Assuming this exists
 import 'package:focus5/screens/settings/firebase_setup_screen.dart'; // Assuming this exists
+import 'package:focus5/screens/settings/explore_layout_screen.dart'; // Assuming this exists
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AdminToolsScreen extends StatefulWidget {
   const AdminToolsScreen({Key? key}) : super(key: key);
@@ -52,6 +54,102 @@ class _AdminToolsScreenState extends State<AdminToolsScreen> {
                  context,
                  MaterialPageRoute(builder: (context) => const CoachAdminScreen()),
                );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.article_outlined),
+            title: const Text('Article Management'),
+            subtitle: const Text('Manage article content'),
+            onTap: () {
+              // We'll create this screen next
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Article Management - Coming Soon')),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard_customize),
+            title: const Text('Explore Screen Layout'),
+            subtitle: const Text('Customize the order of sections on the explore tab'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ExploreLayoutScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.badge),
+            title: const Text('Migrate User Badges'),
+            subtitle: const Text('Convert badge references to arrays in user documents'),
+            onTap: () async {
+              // Show confirmation dialog
+              bool confirm = await showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Confirm Migration'),
+                  content: const Text(
+                    'This will update all user documents that have badge references to use badge arrays instead. '
+                    'This operation cannot be undone. Continue?'
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Continue'),
+                    ),
+                  ],
+                ),
+              ) ?? false;
+              
+              if (confirm) {
+                // Show loading indicator
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Beginning migration...'))
+                );
+                
+                try {
+                  // Get all user documents
+                  final firestore = FirebaseFirestore.instance;
+                  final snapshot = await firestore.collection('users').get();
+                  
+                  int updated = 0;
+                  for (var doc in snapshot.docs) {
+                    final data = doc.data();
+                    if (data['badges'] != null && data['badges'] is Map) {
+                      // If badges is a reference object with id and path
+                      final badgeRef = data['badges'] as Map<String, dynamic>;
+                      if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
+                        // Convert to array with a single badge
+                        await firestore.collection('users').doc(doc.id).update({
+                          'badges': [{
+                            'id': badgeRef['id'],
+                            'name': 'Badge',
+                            'description': 'A badge from reference',
+                            'imageUrl': '',
+                            'earnedAt': FieldValue.serverTimestamp(),
+                            'xpValue': 0,
+                          }]
+                        });
+                        updated++;
+                      }
+                    }
+                  }
+                  
+                  // Show success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Migration complete. Updated $updated user documents.'))
+                  );
+                } catch (e) {
+                  // Show error message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'))
+                  );
+                }
+              }
             },
           ),
           const Divider(),

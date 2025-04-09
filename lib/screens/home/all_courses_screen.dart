@@ -1,34 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:focus5/models/content_models.dart';
+import 'package:focus5/providers/theme_provider.dart';
+import 'package:focus5/widgets/course/course_list_item.dart';
+import 'package:focus5/widgets/shared/custom_app_bar.dart';
+import 'package:focus5/services/firebase_content_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-                  // Course meta info (lessons, duration)
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.play_circle_outline,
-                        size: 14,
-                        color: textColor.withOpacity(0.7),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${course.lessonsList.length}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textColor.withOpacity(0.7),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: textColor.withOpacity(0.7),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${course.duration}m',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textColor.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
-                  ), 
+// Define _buildCourseListItem outside the build method or make it part of the state
+Widget _buildCourseListItem(BuildContext context, Course course, Color textColor) {
+  return CourseListItem(course: course);
+}
+
+class AllCoursesScreen extends StatelessWidget {
+  // ... existing code ...
+                  // Replace the inline Row with the _buildCourseListItem call or CourseListItem directly
+                  // We'll use CourseListItem directly for simplicity here
+                   child: CourseListItem(course: course),
+  // ... existing code ...
+}

@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/content_models.dart';
 import '../services/firebase_storage_service.dart';
+import '../services/media_completion_service.dart';
 
 /// A service class that manages video playback using only the core video_player package
 class BasicVideoService with ChangeNotifier {
@@ -30,6 +31,19 @@ class BasicVideoService with ChangeNotifier {
   // Timer for position updates
   Timer? _positionTimer;
 
+  // Completion callback
+  Function(String mediaId)? _completionCallback;
+  
+  // Media completion service
+  final MediaCompletionService _mediaCompletionService = MediaCompletionService();
+  
+  // Completion state tracking
+  bool _hasMarkedAsCompleted = false;
+
+  // Forward skip limit tracking
+  int _forwardSkipCount = 0;
+  final int _maxForwardSkips = 10;
+
   // Getters
   VideoPlayerController? get videoController => _videoController;
   String get title => _title;
@@ -43,6 +57,10 @@ class BasicVideoService with ChangeNotifier {
   Duration get position => _videoController?.value.position ?? Duration.zero;
   Duration get duration => _videoController?.value.duration ?? Duration.zero;
   double get aspectRatio => _videoController?.value.aspectRatio ?? 16/9;
+  bool get isInitialized => _videoController != null && _videoController!.value.isInitialized;
+  bool get isBuffering => _videoController != null && _videoController!.value.isBuffering;
+  int get forwardSkipCount => _forwardSkipCount;
+  bool get hasReachedForwardSkipLimit => _forwardSkipCount >= _maxForwardSkips;
   
   // Check if a video is already preloaded
   bool isVideoPreloaded(String videoUrl) {
@@ -149,21 +167,27 @@ class BasicVideoService with ChangeNotifier {
   }
 
   // Initialize with video URL, using preloaded controller if available
-  Future<void> initializePlayer({
+  // Returns true if initialization was successful, false otherwise.
+  Future<bool> initializePlayer({
     required String videoUrl,
     required String title,
     required String subtitle,
-    String thumbnailUrl = '',
+    required String thumbnailUrl,
     MediaItem? mediaItem,
     Duration? startPosition,
   }) async {
-    // Dispose existing controllers
+    // Clean up any existing controller first
     await _disposeController();
     
+    // Reset forward skip counter for new video
+    _forwardSkipCount = 0;
+    _hasMarkedAsCompleted = false;
+    
+    // Set video metadata
+    _videoUrl = videoUrl;
     _title = title;
     _subtitle = subtitle;
     _thumbnailUrl = thumbnailUrl;
-    _videoUrl = videoUrl;
     _currentMediaItem = mediaItem;
     
     try {
@@ -190,11 +214,10 @@ class BasicVideoService with ChangeNotifier {
         _cacheVideoData();
         
         notifyListeners();
-        return;
+        return true; // Initialization successful
       }
       
       // No preloaded controller, create a new one
-      // Rest of the existing code for creating a new controller
       if (videoUrl.startsWith('http')) {
         _videoController = VideoPlayerController.networkUrl(
           Uri.parse(videoUrl),
@@ -229,19 +252,33 @@ class BasicVideoService with ChangeNotifier {
           }
         } catch (e) {
           debugPrint('Error getting Firebase Storage URL: $e');
-          _videoController = VideoPlayerController.asset('assets/videos/placeholder.mp4');
+          // Don't use a placeholder, just fail initialization
+          // _videoController = VideoPlayerController.asset('assets/videos/placeholder.mp4');
+          _videoController = null; // Ensure controller is null on error
         }
       } else {
-        // Default to file
-        _videoController = VideoPlayerController.asset(
-          videoUrl,
-          videoPlayerOptions: VideoPlayerOptions(
-            mixWithOthers: false,
-            allowBackgroundPlayback: false,
-          ),
-        );
+        // Default to file (or handle other cases if needed)
+        // Consider if this case is actually expected/possible
+        try {
+             _videoController = VideoPlayerController.asset(
+              videoUrl,
+              videoPlayerOptions: VideoPlayerOptions(
+                mixWithOthers: false,
+                allowBackgroundPlayback: false,
+              ),
+             );
+        } catch (e) {
+             debugPrint('Error initializing asset/file video: $e');
+             _videoController = null;
+        }
       }
       
+      // If controller couldn't be created (e.g., Firebase error)
+      if (_videoController == null) {
+          _cleanUpOnError();
+          return false;
+      }
+
       // Initialize video controller
       await _videoController!.initialize();
       
@@ -263,43 +300,30 @@ class BasicVideoService with ChangeNotifier {
       _cacheVideoData();
       
       notifyListeners();
+      return true; // Initialization successful
+      
     } catch (e) {
-      debugPrint('Error initializing video: $e');
-      // Attempt to create a fallback controller with a default asset if available
-      try {
-        _videoController = VideoPlayerController.asset(
-          'assets/videos/error_video.mp4',
-          videoPlayerOptions: VideoPlayerOptions(
-            mixWithOthers: false,
-            allowBackgroundPlayback: false,
-          ),
-        );
-        await _videoController!.initialize();
-        await _videoController!.setVolume(1.0);
-        _startPositionTimer();
-        notifyListeners();
-      } catch (fallbackError) {
-        debugPrint('Error creating fallback video: $fallbackError');
-        await _disposeController();
-      }
-      rethrow;
+      debugPrint('Error initializing video player: $e');
+      _cleanUpOnError();
+      return false; // Initialization failed
     }
   }
   
   // Start a timer to regularly update the current position
   void _startPositionTimer() {
-    _positionTimer?.cancel();
-    _positionTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      if (_videoController != null && _videoController!.value.isInitialized) {
-        _positionStreamController.add(_videoController!.value.position);
-        
-        // Update playing state if changed
-        final isCurrentlyPlaying = _videoController!.value.isPlaying;
-        if (_isPlaying != isCurrentlyPlaying) {
-          _isPlaying = isCurrentlyPlaying;
-          notifyListeners();
-        }
+    _closePositionTimer();
+    
+    // Create a timer that fires 4 times per second
+    _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
+      if (_videoController == null || !_videoController!.value.isInitialized) {
+        return;
       }
+      
+      final position = _videoController!.value.position;
+      _positionStreamController.add(position);
+      
+      // Add the _checkCompletion call here:
+      _checkCompletion();
     });
   }
   
@@ -325,6 +349,17 @@ class BasicVideoService with ChangeNotifier {
   // Seek forward by specified seconds
   Future<void> seekForward({int seconds = 10}) async {
     if (_videoController == null || !_videoController!.value.isInitialized) return;
+    
+    // Check if we've reached the skip limit
+    if (_forwardSkipCount >= _maxForwardSkips) {
+      // Don't perform the seek, just return
+      // The UI will handle showing a message
+      return;
+    }
+    
+    // Increment skip counter
+    _forwardSkipCount++;
+    debugPrint('Forward skip count: $_forwardSkipCount/$_maxForwardSkips');
     
     final current = _videoController!.value.position;
     final target = current + Duration(seconds: seconds);
@@ -429,5 +464,74 @@ class BasicVideoService with ChangeNotifier {
     } catch (e) {
       debugPrint('Error caching video data: $e');
     }
+  }
+
+  // Helper to clean up state on initialization error
+  void _cleanUpOnError() {
+    _disposeController(); // Dispose if partially initialized
+    _title = '';
+    _subtitle = '';
+    _thumbnailUrl = '';
+    _videoUrl = '';
+    _currentMediaItem = null;
+    _isPlaying = false;
+    _showMiniPlayer = false;
+    notifyListeners();
+  }
+
+  // Set completion callback
+  void setCompletionCallback(Function(String mediaId) callback) {
+    _completionCallback = callback;
+  }
+
+  // Check if a video should be marked as completed
+  void _checkCompletion() {
+    if (_videoController == null || _currentMediaItem == null || _hasMarkedAsCompleted) {
+      return;
+    }
+    
+    final currentPosition = _videoController!.value.position.inSeconds.toDouble();
+    final totalDuration = _videoController!.value.duration.inSeconds.toDouble();
+    
+    // Consider completed if watched 90% of video
+    if (totalDuration > 0 && currentPosition >= (totalDuration * 0.9)) {
+      _hasMarkedAsCompleted = true;
+      
+      // Track in MediaCompletionService
+      _mediaCompletionService.markMediaCompleted('', _currentMediaItem!.id, MediaType.video);
+      
+      // Trigger callback if set
+      if (_completionCallback != null) {
+        _completionCallback!(_currentMediaItem!.id);
+      }
+      
+      debugPrint('Video marked as completed: ${_currentMediaItem!.id}');
+    }
+  }
+
+  // Clean method to properly handle exiting a video
+  Future<void> cleanupBeforeExit() async {
+    debugPrint('Cleaning up video resources before exit...');
+    
+    // Pause video if playing
+    if (_isPlaying && _videoController != null) {
+      try {
+        await _videoController!.pause();
+        _isPlaying = false;
+      } catch (e) {
+        debugPrint('Error pausing video during cleanup: $e');
+      }
+    }
+    
+    // Cache current position
+    await _cacheVideoData();
+    
+    // Update mini player visibility (before navigation)
+    _showMiniPlayer = false;
+    
+    // Notify listeners about state changes
+    notifyListeners();
+    
+    debugPrint('Video resources cleanup completed');
   }
 } 

@@ -61,7 +61,7 @@ Document ID: User's Firebase Auth UID
 Fields:
 ```
 {
-  "id": String,                   // User ID (same as doc ID)
+  "id": String,                   // User's Firebase Auth UID
   "email": String,                // User's email
   "username": String,             // Username for display
   "fullName": String,             // User's full name
@@ -90,7 +90,8 @@ Fields:
     },
     "theme": String,              // "light", "dark", or "system"
     "audioQuality": String        // "high", "medium", or "low"
-  }
+  },
+  "completedArticles": Array<String> // IDs of completed articles
 }
 ```
 
@@ -892,4 +893,4 @@ exports.aggregateModuleResponses = functions.firestore
       }
     });
   });
-``` 
+```

@@ -421,7 +421,7 @@ class ContentProvider with ChangeNotifier {
       for (final course in _courses) {
         filteredLessons.addAll(course.modules.where((lesson) {
           return lesson.title.toLowerCase().contains(lowerQuery) ||
-                 lesson.description.toLowerCase().contains(lowerQuery) ||
+                 (lesson.description?.toLowerCase() ?? '').contains(lowerQuery) ||
                  lesson.categories.any((category) => category.toLowerCase().contains(lowerQuery));
         }));
       }

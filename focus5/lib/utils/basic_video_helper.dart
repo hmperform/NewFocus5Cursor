@@ -63,12 +63,23 @@ class BasicVideoHelper {
     String? thumbnailUrl,
     MediaItem? mediaItem,
     bool openFullscreen = true,
+    Function(String mediaId)? onMediaCompleted,
   }) async {
-    final videoService = Provider.of<BasicVideoService>(context, listen: false);
+    // Create a stable context reference
+    final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+    final navigatorContext = context;
+    final videoService = Provider.of<BasicVideoService>(navigatorContext, listen: false);
     
-    // Show loading indicator while preparing video
-    final loadingDialog = _showLoadingDialog(context);
+    // Store BuildContext state to check validity later
+    final isMounted = Navigator.of(navigatorContext).mounted;
     
+    // Set the completion callback if provided
+    if (onMediaCompleted != null) {
+      videoService.setCompletionCallback(onMediaCompleted);
+    }
+    
+    bool success = false;
+
     try {
       // Check if this video was already preloaded
       final firebaseStorageService = FirebaseStorageService();
@@ -79,48 +90,94 @@ class BasicVideoHelper {
         actualVideoUrl = await firebaseStorageService.getVideoUrl(videoUrl);
         
         if (actualVideoUrl.isEmpty) {
-          // Hide loading dialog
-          Navigator.of(context, rootNavigator: true).pop();
-          
-          // Show error snackbar
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not load video. Please try again later.')),
-          );
+          // Simply navigate back since we can't display the video
+          if (isMounted && Navigator.of(navigatorContext).canPop()) {
+            Navigator.of(navigatorContext).pop();
+          }
           return;
         }
       }
-      
+
       // Initialize the video player
-      await videoService.initializePlayer(
+      success = await videoService.initializePlayer(
         videoUrl: actualVideoUrl,
         title: title ?? 'Video',
         subtitle: subtitle ?? '',
         thumbnailUrl: thumbnailUrl ?? '',
         mediaItem: mediaItem,
       );
-      
-      // Hide loading dialog
-      Navigator.of(context, rootNavigator: true).pop();
-      
-      // Open fullscreen player if requested
-      if (openFullscreen) {
+
+      if (!success) {
+        // Handle failure gracefully
+        if (isMounted && Navigator.of(navigatorContext).canPop()) {
+          Navigator.of(navigatorContext).pop();
+        }
+        return;
+      }
+
+      // Set up completion tracking
+      if (mediaItem != null && success) {
+        videoService.setCompletionCallback(onMediaCompleted ?? (_) {});
+      }
+
+      // Open in fullscreen if requested and successful
+      if (openFullscreen && success) {
         videoService.setFullScreen(true);
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => const BasicPlayerScreen(),
-          ),
-        ).then((_) {
+        
+        // Navigate to the BasicPlayerScreen
+        if (isMounted) {
+          await Navigator.push(
+            navigatorContext,
+            MaterialPageRoute(
+              builder: (context) => const BasicPlayerScreen(),
+            ),
+          );
+          
+          // Reset fullscreen state after returning
           videoService.setFullScreen(false);
-        });
+          
+          // Always navigate back after the video completes
+          if (Navigator.of(navigatorContext).canPop()) {
+            Navigator.of(navigatorContext).pop();
+          }
+        }
       }
     } catch (e) {
-      // Hide loading dialog
-      Navigator.of(context, rootNavigator: true).pop();
+      debugPrint('Error playing video: $e');
       
-      // Show error snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error playing video: ${e.toString()}')),
+      // Ensure we navigate back on error
+      if (isMounted && Navigator.of(navigatorContext).canPop()) {
+        Navigator.of(navigatorContext).pop();
+      }
+    }
+  }
+
+  // Helper method to show error dialog - make it context-safe
+  static void _showErrorDialog(BuildContext context, String message) {
+    // Check if context is still valid before showing dialog
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+      // Context is not valid, just log the error
+      debugPrint('Cannot show error dialog: $message (context is no longer valid)');
+      return;
+    }
+    
+    try {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       );
+    } catch (e) {
+      // If dialog fails, just log the error
+      debugPrint('Failed to show error dialog: $e - Original error: $message');
     }
   }
   
@@ -138,45 +195,5 @@ class BasicVideoHelper {
     ).then((_) {
       videoService.setFullScreen(false);
     });
-  }
-  
-  /// Show a loading dialog while the video is being prepared
-  static AlertDialog _showLoadingDialog(BuildContext context) {
-    AlertDialog alert = AlertDialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      content: Center(
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Loading video...',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return alert;
-      },
-    );
-    
-    return alert;
   }
 } 

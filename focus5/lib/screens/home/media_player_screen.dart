@@ -127,54 +127,16 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
   }
 
   Widget _buildVideoPlayer(MediaProvider mediaProvider) {
-    if (mediaProvider.videoController == null) {
-      debugPrint('Video player screen: videoController is null, showing loading animation');
+    final videoController = mediaProvider.videoController;
+    
+    if (videoController == null || !videoController.value.isInitialized) {
       return _buildLoadingAnimation();
     }
     
-    if (!mediaProvider.videoController!.value.isInitialized) {
-      debugPrint('Video player screen: videoController not initialized, showing loading animation');
-      return _buildLoadingAnimation();
-    }
+    // Calculate video dimensions for aspect ratio
+    final double videoWidth = MediaQuery.of(context).size.width;
+    final double videoHeight = videoWidth / videoController.value.aspectRatio;
     
-    debugPrint('Video player: videoController is initialized with duration: ${mediaProvider.videoController!.value.duration.inSeconds}s, isPlaying: ${mediaProvider.videoController!.value.isPlaying}');
-
-    // Calculate video dimensions to fill screen
-    final size = MediaQuery.of(context).size;
-    final videoRatio = mediaProvider.videoController!.value.aspectRatio;
-    final screenRatio = size.width / size.height;
-    
-    // Determine dimensions to fill screen while keeping aspect ratio
-    double videoWidth;
-    double videoHeight;
-    
-    // IMPROVED LAYOUT: Always fill the screen width in portrait mode
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-    
-    if (isPortrait) {
-      // In portrait, always fill width and zoom if needed
-      videoWidth = size.width;
-      videoHeight = videoWidth / videoRatio;
-      
-      // If video height is less than screen height, scale up to fill (zoom in)
-      if (videoHeight < size.height) {
-        final scale = size.height / videoHeight;
-        videoHeight = size.height;
-        videoWidth = videoWidth * scale;
-      }
-    } else {
-      // In landscape, use the original logic
-      if (screenRatio > videoRatio) {
-        // Screen is wider than video, so fill by width
-        videoWidth = size.width;
-        videoHeight = videoWidth / videoRatio;
-      } else {
-        // Screen is taller than video, so fill by height
-        videoHeight = size.height;
-        videoWidth = videoHeight * videoRatio;
-      }
-    }
-
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -190,7 +152,16 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
         ),
         
         // Custom Controls layer
-        CustomVideoControls(onClose: _handleBackPress),
+        CustomVideoControls(
+          onClose: () {
+            // Properly dispose resources before navigation
+            if (mediaProvider.videoController != null && 
+                mediaProvider.videoController!.value.isPlaying) {
+              mediaProvider.pauseMedia();
+            }
+            _handleBackPress(); // This will properly clean up and navigate back
+          }
+        ),
         
         // Loading overlay
         if (mediaProvider.isBuffering) // Keep loading overlay if needed

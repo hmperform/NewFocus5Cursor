@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Course {
   final String id;
   final String title;
@@ -16,6 +18,7 @@ class Course {
   final bool universityExclusive;
   final List<String>? universityAccess;
   final List<dynamic>? lessons;
+  final List<String> learningPoints;
 
   Course({
     required this.id,
@@ -35,6 +38,7 @@ class Course {
     required this.universityExclusive,
     this.universityAccess,
     this.lessons,
+    this.learningPoints = const [],
   });
 
   factory Course.fromJson(Map<String, dynamic> json) {
@@ -58,6 +62,7 @@ class Course {
           ? List<String>.from(json['universityAccess'])
           : null,
       lessons: json['lessons'],
+      learningPoints: List<String>.from(json['learningPoints'] ?? []),
     );
   }
 
@@ -80,6 +85,7 @@ class Course {
       'universityExclusive': universityExclusive,
       'universityAccess': universityAccess,
       'lessons': lessons,
+      'learningPoints': learningPoints,
     };
   }
 
@@ -100,6 +106,41 @@ class Course {
       premium: false,
       createdAt: DateTime.now(),
       universityExclusive: false,
+      learningPoints: [],
+    );
+  }
+
+  factory Course.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    // Handle creatorId which might be a map or just an ID string
+    String creatorId;
+    if (data['creatorId'] is Map) {
+      creatorId = (data['creatorId'] as Map<String, dynamic>)['id'] ?? 'unknown_creator';
+    } else if (data['creatorId'] is String) {
+      creatorId = data['creatorId'];
+    } else {
+      creatorId = 'unknown_creator'; // Default or error handling
+    }
+
+    return Course(
+      id: doc.id,
+      title: data['title'] ?? 'No Title',
+      description: data['description'] ?? 'No Description',
+      imageUrl: data['imageUrl'] ?? '',
+      coachId: creatorId,
+      coachName: data['creatorName'] ?? 'Unknown Creator',
+      coachImageUrl: data['creatorImageUrl'] ?? '',
+      tags: List<String>.from(data['tags'] ?? []),
+      focusAreas: List<String>.from(data['focusAreas'] ?? []),
+      durationMinutes: data['durationMinutes'] ?? 0,
+      xpReward: data['xpReward'] ?? 0,
+      featured: data['featured'] ?? false,
+      premium: data['premium'] ?? false,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      universityExclusive: data['universityExclusive'] ?? false,
+      universityAccess: data['universityAccess'],
+      learningPoints: List<String>.from(data['learningPoints'] ?? []),
     );
   }
 } 

@@ -7,6 +7,9 @@ import '../../widgets/article/article_card.dart';
 import '../home/articles_list_screen.dart';
 import 'package:focus5/models/coach_model.dart';
 import 'package:focus5/providers/theme_provider.dart';
+import 'package:focus5/widgets/article/article_card.dart';
+import 'package:focus5/models/content_models.dart';
+import 'all_articles_screen.dart';
 
 class CoachProfileScreen extends StatefulWidget {
   final CoachModel coach;

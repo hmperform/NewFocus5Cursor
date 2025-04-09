@@ -9,6 +9,7 @@ import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/basic_video_helper.dart';
+import '../../services/media_completion_service.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -337,7 +338,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildStatItem(Icons.access_time, '${_course!.durationMinutes ~/ 60}h ${_course!.durationMinutes % 60}m', 'Duration'),
-                      _buildStatItem(Icons.menu_book, '${_course!.modules.length}', 'Lessons'),
+                      _buildStatItem(Icons.menu_book, '${_course!.lessonsList.length}', 'Lessons'),
                       _buildStatItem(Icons.bolt, '${_course!.xpReward}', 'XP'),
                     ],
                   ),
@@ -416,6 +417,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final accentColor = themeProvider.accentColor;
+    final userProvider = Provider.of<UserProvider>(context, listen: true);
 
     return Container(
       color: backgroundColor,
@@ -423,9 +425,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         padding: EdgeInsets.zero, // No bottom padding needed here
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(), // Disable scrolling since parent handles it
-        itemCount: _course!.modules.length,
+        itemCount: _course!.lessonsList.length,
         itemBuilder: (context, index) {
-          final lesson = _course!.modules[index];
+          final lesson = _course!.lessonsList[index];
+          // Check if the lesson is completed using the user provider
+          final bool isCompleted = userProvider.completedLessonIds.contains(lesson.id);
+          
           // Enhanced lesson item
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -460,23 +465,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      // Lesson number in circle
+                      // Lesson number or completion indicator
                       Container(
                         width: 42,
                         height: 42,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: accentColor,
-                          shape: BoxShape.circle,
+                          color: isCompleted ? Colors.green : accentColor,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: themeProvider.accentTextColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+                        child: isCompleted 
+                          ? const Icon(Icons.check, color: Colors.white) 
+                          : Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: themeProvider.accentTextColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                       ),
                       const SizedBox(width: 16),
                       // Lesson details
@@ -494,7 +501,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              lesson.description,
+                              lesson.description ?? 'No description available',
                               style: TextStyle(
                                 color: secondaryTextColor,
                                 fontSize: 14,
@@ -540,18 +547,50 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           ],
                         ),
                       ),
-                      // Play button
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: accentColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.play_arrow,
-                          color: accentColor,
-                          size: 20,
+                      // Mark as complete or play button
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () async {
+                            if (isCompleted) {
+                              // Lesson is already completed, do nothing
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('This lesson is already completed!'),
+                                  backgroundColor: Colors.green,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            } else {
+                              // Mark as complete
+                              bool success = await userProvider.toggleLessonCompletion(lesson.id, true, context: context);
+                              // Only show success message if toggle was successful
+                              if (success && mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Lesson marked as completed!'),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: isCompleted
+                              ? Icon(
+                                  Icons.check_box,
+                                  color: Colors.green,
+                                  size: 28,
+                                )
+                              : Icon(
+                                  Icons.check_box_outline_blank,
+                                  color: accentColor,
+                                  size: 28,
+                                ),
+                          ),
                         ),
                       ),
                     ],
@@ -639,10 +678,23 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildLearningPoint('Build mental toughness for high-pressure situations'),
-          _buildLearningPoint('Learn techniques to maintain focus during competition'),
-          _buildLearningPoint('Develop pre-performance routines for peak mental state'),
-          _buildLearningPoint('Apply visualization techniques used by elite athletes'),
+          // Dynamically build learning points from the course data
+          if (_course != null && _course!.learningPoints.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _course!.learningPoints
+                  .map((point) => _buildLearningPoint(point))
+                  .toList(),
+            )
+          else
+            // Optional: Show a message if no learning points are available
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'No learning points specified for this course.',
+                style: TextStyle(color: secondaryTextColor),
+              ),
+            ),
           const SizedBox(height: 32),
           
           // Focus areas
@@ -1013,6 +1065,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       return;
     }
     
+    // Get current user ID for tracking completion
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final userId = userProvider.user?.id ?? '';
+
     // Play the video using BasicVideoHelper
     BasicVideoHelper.playVideo(
       context: context,
@@ -1023,7 +1079,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       mediaItem: MediaItem(
         id: widget.lesson.id,
         title: widget.lesson.title,
-        description: widget.lesson.description,
+        description: widget.lesson.description ?? 'No description available',
         mediaType: MediaType.video,
         mediaUrl: videoUrl,
         imageUrl: widget.lesson.thumbnailUrl ?? '',
@@ -1037,12 +1093,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         xpReward: 10,
       ),
       openFullscreen: true,
+      onMediaCompleted: (mediaId) {
+        // Mark lesson media as completed in the media completion service
+        final mediaCompletionService = MediaCompletionService();
+        mediaCompletionService.markMediaCompleted(userId, mediaId, MediaType.video);
+        
+        // Show completion snackbar if desired
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Lesson content completed! You can now mark it as completed.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      },
     );
+    
+    // Do NOT pop this screen - let the video player navigate naturally
   }
 
   @override
   Widget build(BuildContext context) {
-    // This is now just a wrapper that immediately initializes the basic video player
+    // Use a minimal loading screen that won't flash
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(

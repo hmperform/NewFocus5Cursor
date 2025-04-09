@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/content_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import '../services/media_completion_service.dart';
 
 class MediaProvider extends ChangeNotifier {
   // Media player instances
@@ -29,6 +30,10 @@ class MediaProvider extends ChangeNotifier {
   // Store the last valid position for recovery
   double _lastValidPosition = 0;
   
+  // Forward skip limit tracking
+  int _forwardSkipCount = 0;
+  final int _maxForwardSkips = 10;
+  
   // Flags for state control
   bool _isTransitioning = false;
   bool _disposed = false;
@@ -50,6 +55,11 @@ class MediaProvider extends ChangeNotifier {
   MediaItem? get currentMediaItem => _currentMediaItem;
   MediaType get mediaType => _mediaType;
   
+  // Skip limit getters
+  int get forwardSkipCount => _forwardSkipCount;
+  int get maxForwardSkips => _maxForwardSkips;
+  bool get hasReachedForwardSkipLimit => _forwardSkipCount >= _maxForwardSkips;
+  
   // Reference to last played media item for resuming
   MediaItem? _currentMediaItem;
   
@@ -63,6 +73,9 @@ class MediaProvider extends ChangeNotifier {
   // Flag to pause notifications during disposal
   bool _pauseNotificationsFlag = false;
 
+  // Media completion service
+  final MediaCompletionService _mediaCompletionService = MediaCompletionService();
+  
   MediaProvider() {
     _initAudioPlayer();
   }
@@ -150,6 +163,9 @@ class MediaProvider extends ChangeNotifier {
   }) async {
     if (_disposed) return;
     
+    // Reset skip counter when starting new media
+    _forwardSkipCount = 0;
+    
     // Set media metadata
     _title = title;
     _subtitle = subtitle;
@@ -203,6 +219,19 @@ class MediaProvider extends ChangeNotifier {
     _showMiniPlayer = true;
     
     debugPrint('Audio playback started: $mediaUrl at position $startPosition');
+
+    // Add code to periodically track completion
+    // Create a Timer that updates completion status every 10 seconds
+    Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (_disposed || _audioPlayer == null) {
+        timer.cancel();
+        return;
+      }
+      
+      if (_currentMediaItem != null) {
+        trackMediaCompletion('');  // Will be updated with actual userId when used
+      }
+    });
   }
   
   // Initialize video playback with optimized loading
@@ -321,6 +350,19 @@ class MediaProvider extends ChangeNotifier {
       // CRITICAL FIX: Force update position stream with our initial position
       _positionStreamController.add(startPosition);
       debugPrint('🟢 Video playback initiated successfully');
+      
+      // Add code to periodically track completion
+      // Create a Timer that updates completion status every 10 seconds
+      Timer.periodic(const Duration(seconds: 10), (timer) {
+        if (_disposed || _videoController == null) {
+          timer.cancel();
+          return;
+        }
+        
+        if (_currentMediaItem != null) {
+          trackMediaCompletion('');  // Will be updated with actual userId when used
+        }
+      });
       
     } catch (e) {
       debugPrint('🔴 Error setting up video controller: $e');
@@ -586,6 +628,17 @@ class MediaProvider extends ChangeNotifier {
 
   // Skip forward by specified seconds
   Future<void> skipForward(double seconds) async {
+    if (hasReachedForwardSkipLimit) {
+      // Don't increment or seek if limit reached
+      // The UI will handle showing the message
+      return;
+    }
+    
+    // Increment skip counter
+    _forwardSkipCount++;
+    debugPrint('Forward skip count: $_forwardSkipCount/$_maxForwardSkips');
+    
+    // Perform the seek
     final newPosition = _currentPosition + seconds;
     await seekTo(newPosition);
   }
@@ -765,5 +818,38 @@ class MediaProvider extends ChangeNotifier {
     if (!_pauseNotificationsFlag && !_disposed) {
       super.notifyListeners();
     }
+  }
+
+  // Track media completion
+  Future<void> trackMediaCompletion(String userId) async {
+    if (_currentMediaItem == null || _disposed) return;
+    
+    try {
+      final String mediaId = _currentMediaItem!.id;
+      double currentPos = _currentPosition;
+      double totalDur = _totalDuration;
+      
+      // For video, get position directly from controller for accuracy
+      if (_mediaType == MediaType.video && _videoController != null) {
+        currentPos = _videoController!.value.position.inSeconds.toDouble();
+        totalDur = _videoController!.value.duration.inSeconds.toDouble();
+      }
+      
+      // Track progress
+      await _mediaCompletionService.trackMediaProgress(
+        userId, 
+        mediaId, 
+        currentPos, 
+        totalDur,
+        _mediaType
+      );
+    } catch (e) {
+      debugPrint('Error tracking media completion: $e');
+    }
+  }
+  
+  // Check if media has been completed
+  Future<bool> isMediaCompleted(String userId, String mediaId) async {
+    return await _mediaCompletionService.isMediaCompleted(userId, mediaId);
   }
 } 

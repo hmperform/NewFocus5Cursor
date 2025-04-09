@@ -1,20 +1,25 @@
+import 'dart:async';
+import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:focus5/models/article_model.dart';
+import 'package:focus5/models/content_models.dart';
+import 'package:focus5/providers/coach_provider.dart';
+import 'package:focus5/providers/content_provider.dart';
+import 'package:focus5/providers/theme_provider.dart';
+import 'package:focus5/screens/article/article_detail_screen.dart';
+import 'package:focus5/screens/coach/coach_profile_screen.dart';
+import 'package:focus5/screens/explore/focus_area_courses_screen.dart';
+import 'package:focus5/screens/home/course_detail_screen.dart';
+import 'package:focus5/services/firebase_config_service.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:developer';
 
 import '../../providers/user_provider.dart';
-import '../../providers/content_provider.dart';
-import '../../providers/theme_provider.dart';
-import '../../providers/coach_provider.dart';
 import '../../constants/theme.dart';
-import '../../models/content_models.dart';
-import 'course_detail_screen.dart';
-import 'coach_profile_screen.dart';
 import 'articles_list_screen.dart';
 import '../../services/paywall_service.dart';
-import 'article_detail_screen.dart';
 import '../explore/focus_area_courses_screen.dart';
 import '../../widgets/article/article_card.dart';
 
@@ -38,6 +43,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   String? _coachesError;
   
   late TabController _tabController;
+  final FirebaseConfigService _configService = FirebaseConfigService();
+  Map<String, dynamic> _appConfig = {};
+  bool _loadingConfig = true;
   
   final List<String> _categories = [
     'All',
@@ -59,23 +67,43 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     });
 
     // Initialize content data
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final contentProvider = Provider.of<ContentProvider>(context, listen: false);
       // *** Always call initContent to handle loading of all content types ***
       contentProvider.initContent(null); 
 
-      // *** REMOVED redundant checks and calls ***
-      // if (contentProvider.courses.isEmpty) {
-      //   contentProvider.initContent(null);
-      // }
-      // if (contentProvider.articles.isEmpty) {
-      //  contentProvider.loadArticles(); // REMOVED
-      // }
-
       // Load coaches separately as before
       final coachProvider = Provider.of<CoachProvider>(context, listen: false);
       coachProvider.loadCoaches();
+      
+      // Load app configuration for section ordering
+      _loadAppConfig();
     });
+  }
+  
+  Future<void> _loadAppConfig() async {
+    try {
+      final config = await _configService.getAppConfig();
+      setState(() {
+        _appConfig = config;
+        _loadingConfig = false;
+      });
+      debugPrint('Loaded app config: $config');
+    } catch (e) {
+      debugPrint('Error loading app config: $e');
+      setState(() {
+        _appConfig = {
+          'section_order': [
+            'focus_areas',
+            'featured_courses',
+            'articles',
+            'trending_courses',
+            'coaches'
+          ]
+        };
+        _loadingConfig = false;
+      });
+    }
   }
   
   @override
@@ -170,25 +198,48 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
 
           // Main content
           SliverList(
-            delegate: SliverChildListDelegate([
-              // Coaches Section - Now first
-              _buildCoachesSection(),
-              
-              // Featured Courses Section - Now second
-              _buildFeaturedCoursesSection(),
-              
-              // Focus Areas (Modules) Section - Now third
-              _buildModulesSection(),
-              
-              // Renamed Articles Section to Trending Courses - Now last
-              _buildTrendingCoursesSection(),
-              
-              const SizedBox(height: 80), // Bottom padding
-            ]),
+            delegate: SliverChildListDelegate(_buildOrderedSections()),
           ),
         ],
       ),
     );
+  }
+  
+  List<Widget> _buildOrderedSections() {
+    if (_loadingConfig) {
+      return [
+        const SizedBox(height: 40),
+        const Center(child: CircularProgressIndicator()),
+        const SizedBox(height: 80),
+      ];
+    }
+    
+    // Get section order from app config, with fallback to default
+    final List<dynamic> sectionOrder = 
+        _appConfig['section_order'] as List<dynamic>? ?? 
+        ['focus_areas', 'featured_courses', 'articles', 'trending_courses', 'coaches'];
+    
+    // Map section IDs to their builder methods
+    final Map<String, Widget> sectionWidgets = {
+      'focus_areas': _buildModulesSection(),
+      'featured_courses': _buildFeaturedCoursesSection(),
+      'articles': _buildArticlesSection(),
+      'trending_courses': _buildTrendingCoursesSection(),
+      'coaches': _buildCoachesSection(),
+    };
+    
+    // Create ordered list of sections based on config
+    final orderedSections = <Widget>[];
+    for (final sectionId in sectionOrder) {
+      if (sectionWidgets.containsKey(sectionId)) {
+        orderedSections.add(sectionWidgets[sectionId]!);
+      }
+    }
+    
+    // Add bottom padding
+    orderedSections.add(const SizedBox(height: 80));
+    
+    return orderedSections;
   }
   
   Widget _buildCoachesSection() {
@@ -459,6 +510,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Add top spacing to separate from previous section
+        const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Row(
@@ -490,7 +543,8 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             return ArticleCard(article: article); // Correctly using the imported ArticleCard widget
           },
         ),
-        const SizedBox(height: 24),
+        // Add more bottom spacing
+        const SizedBox(height: 40),
       ],
     );
   }

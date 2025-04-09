@@ -288,6 +288,52 @@ class BadgeService {
       return false;
     }
   }
+  
+  // Manually award a badge to a user (for admin use)
+  Future<bool> manuallyAwardBadge(String userId, String badgeId) async {
+    try {
+      // Get the badge definition
+      final badgeDoc = await _firestore.collection('badges').doc(badgeId).get();
+      if (!badgeDoc.exists) {
+        debugPrint('Badge not found: $badgeId');
+        return false;
+      }
+      
+      // Get user to check if they already have the badge
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        debugPrint('User not found: $userId');
+        return false;
+      }
+      
+      final user = User.fromFirestore(userDoc);
+      
+      // Check if user already has this badge
+      if (user.badges.any((b) => b.id == badgeId)) {
+        debugPrint('User already has this badge: $badgeId');
+        return false;
+      }
+      
+      // Create new badge
+      final badgeData = badgeDoc.data()!;
+      final newBadge = AppBadge(
+        id: badgeId,
+        name: badgeData['name'] ?? 'Unknown Badge',
+        description: badgeData['description'] ?? '',
+        imageUrl: badgeData['imageUrl'] ?? '',
+        earnedAt: DateTime.now(),
+        xpValue: badgeData['xpValue'] ?? 0,
+      );
+      
+      // Award the badge
+      await _awardBadgeToUser(userId, newBadge);
+      
+      return true;
+    } catch (e) {
+      debugPrint('Error manually awarding badge: $e');
+      return false;
+    }
+  }
 }
 
 // Badge definition class - represents the metadata for a badge

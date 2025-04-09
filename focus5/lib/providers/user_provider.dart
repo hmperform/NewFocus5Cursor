@@ -15,12 +15,14 @@ import '../providers/auth_provider.dart';
 import '../services/firebase_auth_service.dart';
 import 'package:provider/provider.dart';
 import '../main.dart'; // Import to access navigatorKey
+import '../services/media_completion_service.dart';
 
 class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorageService _storageService = FirebaseStorageService();
   final BadgeService _badgeService = BadgeService();
   final AuthProvider? _authProvider = null;
+  final MediaCompletionService _mediaCompletionService = MediaCompletionService();
   
   User? _user;
   List<JournalEntry> _journalEntries = [];
@@ -36,6 +38,12 @@ class UserProvider extends ChangeNotifier {
   int get streak => _user?.streak ?? 0;
   List<AppBadge> get badges => _user?.badges ?? [];
   List<String> get focusAreas => _user?.focusAreas ?? [];
+  
+  // Get list of completed lesson IDs
+  List<String> get completedLessonIds => _user?.completedLessons ?? [];
+  
+  // Get list of completed article IDs
+  List<String> get completedArticleIds => _user?.completedArticles ?? [];
   
   // Level-related getters
   int get level => UserLevelService.getUserLevel(_user?.xp ?? 0);
@@ -505,6 +513,259 @@ class UserProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error getting available badges: $e');
       return [];
+    }
+  }
+
+  // Toggle lesson completion status
+  Future<bool> toggleLessonCompletion(String lessonId, bool isCompleted, {required BuildContext context}) async {
+    if (_user == null) return false;
+    
+    try {
+      final userId = _user!.id;
+      List<String> updatedLessons = [..._user!.completedLessons];
+      
+      // Only allow marking lessons as completed, not uncompleting them
+      if (isCompleted && !updatedLessons.contains(lessonId)) {
+        // Check if the lesson media has been completed
+        final hasCompletedMedia = await _mediaCompletionService.isMediaCompleted(userId, lessonId);
+        
+        if (!hasCompletedMedia) {
+          // Show message that user needs to watch/listen to the content first
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('You need to watch/listen to the entire content before marking it as completed.'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 3),
+                action: SnackBarAction(
+                  label: 'OK',
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
+              ),
+            );
+          }
+          return false;
+        }
+        
+        // Add to completed lessons
+        updatedLessons.add(lessonId);
+        
+        // Add XP for completing a lesson
+        await addXp(userId, 50, 'Lesson completion');
+
+        // Update in Firestore
+        await _firestore.collection('users').doc(userId).update({
+          'completedLessons': updatedLessons,
+        });
+        
+        // Log the completion
+        await _firestore.collection('lesson_completions').add({
+          'userId': userId,
+          'lessonId': lessonId,
+          'action': 'completed',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        // Update local user
+        _user = _user!.copyWith(completedLessons: updatedLessons);
+        notifyListeners();
+        
+        // Check if this lesson completion completes an entire course
+        await checkAndAwardCourseCompletionXp(lessonId);
+        
+        return true;
+      } else {
+        // Silently ignore attempts to uncheck completed lessons
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error toggling lesson completion: $e');
+      return false;
+    }
+  }
+  
+  // Check if a course is completed and award XP (only once per course)
+  Future<void> checkAndAwardCourseCompletionXp(String lessonId) async {
+    if (_user == null) return;
+    
+    try {
+      // Step 1: Find which course this lesson belongs to by querying Firestore
+      final courseQuery = await _firestore
+          .collection('courses')
+          .where('lessonsList', arrayContains: {'id': lessonId})
+          .limit(1)
+          .get();
+      
+      if (courseQuery.docs.isEmpty) {
+        debugPrint('No course found containing lesson $lessonId');
+        return;
+      }
+      
+      final courseDoc = courseQuery.docs.first;
+      final courseId = courseDoc.id;
+      final courseData = courseDoc.data();
+      
+      // Skip if this course is already marked as completed
+      if (_user!.completedCourses.contains(courseId)) {
+        debugPrint('Course $courseId already completed, skipping XP award');
+        return;
+      }
+      
+      // Step 2: Get all lessons in this course
+      List<String> courseLessonIds = [];
+      if (courseData['lessonsList'] != null && courseData['lessonsList'] is List) {
+        courseLessonIds = (courseData['lessonsList'] as List)
+            .where((lessonData) => lessonData is Map && lessonData['id'] != null)
+            .map((lessonData) => lessonData['id'].toString())
+            .toList();
+      } else if (courseData['lessons'] != null && courseData['lessons'] is List) {
+        courseLessonIds = (courseData['lessons'] as List)
+            .where((lessonData) => lessonData is Map && lessonData['id'] != null)
+            .map((lessonData) => lessonData['id'].toString())
+            .toList();
+      }
+      
+      if (courseLessonIds.isEmpty) {
+        debugPrint('No lessons found in course $courseId');
+        return;
+      }
+      
+      // Step 3: Check if all course lessons are completed
+      bool allLessonsCompleted = courseLessonIds.every(
+        (lessonId) => _user!.completedLessons.contains(lessonId)
+      );
+      
+      if (!allLessonsCompleted) {
+        debugPrint('Not all lessons completed for course $courseId yet');
+        return;
+      }
+      
+      // Step 4: All lessons are completed! Award XP and mark course as completed
+      final xpReward = (courseData['xpReward'] as num?)?.toInt() ?? 100;
+      final userId = _user!.id;
+      
+      // Update user document
+      final updatedCompletedCourses = [..._user!.completedCourses, courseId];
+      await _firestore.collection('users').doc(userId).update({
+        'completedCourses': updatedCompletedCourses,
+      });
+      
+      // Log the completion
+      await _firestore.collection('course_completions').add({
+        'userId': userId,
+        'courseId': courseId,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      
+      // Add XP for completing the course
+      await addXp(userId, xpReward, 'Course completion');
+      
+      // Award Focus Points
+      await addFocusPoints(userId, 25, 'Course completion');
+      
+      // Update local user
+      _user = _user!.copyWith(
+        completedCourses: updatedCompletedCourses,
+      );
+      
+      // Show alert/notification
+      debugPrint('🎉 Course $courseId completed! Awarded $xpReward XP');
+      
+      // Check for badges
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error checking course completion: $e');
+    }
+  }
+
+  // Track article completion
+  Future<bool> toggleArticleCompletion(String articleId, bool isCompleted, {required BuildContext context}) async {
+    if (_user == null) return false;
+    
+    try {
+      final userId = _user!.id;
+      List<String> updatedArticles = [..._user!.completedArticles];
+      
+      if (isCompleted && !updatedArticles.contains(articleId)) {
+        // Add to completed articles
+        updatedArticles.add(articleId);
+        
+        // Add XP for completing an article
+        await addXp(userId, 30, 'Article completion');
+
+        // Update in Firestore
+        await _firestore.collection('users').doc(userId).update({
+          'completedArticles': updatedArticles,
+        });
+        
+        // Log the completion/removal
+        await _firestore.collection('article_completions').add({
+          'userId': userId,
+          'articleId': articleId,
+          'action': 'completed',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        // Update local user
+        _user = _user!.copyWith(completedArticles: updatedArticles);
+        notifyListeners();
+        
+        return true;
+        
+      } else if (!isCompleted && updatedArticles.contains(articleId)) {
+        // Remove from completed articles
+        updatedArticles.remove(articleId);
+        
+        // Update in Firestore
+        await _firestore.collection('users').doc(userId).update({
+          'completedArticles': updatedArticles,
+        });
+        
+        // Log the completion/removal
+        await _firestore.collection('article_completions').add({
+          'userId': userId,
+          'articleId': articleId,
+          'action': 'uncompleted',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        
+        // Update local user
+        _user = _user!.copyWith(completedArticles: updatedArticles);
+        notifyListeners();
+        
+        return true;
+      } else {
+        // No change needed
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error toggling article completion: $e');
+      return false;
+    }
+  }
+
+  // Award a badge to the current user (admin only)
+  Future<bool> awardBadgeToCurrentUser(String badgeId) async {
+    if (_user == null || !_user!.isAdmin) {
+      return false;
+    }
+    
+    try {
+      final badgeService = BadgeService();
+      final success = await badgeService.manuallyAwardBadge(_user!.id, badgeId);
+      
+      if (success) {
+        // Reload user data to get the updated badges
+        await loadUserData(_user!.id);
+      }
+      
+      return success;
+    } catch (e) {
+      debugPrint('Error awarding badge to current user: $e');
+      return false;
     }
   }
 } 

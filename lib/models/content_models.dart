@@ -104,4 +104,99 @@ class Article {
       premium: json['premium'] ?? false,
     );
   }
+}
+
+class Lesson {
+  final String id;
+  final String title;
+  final String description;
+  final String textContent;
+  final String audioUrl;
+  final String videoUrl;
+  final String thumbnailUrl;
+  final DateTime createdAt;
+  final String courseId;
+  final int order;
+  final int durationMinutes;
+  final bool isFree;
+  final String type;
+  final int xp;
+  final CreatorId creatorId;
+  final String? quizId;
+  final bool isCompleted;
+  final Map<String, bool> userProgress;
+
+  Lesson({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.textContent,
+    required this.audioUrl,
+    required this.videoUrl,
+    required this.thumbnailUrl,
+    required this.createdAt,
+    required this.courseId,
+    required this.order,
+    required this.durationMinutes,
+    required this.isFree,
+    required this.type,
+    required this.xp,
+    required this.creatorId,
+    required this.quizId,
+    required this.isCompleted,
+    required this.userProgress,
+  });
+
+  factory Lesson.fromJson(Map<String, dynamic> data, String id) {
+    // Ensure required fields are present
+    _validateRequiredField(data, 'title', id);
+    _validateRequiredField(data, 'courseId', id);
+    _validateRequiredField(data, 'order', id);
+    _validateRequiredField(data, 'durationMinutes', id);
+    _validateRequiredField(data, 'type', id);
+    _validateRequiredField(data, 'xp', id);
+
+    // Helper function to parse Timestamps safely
+    DateTime? _parseTimestamp(dynamic timestamp) {
+      if (timestamp is Timestamp) {
+        return timestamp.toDate();
+      } else if (timestamp is String) {
+        return DateTime.tryParse(timestamp);
+      }
+      return null;
+    }
+
+    // Helper function to parse CreatorId safely
+    CreatorId? _parseCreatorId(dynamic creatorData) {
+      if (creatorData is Map<String, dynamic>) {
+        return CreatorId.fromJson(creatorData);
+      }
+      return null;
+    }
+
+    return Lesson(
+      id: id,
+      title: data['title'] as String,
+      description: data['description'] as String? ?? '',
+      textContent: data['textContent'] as String? ?? '',
+      audioUrl: data['audioUrl'] as String?,
+      videoUrl: data['videoUrl'] as String?,
+      thumbnailUrl: data['thumbnailUrl'] as String?,
+      createdAt: _parseTimestamp(data['createdAt']),
+      courseId: data['courseId'] as String,
+      order: (data['order'] as num?)?.toInt() ?? 0,
+      durationMinutes: (data['durationMinutes'] as num?)?.toInt() ?? 0,
+      isFree: data['isFree'] as bool? ?? false,
+      type: data['type'] as String? ?? 'video',
+      xp: (data['xp'] as num?)?.toInt() ?? 0,
+      creatorId: _parseCreatorId(data['creatorId']),
+      quizId: data['quizId'] as String?,
+      isCompleted: data['isCompleted'] as bool? ?? false,
+      userProgress: (data['userProgress'] as Map<String, dynamic>?)
+              ?.map((key, value) => MapEntry(key, value as bool)) ??
+          {},
+    );
+  }
+
+  // ... rest of the class stays the same ...
 } 

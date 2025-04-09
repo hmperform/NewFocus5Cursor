@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:focus5/models/content_models.dart';
+import 'package:focus5/screens/home/article_detail_screen.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;

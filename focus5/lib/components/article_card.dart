@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/article_model.dart';
 import '../providers/theme_provider.dart';
+import '../providers/user_provider.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
@@ -14,7 +15,9 @@ class ArticleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+    final isCompleted = userProvider.completedArticleIds.contains(article.id);
     
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
@@ -91,6 +94,41 @@ class ArticleCard extends StatelessWidget {
                             'PREMIUM',
                             style: TextStyle(
                               color: isDarkMode ? Colors.black : Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Completion indicator
+                if (isCompleted)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'COMPLETED',
+                            style: TextStyle(
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),

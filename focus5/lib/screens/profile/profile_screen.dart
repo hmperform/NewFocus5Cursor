@@ -7,6 +7,7 @@ import '../../models/badge_model.dart';
 import 'edit_profile_screen.dart';
 import '../../utils/image_utils.dart';
 import '../explore/focus_area_courses_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -288,7 +289,181 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     
+                    // Admin section (only visible for admins)
+                    if (user.isAdmin) ...[
+                      const SizedBox(height: 24),
+                      
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1E1E),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.amber,
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.admin_panel_settings,
+                                    color: Colors.amber,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Admin Controls',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Use these controls with caution. Changes are immediate.',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              
+                              // Award Audio Ace badge button
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.headphones),
+                                  label: const Text('Award Audio Ace Badge'),
+                                  onPressed: () async {
+                                    final result = await userProvider.awardBadgeToCurrentUser('audio_complete_10');
+                                    
+                                    if (result && mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Audio Ace badge awarded!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } else if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Failed to award badge or badge already earned'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.amber,
+                                    foregroundColor: Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    
                     const SizedBox(height: 32),
+                    
+                    // Fix Badges Button
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.badge_outlined),
+                          label: const Text('Fix Badges'),
+                          onPressed: () async {
+                            // Show confirmation dialog
+                            bool confirm = await showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Fix Badges'),
+                                content: const Text(
+                                  'This will update your badges to ensure they are properly displayed. Continue?'
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Continue'),
+                                  ),
+                                ],
+                              ),
+                            ) ?? false;
+                            
+                            if (confirm) {
+                              try {
+                                // Show loading indicator
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Fixing badges...'))
+                                );
+                                
+                                // Run the migration for this user only
+                                final firestore = FirebaseFirestore.instance;
+                                final userData = await firestore.collection('users').doc(userId).get();
+                                
+                                if (userData.exists) {
+                                  final data = userData.data();
+                                  if (data != null && data['badges'] != null && data['badges'] is Map) {
+                                    // If badges is a reference object with id and path
+                                    final badgeRef = data['badges'] as Map<String, dynamic>;
+                                    if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
+                                      // Convert to array with a single badge
+                                      await firestore.collection('users').doc(userId).update({
+                                        'badges': [{
+                                          'id': badgeRef['id'],
+                                          'name': 'Badge',
+                                          'description': 'A badge from reference',
+                                          'imageUrl': '',
+                                          'earnedAt': FieldValue.serverTimestamp(),
+                                          'xpValue': 0,
+                                        }]
+                                      });
+                                      
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Badges fixed successfully! Refresh to see changes.'))
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Your badges are already in the correct format.'))
+                                      );
+                                    }
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Your badges are already in the correct format.'))
+                                    );
+                                  }
+                                }
+                              } catch (e) {
+                                // Show error message
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error fixing badges: $e'))
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2A2A2A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               );

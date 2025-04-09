@@ -85,6 +85,53 @@ class _CustomVideoControlsState extends State<CustomVideoControls> {
       }
     });
   }
+  
+  // Show a cheeky popup message when user tries to skip forward too many times
+  void _showSkipLimitPopup() {
+    if (!mounted) return;
+    
+    // Cancel the hide timer while showing popup
+    _hideTimer?.cancel();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black.withOpacity(0.8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.lime.shade400, width: 2),
+        ),
+        title: const Text('Whoa there, skipper!',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.not_interested, color: Colors.lime.shade400, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'You\'ve skipped forward 10 times already! \n'
+              'Maybe try watching some of the content? 😉',
+              style: TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Fine...', style: TextStyle(color: Colors.lime.shade400)),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    ).then((_) {
+      // Reset the hide timer after popup is dismissed
+      if (mounted && _showControls) {
+        _resetHideTimer();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,20 +170,66 @@ class _CustomVideoControlsState extends State<CustomVideoControls> {
                   ),
                 ),
                 
-                // Center play/pause button
+                // Center area with play/pause and skip buttons
                 Expanded(
-                  child: Center(
-                    child: IconButton(
-                      iconSize: 60,
-                      icon: Icon(
-                        mediaProvider.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                        color: Colors.white,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Back 10 seconds
+                      IconButton(
+                        iconSize: 40,
+                        icon: const Icon(
+                          Icons.replay_10_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          mediaProvider.skipBackward(10);
+                          _resetHideTimer();
+                        },
                       ),
-                      onPressed: () {
-                        mediaProvider.togglePlayPause();
-                        _resetHideTimer();
-                      },
-                    ),
+                      
+                      const SizedBox(width: 30),
+                      
+                      // Play/Pause Button
+                      IconButton(
+                        iconSize: 60,
+                        icon: Icon(
+                          mediaProvider.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          mediaProvider.togglePlayPause();
+                          _resetHideTimer();
+                        },
+                      ),
+                      
+                      const SizedBox(width: 30),
+                      
+                      // Forward 10 seconds
+                      IconButton(
+                        iconSize: 40,
+                        icon: const Icon(
+                          Icons.forward_10_rounded,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          if (mediaProvider.hasReachedForwardSkipLimit) {
+                            _showSkipLimitPopup();
+                          } else {
+                            mediaProvider.skipForward(10);
+                            _resetHideTimer();
+                            
+                            // If this skip reaches the limit, show the popup
+                            if (mediaProvider.forwardSkipCount == mediaProvider.maxForwardSkips) {
+                              // Small delay to let the seek complete before showing popup
+                              Future.delayed(const Duration(milliseconds: 200), () {
+                                _showSkipLimitPopup();
+                              });
+                            }
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 
