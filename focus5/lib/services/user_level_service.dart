@@ -7,29 +7,29 @@ class UserLevelService {
   
   // Map of level thresholds - key is level number, value is XP required
   static final Map<int, int> levelThresholds = {
-    1: 0,      // Level 1: 0-299 XP
-    2: 300,    // Level 2: 300-799 XP
-    3: 800,    // Level 3: 800-1499 XP
-    4: 1500,   // Level 4: 1500-2499 XP
-    5: 2500,   // Level 5: 2500-3999 XP
-    6: 4000,   // Level 6: 4000-5999 XP
-    7: 6000,   // Level 7: 6000-8499 XP
-    8: 8500,   // Level 8: 8500-11499 XP
-    9: 11500,  // Level 9: 11500-14999 XP
-    10: 15000, // Level 10: 15000+ XP
+    1: 0,      // Level 1: 0-499 XP
+    2: 500,    // Level 2: 500-999 XP
+    3: 1000,   // Level 3: 1000-1499 XP
+    4: 1500,   // Level 4: 1500-1999 XP
+    5: 2000,   // Level 5: 2000-2499 XP
+    6: 2500,   // Level 6: 2500-2999 XP
+    7: 3000,   // Level 7: 3000-3499 XP
+    8: 3500,   // Level 8: 3500-3999 XP
+    9: 4000,   // Level 9: 4000-4499 XP
+    10: 4500,  // Level 10: 4500+ XP
   };
   
-  // Focus points rewarded for each level up
+  // Focus points rewarded for each level up (1 point per level)
   static final Map<int, int> levelFocusPointsRewards = {
-    2: 100,  // Reward for reaching level 2
-    3: 150,  // Reward for reaching level 3
-    4: 200,  // Reward for reaching level 4
-    5: 250,  // Reward for reaching level 5
-    6: 300,  // Reward for reaching level 6
-    7: 350,  // Reward for reaching level 7
-    8: 400,  // Reward for reaching level 8
-    9: 450,  // Reward for reaching level 9
-    10: 500, // Reward for reaching level 10
+    2: 1,  // Reward for reaching level 2
+    3: 1,  // Reward for reaching level 3
+    4: 1,  // Reward for reaching level 4
+    5: 1,  // Reward for reaching level 5
+    6: 1,  // Reward for reaching level 6
+    7: 1,  // Reward for reaching level 7
+    8: 1,  // Reward for reaching level 8
+    9: 1,  // Reward for reaching level 9
+    10: 1, // Reward for reaching level 10
   };
   
   // Get user's current level based on XP
