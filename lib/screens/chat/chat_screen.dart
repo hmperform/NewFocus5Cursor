@@ -79,9 +79,9 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Consumer<ChatProvider>(
-          builder: (context, provider, child) {
-            final chat = provider.chats.firstWhere(
-              (c) => c.id == widget.chatId,
+          builder: (context, chatProvider, child) {
+            final chat = chatProvider.chats.firstWhere(
+              (chat) => chat.id == widget.chatId,
               orElse: () => Chat(
                 id: '',
                 participantIds: [],
@@ -89,107 +89,50 @@ class _ChatScreenState extends State<ChatScreen> {
                 lastMessageTime: DateTime.now(),
                 lastMessageSenderId: '',
                 hasUnreadMessages: false,
+                isGroupChat: false,
               ),
             );
             
             if (chat.id.isEmpty) {
-              return const Text('Chat');
+              return const Text('Loading...');
             }
             
-            final currentUserId = provider.currentUserId;
-            
-            // Get other participant for 1:1 chats
-            if (!chat.isGroupChat && chat.participantIds.length == 2) {
-              final otherUserId = chat.participantIds.firstWhere(
-                (id) => id != currentUserId,
-                orElse: () => '',
-              );
-              
-              if (otherUserId.isNotEmpty) {
-                return FutureBuilder<ChatUser?>(
-                  future: provider.getUserDetails(otherUserId),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Text('Loading...');
-                    }
-                    
-                    final user = snapshot.data;
-                    _otherUser = user; // Store for later use
-                    
-                    return GestureDetector(
-                      onTap: user?.isCoach == true ? () => _navigateToCoachProfile(user) : null,
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundImage: user?.profileImageUrl != null 
-                                ? NetworkImage(user!.profileImageUrl!) 
-                                : null,
-                            child: user?.profileImageUrl == null
-                                ? Text(user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : '?')
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user?.name ?? 'User',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (user?.isCoach == true)
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: Colors.blue.shade100,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: const Text(
-                                          'Coach',
-                                          style: TextStyle(fontSize: 10, color: Colors.blue),
-                                        ),
-                                      ),
-                                      if (user?.isCoach == true)
-                                        const Text(
-                                          ' • Tap to view profile',
-                                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                                        ),
-                                    ],
-                                  ),
-                              ],
+            if (chat.isGroupChat) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(chat.groupName ?? 'Group Chat'),
+                  ),
+                  if (chatProvider.isAdmin)
+                    IconButton(
+                      icon: const Icon(Icons.people),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => GroupMembersScreen(
+                              chatId: chat.id,
+                              isAdmin: chatProvider.isAdmin,
                             ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              }
+                        );
+                      },
+                    ),
+                ],
+              );
             }
             
-            // Group chat title
-            return Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundImage: chat.groupAvatarUrl != null
-                      ? NetworkImage(chat.groupAvatarUrl!)
-                      : null,
-                  child: chat.groupAvatarUrl == null
-                      ? const Icon(Icons.group, size: 16)
-                      : null,
+            return FutureBuilder<ChatUser?>(
+              future: chatProvider.getUserDetails(
+                chat.participantIds.firstWhere(
+                  (id) => id != chatProvider.currentUserId,
+                  orElse: () => '',
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    chat.groupName ?? 'Group Chat',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+              ),
+              builder: (context, snapshot) {
+                final user = snapshot.data;
+                return Text(user?.name ?? 'Loading...');
+              },
             );
           },
         ),

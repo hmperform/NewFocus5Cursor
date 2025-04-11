@@ -26,6 +26,30 @@ class ChatUser {
   });
 }
 
+class ChatUserData {
+  final String id;
+  final String name;
+  final String userName;
+  final String fullName;
+  final String imageUrl;
+  final String role;
+  final String specialization;
+  final String status;
+  final String? coachId;
+
+  ChatUserData({
+    required this.id,
+    required this.name,
+    required this.userName,
+    required this.fullName,
+    required this.imageUrl,
+    required this.role,
+    this.specialization = '',
+    required this.status,
+    this.coachId,
+  });
+}
+
 class ChatMessage {
   final String id;
   final String senderId;

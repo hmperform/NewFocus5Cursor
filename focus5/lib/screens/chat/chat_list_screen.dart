@@ -4,6 +4,7 @@ import '../../models/chat_models.dart';
 import '../../providers/chat_provider.dart';
 import 'chat_screen.dart';
 import 'new_chat_screen.dart';
+import 'group_chat_creation_screen.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class ChatListScreen extends StatefulWidget {
@@ -211,10 +212,50 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   void _navigateToNewChat(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const NewChatScreen()),
-    );
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    
+    // Only show the dialog for admins
+    if (chatProvider.isAdmin) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Create New Chat'),
+          content: const Text('What type of chat would you like to create?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                // Navigate to regular one-on-one chat
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const NewChatScreen()),
+                );
+              },
+              child: const Text('One-on-One Chat'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                // Navigate to group chat creation
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GroupChatCreationScreen(),
+                  ),
+                );
+              },
+              child: const Text('Group Chat'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // For non-admins, directly navigate to regular chat
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const NewChatScreen()),
+      );
+    }
   }
 
   void _navigateToChat(BuildContext context, String chatId) {

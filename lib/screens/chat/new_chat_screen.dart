@@ -13,60 +13,27 @@ class NewChatScreen extends StatefulWidget {
 
 class _NewChatScreenState extends State<NewChatScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  List<ChatUser> _searchResults = [];
-  bool _isSearching = false;
   
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchChanged);
+    // Initial load for admins
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final chatProvider = context.read<ChatProvider>();
+      if (!chatProvider.isCurrentUserLoading && chatProvider.isAdmin) {
+         // Load all users if admin and search results are currently empty
+         // Check searchResults length to avoid redundant calls if navigating back
+         if (chatProvider.searchResults.isEmpty) {
+            chatProvider.searchUsers(''); 
+         }
+      }
+    });
   }
   
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
-  }
-  
-  void _onSearchChanged() {
-    setState(() {
-      _searchQuery = _searchController.text;
-    });
-    
-    if (_searchQuery.length >= 2) {
-      _performSearch();
-    } else {
-      setState(() {
-        _searchResults = [];
-      });
-    }
-  }
-  
-  Future<void> _performSearch() async {
-    if (_searchQuery.length < 2) return;
-    
-    setState(() {
-      _isSearching = true;
-    });
-    
-    try {
-      final results = await Provider.of<ChatProvider>(context, listen: false)
-          .searchUsers(_searchQuery);
-      
-      setState(() {
-        _searchResults = results;
-        _isSearching = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isSearching = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error searching users: $e')),
-      );
-    }
   }
   
   Future<void> _startChat(ChatUser user) async {
@@ -120,24 +87,31 @@ class _NewChatScreenState extends State<NewChatScreen> {
   
   // Navigate to coach profile if user is a coach
   void _viewCoachProfile(ChatUser user) async {
-    if (!user.isCoach || !user.hasCoachProfile) return;
+    if (!user.isCoach || user.coachId == null) return; // Use coachId check
     
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    final coachDetails = await chatProvider.getCoachDetails(user.userId);
-    
-    if (coachDetails != null && mounted) {
-      Navigator.pushNamed(context, '/coach', arguments: user.coachId);
-    }
+    // No need to fetch details again, just navigate if coachId exists
+    Navigator.pushNamed(context, '/coach', arguments: user.coachId);
   }
   
   @override
   Widget build(BuildContext context) {
-    final chatProvider = Provider.of<ChatProvider>(context);
+    // Use watch to rebuild when provider notifies listeners
+    final chatProvider = context.watch<ChatProvider>(); 
     final isAdminOrCoach = chatProvider.isAdmin || chatProvider.isCoach;
     
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Chat'),
+         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Allow manual refresh, especially for admins to reload all users
+              chatProvider.searchUsers(_searchController.text);
+            },
+            tooltip: 'Refresh List',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -168,133 +142,165 @@ class _NewChatScreenState extends State<NewChatScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search users...',
+                hintText: isAdminOrCoach ? 'Search all users...' : 'Search coaches...',
                 prefixIcon: const Icon(Icons.search),
+                 suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          // Trigger search with empty query (loads all for admin)
+                          chatProvider.searchUsers(''); 
+                        },
+                      )
+                    : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _performSearch(),
+              // Trigger search on every change
+              onChanged: (query) {
+                chatProvider.searchUsers(query);
+              },
             ),
           ),
-          if (_isSearching)
-            const Center(child: CircularProgressIndicator())
-          else if (_searchQuery.length < 2)
-            const Expanded(
-              child: Center(
-                child: Text('Type at least 2 characters to search'),
-              ),
-            )
-          else if (_searchResults.isEmpty)
-            const Expanded(
-              child: Center(
-                child: Text('No users found'),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                itemCount: _searchResults.length,
-                itemBuilder: (context, index) {
-                  final user = _searchResults[index];
-                  final canChat = chatProvider.canStartChatWith(user);
-                  
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: user.profileImageUrl != null
-                          ? NetworkImage(user.profileImageUrl!)
-                          : null,
-                      child: user.profileImageUrl == null
-                          ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?')
-                          : null,
-                    ),
-                    title: Row(
-                      children: [
-                        Expanded(child: Text(user.name)),
-                        if (user.isCoach)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'Coach',
-                              style: TextStyle(fontSize: 12, color: Colors.blue),
-                            ),
-                          ),
-                      ],
-                    ),
-                    subtitle: _buildUserStatus(user),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (user.isCoach && user.hasCoachProfile)
-                          IconButton(
-                            icon: const Icon(Icons.person, color: Colors.blue),
-                            onPressed: () => _viewCoachProfile(user),
-                            tooltip: 'View coach profile',
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.chat),
-                          onPressed: canChat ? () => _startChat(user) : null,
-                          color: canChat ? Colors.blue : Colors.grey,
-                          tooltip: canChat 
-                              ? 'Start chat' 
-                              : 'You can only chat with coaches',
+          Expanded(
+            // Use provider state for loading and results
+            child: chatProvider.isSearching 
+                ? const Center(child: CircularProgressIndicator())
+                : chatProvider.searchResults.isEmpty
+                    ? Center(
+                        child: Column(
+                           mainAxisAlignment: MainAxisAlignment.center,
+                           children: [
+                             Icon(Icons.people_outline, size: 60, color: Colors.grey),
+                             SizedBox(height: 16),
+                             Text(
+                               _searchController.text.isEmpty
+                                  ? (chatProvider.isAdmin ? 'No users found' : 'Search for coaches')
+                                  : 'No users matching "${_searchController.text}"',
+                                textAlign: TextAlign.center,
+                             ),
+                             if (_searchController.text.isNotEmpty)
+                               Padding(
+                                 padding: const EdgeInsets.only(top: 16.0),
+                                 child: ElevatedButton(
+                                   onPressed: () {
+                                      _searchController.clear();
+                                      chatProvider.searchUsers(''); 
+                                   },
+                                   child: const Text('Clear Search'),
+                                 ),
+                               ),
+                           ],
                         ),
-                      ],
-                    ),
-                    onTap: canChat ? () => _startChat(user) : null,
-                    enabled: canChat,
-                  );
-                },
-              ),
-            ),
+                      )
+                    : ListView.builder(
+                        // Use provider state for item count and data
+                        itemCount: chatProvider.searchResults.length,
+                        itemBuilder: (context, index) {
+                          final user = chatProvider.searchResults[index];
+                          final canChat = chatProvider.canStartChatWith(user);
+                          
+                          return ListTile(
+                             leading: CircleAvatar(
+                              // Handle potential null avatarUrl gracefully
+                              backgroundImage: (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                                  ? NetworkImage(user.avatarUrl!)
+                                  : null,
+                              child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                                  ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?')
+                                  : null,
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(user.fullName.isNotEmpty ? user.fullName : user.name)), // Prefer fullName
+                                if (user.isCoach)
+                                   Padding(
+                                     padding: const EdgeInsets.only(left: 8.0),
+                                     child: Chip(
+                                        label: Text('Coach'),
+                                        labelStyle: TextStyle(fontSize: 10, color: Colors.blue.shade900),
+                                        backgroundColor: Colors.blue.shade100,
+                                        padding: EdgeInsets.zero,
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                   ),
+                                 if (user.isAdmin) // Add Admin chip
+                                   Padding(
+                                     padding: const EdgeInsets.only(left: 8.0),
+                                     child: Chip(
+                                        label: Text('Admin'),
+                                        labelStyle: TextStyle(fontSize: 10, color: Colors.purple.shade900),
+                                        backgroundColor: Colors.purple.shade100,
+                                        padding: EdgeInsets.zero,
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                   ),
+                              ],
+                            ),
+                            subtitle: _buildUserStatus(user),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (user.isCoach && user.coachId != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.person, color: Colors.blue),
+                                    onPressed: () => _viewCoachProfile(user),
+                                    tooltip: 'View coach profile',
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.chat),
+                                  onPressed: canChat ? () => _startChat(user) : null,
+                                  color: canChat ? Colors.blue : Colors.grey,
+                                  tooltip: canChat 
+                                      ? 'Start chat' 
+                                      : (chatProvider.isAdmin ? 'Start chat' : 'You can only chat with coaches'), // Update tooltip for admin
+                                ),
+                              ],
+                            ),
+                            onTap: canChat ? () => _startChat(user) : null,
+                          );
+                        },
+                      ),
+          ),
         ],
       ),
     );
   }
-  
+
   Widget _buildUserStatus(ChatUser user) {
-    if (user.isOnline) {
-      return Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Text('Online'),
-        ],
-      );
-    } else if (user.lastSeen != null) {
-      return Text('Last seen ${_formatLastSeen(user.lastSeen!)}');
-    } else {
-      return const Text('Offline');
+    IconData statusIcon;
+    Color statusColor;
+    String statusText;
+
+    switch (user.status) {
+      case UserStatus.online:
+        statusIcon = Icons.circle;
+        statusColor = Colors.green;
+        statusText = 'Online';
+        break;
+      case UserStatus.away:
+        statusIcon = Icons.circle;
+        statusColor = Colors.orange;
+        statusText = 'Away';
+        break;
+      case UserStatus.offline:
+      default:
+        statusIcon = Icons.circle_outlined; // Or Icons.circle with grey
+        statusColor = Colors.grey;
+        statusText = 'Offline';
+        break;
     }
-  }
-  
-  String _formatLastSeen(DateTime lastSeen) {
-    final now = DateTime.now();
-    final difference = now.difference(lastSeen);
-    
-    if (difference.inSeconds < 60) {
-      return 'just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
-    } else {
-      return '${lastSeen.day}/${lastSeen.month}/${lastSeen.year}';
-    }
+
+    return Row(
+      children: [
+        Icon(statusIcon, size: 12, color: statusColor),
+        const SizedBox(width: 4),
+        Text(statusText, style: const TextStyle(fontSize: 12)),
+      ],
+    );
   }
 } 

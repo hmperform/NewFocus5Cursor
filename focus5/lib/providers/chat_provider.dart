@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';  // Add this import for StreamSubscription
 import '../models/chat_models.dart';
+// FieldValue is in cloud_firestore
 
 // Helper class to store cache entry with timestamp
 class _CacheEntry<T> {
@@ -18,6 +19,9 @@ class _CacheEntry<T> {
 
 class ChatProvider with ChangeNotifier {
   bool _isLoading = false;
+  bool _isSearching = false;
+  String _error = '';
+  List<ChatUser> _searchResults = [];
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
@@ -33,14 +37,59 @@ class ChatProvider with ChangeNotifier {
   // Define cache duration
   static const Duration _cacheMaxAge = Duration(minutes: 5);
 
+  // Update the isAdmin getter to check both email and Firestore data
+  bool _isAdminCached = false;
+  bool _isCoachCached = false;
+
+  bool get isAdmin {
+    final currentUser = _auth.currentUser;
+    if (currentUser != null) {
+      final email = currentUser.email;
+      if (email != null && email.endsWith('@hmperform.com')) {
+        return true;
+      }
+    }
+    return _isAdminCached;
+  }
+  
+  bool get isCoach => _isCoachCached;
+
+  // Add method to check admin status in Firestore
+  Future<void> _checkAdminStatus() async {
+    if (_auth.currentUser == null) return;
+    
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(_auth.currentUser!.uid)
+          .get();
+          
+      if (userDoc.exists) {
+        final data = userDoc.data()!;
+        final emailIsAdmin = _auth.currentUser?.email?.endsWith('@hmperform.com') ?? false;
+        _isAdminCached = data['isAdmin'] == true || emailIsAdmin;
+        _isCoachCached = data['isCoach'] == true;
+        debugPrint('ChatProvider: Updated admin status for current user: $_isAdminCached');
+        debugPrint('ChatProvider: Updated coach status for current user: $_isCoachCached');
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('ChatProvider Error: Failed to check admin status: $e');
+    }
+  }
+
   // Getters
   bool get isLoading => _isLoading;
+  bool get isSearching => _isSearching;
+  String get error => _error;
+  List<ChatUser> get searchResults => _searchResults;
   String get currentUserId => _auth.currentUser?.uid ?? 'unknown';
   List<Chat> get chats => _chats;
   
   ChatProvider() {
     _initChats();
     _initCoachUserMapping();
+    _checkAdminStatus();
   }
 
   // Initialize chats
@@ -183,10 +232,16 @@ class ChatProvider with ChangeNotifier {
             userId = data['associatedUser']['id'];
           } else if (data['associatedUser'] is DocumentReference) {
             userId = data['associatedUser'].id;
+          } else {
+            // Try to extract ID from string representation
+            final associatedUserStr = data['associatedUser'].toString();
+            if (associatedUserStr.contains('/')) {
+              userId = associatedUserStr.split('/').last.replaceAll(')', '');
+            }
           }
           
           if (userId.isNotEmpty) {
-            final coachId = 'coach-${doc.id}';
+            final coachId = 'coach-${doc.id}'; // Simplified coach ID format
             final coachName = data['name'] ?? 'Coach';
             debugPrint('ChatProvider: Mapping user $userId to coach $coachId ($coachName)');
             _coachUserMapping[userId] = coachId;
@@ -201,7 +256,6 @@ class ChatProvider with ChangeNotifier {
               role: 'coach',
               specialization: data['specialization'] ?? '',
             );
-            // Use _updateCache helper
             _updateCache(coachId, coachUser); 
             debugPrint('ChatProvider: Pre-cached coach user: ${coachUser.name} with ID $coachId');
           }
@@ -399,30 +453,12 @@ class ChatProvider with ChangeNotifier {
       await messageRef.set(message);
       debugPrint('ChatProvider: Message sent successfully with ID: ${messageRef.id}');
       
-      // Add message to local state immediately
-      if (_messages.containsKey(chatId)) {
-        final currentMessages = _messages[chatId] ?? [];
-        final newMessage = ChatMessage(
-          id: messageRef.id,
-          senderId: currentUserId,
-          content: content,
-          timestamp: timestamp,
-          isRead: true,
-          reactions: null,
-        );
-        
-        // Add a flag to prevent duplicate from listener
-        _recentlySentMessages[messageRef.id] = DateTime.now();
-        
-        debugPrint('ChatProvider: Adding message to local state immediately');
-        _messages[chatId] = [...currentMessages, newMessage];
-        notifyListeners();
-        
-        // Remove the flag after a delay
-        Future.delayed(const Duration(seconds: 2), () {
-          _recentlySentMessages.remove(messageRef.id);
-        });
-      }
+      // Add to recently sent messages to prevent duplicate
+      _recentlySentMessages[messageRef.id] = DateTime.now();
+      
+      // Let the Firestore listener handle the state update
+      // This prevents duplicate messages from appearing
+      
     } catch (e, stackTrace) {
       debugPrint('ChatProvider Error: Error sending message: $e');
       debugPrint('ChatProvider Error: Stack trace: $stackTrace');
@@ -549,12 +585,17 @@ class ChatProvider with ChangeNotifier {
     final messages = docs.map((doc) {
       final data = doc.data() as Map<String, dynamic>;
       
-      // Skip if this message was just sent locally
+      // Skip if this message was just sent locally (extend time window to 10 seconds)
       if (_recentlySentMessages.containsKey(doc.id)) {
-        debugPrint('ChatProvider: Skipping duplicate message: ${doc.id}');
-        return null;
+        final sentTime = _recentlySentMessages[doc.id]!;
+        if (DateTime.now().difference(sentTime) < const Duration(seconds: 10)) {
+          debugPrint('ChatProvider: Skipping duplicate message: ${doc.id} (sent ${DateTime.now().difference(sentTime).inSeconds}s ago)');
+          return null;
+        }
+        // Remove old entries
+        _recentlySentMessages.remove(doc.id);
       }
-      
+
       // Extract content, defaulting to empty string if missing
       final String content = data['content'] ?? '';
       
@@ -583,9 +624,6 @@ class ChatProvider with ChangeNotifier {
       // Pre-cache the user details (asynchronously)
       getUserDetails(senderId).then((user) {
         if (user != null) {
-          // Optionally notify listeners if user details changed, but be careful
-          // This might trigger rebuilds, consider if it's needed here
-          // notifyListeners(); 
           debugPrint('ChatProvider: Pre-fetched/updated user details for $senderId: ${user.name}');
         }
       });
@@ -603,17 +641,20 @@ class ChatProvider with ChangeNotifier {
             : null,
       );
     }).where((message) => message != null).cast<ChatMessage>().toList();
+
+    // Sort messages by timestamp to ensure correct order
+    messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     
     if (messages.isNotEmpty) {
       debugPrint('ChatProvider: Updating UI with ${messages.length} messages for chat $chatId');
-      // Only update if messages actually changed? Could compare lists.
-      _messages[chatId] = messages; 
-      notifyListeners();
-    } else if (docs.isEmpty && _messages.containsKey(chatId) && _messages[chatId]!.isNotEmpty) {
-       // Handle case where all messages were deleted
-       debugPrint('ChatProvider: All messages deleted for chat $chatId');
-       _messages[chatId] = [];
-       notifyListeners();
+      // Only update if messages actually changed
+      final existingMessages = _messages[chatId] ?? [];
+      if (!_areMessageListsEqual(existingMessages, messages)) {
+        _messages[chatId] = messages;
+        notifyListeners();
+      } else {
+        debugPrint('ChatProvider: Messages unchanged, skipping UI update');
+      }
     }
   }
 
@@ -816,5 +857,232 @@ class ChatProvider with ChangeNotifier {
       debugPrint('Stack trace: $stackTrace');
     }
     debugPrint('=== END DEBUG COACH INFO ===');
+  }
+
+  // Update searchUsers method
+  Future<void> searchUsers(String query) async {
+    final lowerCaseQuery = query.trim().toLowerCase();
+    debugPrint('ChatProvider: Starting user search with query: "$lowerCaseQuery"');
+
+    _isSearching = true;
+    _searchResults = [];
+    notifyListeners();
+
+    try {
+      // Get all users first
+      debugPrint('ChatProvider: Fetching users from Firestore...');
+      final userQuery = await _firestore.collection('users').get();
+      debugPrint('ChatProvider: Found ${userQuery.docs.length} users in users collection');
+      
+      final allUsers = userQuery.docs.map((doc) {
+        final data = doc.data();
+        final isAdmin = data['isAdmin'] == true;
+        final isCoach = data['isCoach'] == true;
+        final username = data['username'] ?? 'Unknown User';
+        debugPrint('ChatProvider: Processing user ${doc.id}: $username (isAdmin: $isAdmin, isCoach: $isCoach)');
+        
+        return ChatUser(
+          id: doc.id,
+          name: username,
+          fullName: data['fullName'] ?? username,
+          avatarUrl: data['profileImageUrl'] ?? '',
+          status: UserStatus.online,
+          role: isCoach ? 'coach' : (isAdmin ? 'admin' : 'user'),
+          specialization: data['specialization'] ?? '',
+        );
+      }).toList();
+
+      // Get all coaches
+      debugPrint('ChatProvider: Fetching coaches from Firestore...');
+      final coachQuery = await _firestore.collection('coaches').get();
+      debugPrint('ChatProvider: Found ${coachQuery.docs.length} coaches in coaches collection');
+      
+      final coaches = coachQuery.docs.map((doc) {
+        final data = doc.data();
+        final coachName = data['name'] ?? 'Unknown Coach';
+        debugPrint('ChatProvider: Processing coach ${doc.id}: $coachName');
+        
+        return ChatUser(
+          id: 'coach-${doc.id}',
+          name: coachName,
+          fullName: coachName,
+          avatarUrl: data['imageUrl'] ?? '',
+          status: UserStatus.online,
+          role: 'coach',
+          specialization: data['specialization'] ?? '',
+        );
+      }).toList();
+
+      // Combine all users and coaches
+      List<ChatUser> allResults = [...allUsers, ...coaches];
+      debugPrint('ChatProvider: Combined ${allResults.length} total users before filtering');
+
+      // Remove current user
+      allResults = allResults.where((user) => user.id != currentUserId).toList();
+      debugPrint('ChatProvider: ${allResults.length} users after removing current user');
+
+      // Apply search filter if query exists
+      if (lowerCaseQuery.isNotEmpty) {
+        allResults = allResults.where((user) {
+          final nameMatch = user.name.toLowerCase().contains(lowerCaseQuery);
+          final fullNameMatch = user.fullName.toLowerCase().contains(lowerCaseQuery);
+          return nameMatch || fullNameMatch;
+        }).toList();
+        debugPrint('ChatProvider: ${allResults.length} users after applying search filter');
+      }
+
+      debugPrint('ChatProvider: Setting search results with ${allResults.length} users');
+      _searchResults = allResults;
+
+    } catch (e) {
+      debugPrint('ChatProvider Error: Error searching users: $e');
+      _error = "Error searching users: ${e.toString()}";
+      _searchResults = [];
+    } finally {
+      _isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  // Helper method to compare message lists
+  bool _areMessageListsEqual(List<ChatMessage> list1, List<ChatMessage> list2) {
+    if (list1.length != list2.length) return false;
+    for (int i = 0; i < list1.length; i++) {
+      if (list1[i].id != list2[i].id || 
+          list1[i].content != list2[i].content ||
+          list1[i].timestamp != list2[i].timestamp) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Get all users for group chat creation
+  Future<List<ChatUserData>> getAllUsers() async {
+    try {
+      final List<ChatUserData> allUsers = [];
+      
+      // Get all users
+      final userDocs = await _firestore.collection('users').get();
+      
+      // Exclude current user
+      for (final doc in userDocs.docs) {
+        if (doc.id == currentUserId) continue;
+        
+        final data = doc.data();
+        final String email = (data['email'] ?? '').toString();
+        final bool isAdmin = data['isAdmin'] == true || (email.isNotEmpty && email.endsWith('@hmperform.com'));
+        final bool isCoach = data['isCoach'] == true;
+        final String role = isAdmin ? 'admin' : (isCoach ? 'coach' : (data['role'] ?? 'user'));
+        
+        // Prioritize fullName over username
+        final String fullName = data['fullName'] ?? '';
+        final String username = data['username'] ?? '';
+        final String displayName = fullName.isNotEmpty ? fullName : (username.isNotEmpty ? username : (data['name'] ?? 'Unknown User'));
+        
+        allUsers.add(ChatUserData(
+          id: doc.id,
+          name: displayName,
+          userName: username,
+          fullName: fullName,
+          imageUrl: data['profileImage'] ?? data['profileImageUrl'] ?? '',
+          role: role,
+          specialization: '',
+          status: data['status'] ?? 'offline',
+        ));
+      }
+      
+      // Get coaches to ensure we have them all
+      final coachDocs = await _firestore.collection('coaches').get();
+      
+      for (final doc in coachDocs.docs) {
+        final data = doc.data();
+        String? userId = data['userId'] as String?;
+        
+        // Skip if no valid userId
+        if (userId == null || userId.isEmpty) continue;
+        
+        // Check if we already have this user
+        if (allUsers.any((user) => user.id == userId)) continue;
+        
+        // Add coach
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data() ?? {};
+          final String displayName = userData['fullName'] ?? data['name'] ?? 'Unknown Coach';
+          
+          allUsers.add(ChatUserData(
+            id: userId,
+            name: displayName,
+            userName: userData['username'] ?? '',
+            fullName: userData['fullName'] ?? displayName,
+            imageUrl: data['imageUrl'] ?? '',
+            role: 'coach',
+            specialization: data['specialization'] ?? '',
+            status: userData['status'] ?? 'offline',
+            coachId: doc.id,
+          ));
+        }
+      }
+      
+      return allUsers;
+    } catch (e) {
+      debugPrint('Error fetching all users: $e');
+      return [];
+    }
+  }
+
+  // Create a group chat
+  Future<String?> createGroupChat({
+    required List<String> participantIds,
+    required String groupName,
+  }) async {
+    if (participantIds.isEmpty) {
+      throw Exception('At least one participant must be selected');
+    }
+    
+    if (groupName.isEmpty) {
+      throw Exception('Group name is required');
+    }
+    
+    try {
+      // Add current user to participants if not already included
+      final allParticipantIds = [...participantIds];
+      if (!allParticipantIds.contains(currentUserId)) {
+        allParticipantIds.add(currentUserId);
+      }
+      
+      final timestamp = DateTime.now();
+      
+      // Create the chat document
+      final chatDoc = await _firestore.collection('chats').add({
+        'participantIds': allParticipantIds,
+        'createdBy': currentUserId,
+        'createdAt': Timestamp.fromDate(timestamp),
+        'lastMessageText': 'Group chat created',
+        'lastMessageTime': Timestamp.fromDate(timestamp),
+        'lastMessageSenderId': currentUserId,
+        'readBy': [currentUserId],
+        'isGroupChat': true,
+        'groupName': groupName,
+      });
+      
+      // Create welcome message
+      await _firestore.collection('messages').add({
+        'chatId': chatDoc.id,
+        'senderId': currentUserId,
+        'content': 'Welcome to the group chat!',
+        'timestamp': Timestamp.fromDate(timestamp),
+        'readBy': [currentUserId],
+      });
+      
+      // Fetch the new chat
+      await _initChats();
+      
+      return chatDoc.id;
+    } catch (e) {
+      debugPrint('Error creating group chat: $e');
+      return null;
+    }
   }
 } 
