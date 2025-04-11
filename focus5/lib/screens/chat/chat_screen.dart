@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';  // Add this import for ImageFilter
 import '../../models/chat_models.dart';
 import '../../providers/chat_provider.dart';
+import 'package:flutter/rendering.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -443,13 +445,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   // Get user details from snapshot or fallback to ID-based display
                                   if (snapshot.hasData && snapshot.data != null) {
                                     final user = snapshot.data!;
-                                    displayName = user.name;
+                                    if (message.senderId.startsWith('coach-')) {
+                                      // For coaches, use "Coach" followed by their name
+                                      displayName = 'Coach ${user.name}';
+                                    } else {
+                                      // For regular users, use their fullName
+                                      displayName = user.fullName ?? user.name;
+                                    }
                                     avatarUrl = user.avatarUrl;
                                   } else if (snapshot.connectionState == ConnectionState.done) {
                                     // If we're done loading but no data, use the ID as fallback
                                     if (message.senderId.startsWith('coach-')) {
                                       // For coach IDs, show a nicer format
-                                      displayName = 'Coach';
+                                      displayName = 'Coach ${message.senderId.replaceAll('coach-', '')}';
                                     } else {
                                       // For regular users, use a truncated ID
                                       displayName = message.senderId.length > 8
@@ -651,48 +659,74 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 
-                // Message input
+                // Message input bar with glassmorphic effect
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface.withOpacity(0.7),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
-                        spreadRadius: 1,
-                        blurRadius: 2,
-                        offset: const Offset(0, -1),
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
                       ),
                     ],
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.attach_file),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Attachments coming soon')),
-                          );
-                        },
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: const InputDecoration(
-                            hintText: 'Type a message',
-                            border: InputBorder.none,
-                          ),
-                          textCapitalization: TextCapitalization.sentences,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _sendMessage(),
+                  child: ClipRRect(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        child: Row(
+                          children: [
+                            // Attachment button
+                            IconButton(
+                              icon: Icon(
+                                Icons.attach_file,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Attachments coming soon!'),
+                                  ),
+                                );
+                              },
+                            ),
+                            // Message text field
+                            Expanded(
+                              child: TextField(
+                                controller: _messageController,
+                                decoration: InputDecoration(
+                                  hintText: 'Type a message',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.5),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                textCapitalization: TextCapitalization.sentences,
+                                keyboardType: TextInputType.multiline,
+                                maxLines: null,
+                                onSubmitted: (text) => _sendMessage(),
+                              ),
+                            ),
+                            // Send button
+                            IconButton(
+                              icon: Icon(
+                                Icons.send,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              onPressed: _sendMessage,
+                            ),
+                          ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        color: Colors.blue,
-                        onPressed: _sendMessage,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],

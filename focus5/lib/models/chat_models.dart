@@ -9,6 +9,7 @@ enum UserStatus {
 class ChatUser {
   final String id;
   final String name;
+  final String fullName;
   final String avatarUrl;
   final UserStatus status;
   final String role;
@@ -17,6 +18,7 @@ class ChatUser {
   ChatUser({
     required this.id,
     required this.name,
+    required this.fullName,
     required this.avatarUrl,
     required this.status,
     required this.role,

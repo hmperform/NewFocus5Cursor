@@ -1,7 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';  // Add this import for StreamSubscription
 import '../models/chat_models.dart';
+
+// Helper class to store cache entry with timestamp
+class _CacheEntry<T> {
+  final T data;
+  final DateTime timestamp;
+
+  _CacheEntry(this.data, this.timestamp);
+
+  bool isStale(Duration maxAge) {
+    return DateTime.now().difference(timestamp) > maxAge;
+  }
+}
 
 class ChatProvider with ChangeNotifier {
   bool _isLoading = false;
@@ -10,10 +23,15 @@ class ChatProvider with ChangeNotifier {
   
   List<Chat> _chats = [];
   final Map<String, List<ChatMessage>> _messages = {};
-  final Map<String, ChatUser> _userCache = {};
-
-  // Cache to map user IDs to coach IDs
+  // Update userCache to store CacheEntry<ChatUser?>
+  final Map<String, _CacheEntry<ChatUser?>> _userCache = {}; 
   final Map<String, String> _coachUserMapping = {};
+  final Map<String, DateTime> _recentlySentMessages = {};
+  final Map<String, StreamSubscription<QuerySnapshot>> _messageListeners = {};
+  static Set<String>? _activeListenerChats;
+
+  // Define cache duration
+  static const Duration _cacheMaxAge = Duration(minutes: 5);
 
   // Getters
   bool get isLoading => _isLoading;
@@ -27,13 +45,14 @@ class ChatProvider with ChangeNotifier {
 
   // Initialize chats
   Future<void> _initChats() async {
+    if (_isLoading) return;
+    
     _isLoading = true;
     notifyListeners();
     
     try {
       if (_auth.currentUser != null) {
-        // Wait for coach mapping to be initialized
-        await _initCoachUserMapping();
+        await _initCoachUserMapping(); // Ensure mapping is done first
         _listenToChats();
       }
     } catch (e) {
@@ -68,6 +87,15 @@ class ChatProvider with ChangeNotifier {
         );
       }).toList();
       
+      // Pre-fetch user details for participants when chat list updates
+      for (final chat in _chats) {
+        for (final participantId in chat.participantIds) {
+          if (participantId != currentUserId) {
+            getUserDetails(participantId); // Fetch details, populating cache
+          }
+        }
+      }
+
       notifyListeners();
     }, onError: (e) {
       debugPrint('Error listening to chats: $e');
@@ -79,6 +107,37 @@ class ChatProvider with ChangeNotifier {
     return _messages[chatId] ?? [];
   }
   
+  // Load initial messages without setting up listeners
+  Future<void> _loadInitialMessages(String chatId) async {
+    debugPrint('ChatProvider: Loading initial messages for chat: $chatId');
+    
+    if (chatId.isEmpty) {
+      debugPrint('ChatProvider Error: Cannot load initial messages - chat ID is empty');
+      return;
+    }
+    
+    try {
+      final chatRef = _firestore.collection('chats').doc(chatId);
+      
+      final messagesQuery = await _firestore
+          .collection('messages')
+          .where(Filter.or(
+              Filter('chatId', isEqualTo: chatId),
+              Filter('chatRef', isEqualTo: chatRef)
+          ))
+          .orderBy('timestamp', descending: false)
+          .get();
+      
+      if (messagesQuery.docs.isNotEmpty) {
+        debugPrint('ChatProvider: Found ${messagesQuery.docs.length} initial messages for chat $chatId');
+        _handleMessageUpdate(chatId, messagesQuery.docs);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('ChatProvider Error: Failed to load initial messages for chat $chatId: $e');
+      debugPrint('ChatProvider Error: Stack trace: $stackTrace');
+    }
+  }
+
   // Load messages for a chat and listen for updates
   Future<void> loadMessages(String chatId) async {
     debugPrint('ChatProvider: Loading messages for chat: $chatId');
@@ -89,48 +148,14 @@ class ChatProvider with ChangeNotifier {
     }
     
     // Skip if we're already loaded and listening to this chat's messages
-    if (_messages.containsKey(chatId) && _messages[chatId]!.isNotEmpty) {
-      debugPrint('ChatProvider: Already have ${_messages[chatId]!.length} messages for chat $chatId, ensuring listener');
-      // Just make sure we have a listener set up
-      _ensureMessageListener(chatId);
+    if (_messages.containsKey(chatId) && _messages[chatId]!.isNotEmpty && 
+        _messageListeners.containsKey(chatId) && _messageListeners[chatId] != null) {
+      debugPrint('ChatProvider: Already have ${_messages[chatId]!.length} messages for chat $chatId with active listener');
       return;
     }
     
-    // Check if chat exists in Firestore but not in local state
-    if (!_chats.any((chat) => chat.id == chatId)) {
-      debugPrint('ChatProvider: Chat not found in local state, checking Firestore');
-      try {
-        final chatDoc = await _firestore.collection('chats').doc(chatId).get();
-        if (chatDoc.exists) {
-          debugPrint('ChatProvider: Found chat in Firestore, adding to local state');
-          final data = chatDoc.data()!;
-          final chat = Chat(
-            id: chatDoc.id,
-            participantIds: List<String>.from(data['participantIds'] ?? []),
-            lastMessageText: data['lastMessageText'] ?? '',
-            lastMessageTime: (data['lastMessageTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            lastMessageSenderId: data['lastMessageSenderId'] ?? '',
-            hasUnreadMessages: data['readBy'] == null || 
-                !(data['readBy'] as List<dynamic>).contains(currentUserId),
-            isGroupChat: data['isGroupChat'] ?? false,
-            groupName: data['groupName'],
-            groupAvatarUrl: data['groupAvatarUrl'],
-          );
-          
-          _chats = [..._chats, chat];
-          notifyListeners();
-        } else {
-          debugPrint('ChatProvider Error: Chat $chatId not found in Firestore');
-          throw Exception('Chat not found');
-        }
-      } catch (e) {
-        debugPrint('ChatProvider Error: Error checking chat in Firestore: $e');
-        rethrow;
-      }
-    }
-    
     // Initialize with empty array only if we don't already have messages
-    if (!_messages.containsKey(chatId) || _messages[chatId]!.isEmpty) {
+    if (!_messages.containsKey(chatId)) {
       _messages[chatId] = []; // Initialize with empty array
       notifyListeners(); // Notify UI that we're loading messages
     }
@@ -140,9 +165,6 @@ class ChatProvider with ChangeNotifier {
     
     // Also fetch the existing messages right away for faster display
     await resetAndReloadMessages(chatId);
-    
-    // Mark chat as read
-    markChatAsRead(chatId);
   }
 
   // Initialize coach-user mapping
@@ -170,14 +192,18 @@ class ChatProvider with ChangeNotifier {
             _coachUserMapping[userId] = coachId;
             
             // Pre-cache the coach in userCache to ensure quick lookups
-            _userCache[coachId] = ChatUser(
+            final coachUser = ChatUser(
               id: coachId,
               name: coachName,
+              fullName: coachName,
               avatarUrl: data['imageUrl'] ?? '',
               status: UserStatus.online,
               role: 'coach',
               specialization: data['specialization'] ?? '',
             );
+            // Use _updateCache helper
+            _updateCache(coachId, coachUser); 
+            debugPrint('ChatProvider: Pre-cached coach user: ${coachUser.name} with ID $coachId');
           }
         }
       }
@@ -199,178 +225,102 @@ class ChatProvider with ChangeNotifier {
     return userId;
   }
 
-  // Get user details
+  // Helper to update cache with timestamp
+  void _updateCache(String userId, ChatUser? user) {
+     _userCache[userId] = _CacheEntry(user, DateTime.now());
+  }
+
+  // Get user details with improved caching and resilience
   Future<ChatUser?> getUserDetails(String userId) async {
-    debugPrint('ChatProvider: Getting user details for $userId');
-    
-    // Check if this userId is actually a coach's associated user
-    final effectiveUserId = _checkForCoachUserId(userId);
-    if (effectiveUserId != userId) {
-      debugPrint('ChatProvider: Using coach ID $effectiveUserId instead of user ID $userId');
-      userId = effectiveUserId;
+    if (userId.isEmpty) {
+      debugPrint('ChatProvider: Cannot get user details - user ID is empty');
+      return _createDefaultUser(userId, 'Unknown User'); // Return default instead of null
     }
     
-    // Return from cache if available
-    if (_userCache.containsKey(userId)) {
-      debugPrint('ChatProvider: Found user $userId in cache: ${_userCache[userId]?.name}');
-      return _userCache[userId];
+    // 1. Check cache (and staleness)
+    final cachedEntry = _userCache[userId];
+    if (cachedEntry != null && !cachedEntry.isStale(_cacheMaxAge)) {
+      debugPrint('ChatProvider: User $userId found in cache (fresh): ${cachedEntry.data?.name}');
+      // Return cached data, even if it was null (meaning previously not found)
+      return cachedEntry.data; 
+    } else if (cachedEntry != null) {
+       debugPrint('ChatProvider: User $userId found in cache (stale), fetching fresh data.');
     }
-    
+
+    // 2. Fetch from Firestore if not in cache or stale
+    ChatUser? user;
     try {
-      // First, check if this is a coach ID
-      if (userId.startsWith('coach-')) {
-        debugPrint('ChatProvider: Checking coaches collection for $userId');
-        // Extract the coach numeric ID
-        final coachNumericId = userId.replaceFirst('coach-', '');
-        
-        // Get the coach document
-        final coachDoc = await _firestore.collection('coaches').doc(coachNumericId).get();
+      final effectiveUserId = _checkForCoachUserId(userId); // Get actual ID (could be coach ID)
+      
+      // Is it a coach ID?
+      if (effectiveUserId.startsWith('coach-')) {
+        debugPrint('ChatProvider: Fetching coach details for $effectiveUserId');
+        final coachDocId = effectiveUserId.replaceFirst('coach-', '');
+        final coachDoc = await _firestore.collection('coaches').doc(coachDocId).get();
         
         if (coachDoc.exists) {
-          debugPrint('ChatProvider: Found coach document for $userId');
-          final data = coachDoc.data()!;
-          debugPrint('ChatProvider: Coach data: ${data.toString()}');
-          
-          // If the coach has an associated user, use that instead
-          if (data['associatedUser'] != null) {
-            final associatedUser = data['associatedUser'];
-            String associatedUserId;
-            
-            if (associatedUser is Map && associatedUser.containsKey('id')) {
-              // Map format {"id": "userId", "path": "users"}
-              associatedUserId = associatedUser['id'];
-              debugPrint('ChatProvider: Coach has associated user ID: $associatedUserId');
-              
-              // Recursively get the associated user details
-              // But first store a temporary entry to prevent infinite recursion
-              _userCache[userId] = ChatUser(
-                id: userId,
-                name: data['name'] ?? 'Coach',
-                avatarUrl: data['imageUrl'] ?? '',
-                status: UserStatus.online,
-                role: 'coach',
-                specialization: data['specialization'] ?? '',
-              );
-              
-              // Get the actual user
-              final actualUser = await getUserDetails(associatedUserId);
-              if (actualUser != null) {
-                debugPrint('ChatProvider: Found associated user for coach');
-                // Create a merged user with coach info but linked to real user
-                final mergedUser = ChatUser(
-                  id: userId, // Keep the coach ID for references
-                  name: data['name'] ?? actualUser.name, // Prefer coach name
-                  avatarUrl: data['imageUrl'] ?? actualUser.avatarUrl,
-                  status: actualUser.status, // Use real user status
-                  role: 'coach',
-                  specialization: data['specialization'] ?? '',
-                );
-                _userCache[userId] = mergedUser;
-                return mergedUser;
-              }
-            } else if (associatedUser is DocumentReference) {
-              // Handle DocumentReference format
-              associatedUserId = associatedUser.id;
-              debugPrint('ChatProvider: Coach has associated user reference: $associatedUserId');
-              
-              // Similar logic as above
-              _userCache[userId] = ChatUser(
-                id: userId,
-                name: data['name'] ?? 'Coach',
-                avatarUrl: data['imageUrl'] ?? '',
-                status: UserStatus.online,
-                role: 'coach',
-                specialization: data['specialization'] ?? '',
-              );
-              
-              final actualUser = await getUserDetails(associatedUserId);
-              if (actualUser != null) {
-                final mergedUser = ChatUser(
-                  id: userId,
-                  name: data['name'] ?? actualUser.name,
-                  avatarUrl: data['imageUrl'] ?? actualUser.avatarUrl,
-                  status: actualUser.status,
-                  role: 'coach',
-                  specialization: data['specialization'] ?? '',
-                );
-                _userCache[userId] = mergedUser;
-                return mergedUser;
-              }
-            }
-          }
-          
-          // If no associated user or couldn't find it, return the coach directly
-          final coachUser = ChatUser(
-            id: userId,
-            name: data['name'] ?? 'Unnamed Coach',
-            avatarUrl: data['imageUrl'] ?? '',
-            status: UserStatus.online, // Assume coaches are online
+          final coachData = coachDoc.data()!;
+          user = ChatUser(
+            id: effectiveUserId, // Use the 'coach-' prefixed ID
+            name: coachData['name'] ?? 'Unknown Coach',
+            fullName: 'Coach ${coachData['name'] ?? 'Unknown'}', // Use "Coach Name" format
+            avatarUrl: coachData['imageUrl'] ?? '',
+            status: UserStatus.online, 
             role: 'coach',
-            specialization: data['specialization'] ?? '',
+            specialization: coachData['specialization'] ?? '',
           );
-          
-          debugPrint('ChatProvider: Caching coach information for $userId with name: ${coachUser.name}');
-          _userCache[userId] = coachUser;
-          return coachUser;
+          debugPrint('ChatProvider: Fetched coach user from Firestore: ${user.name}');
         } else {
-          debugPrint('ChatProvider: Coach document not found for $userId');
+           debugPrint('ChatProvider: Coach document $coachDocId not found in Firestore for $effectiveUserId');
+           // Cache null result for coach
+           user = null; 
         }
+      } 
+      // Is it a regular user ID?
+      else {
+         debugPrint('ChatProvider: Fetching regular user details for $effectiveUserId');
+         final userDoc = await _firestore.collection('users').doc(effectiveUserId).get();
+         if (userDoc.exists) {
+           final userData = userDoc.data()!;
+           user = ChatUser(
+             id: effectiveUserId,
+             name: userData['username'] ?? 'Unknown User',
+             fullName: userData['fullName'] ?? userData['username'] ?? 'Unknown User',
+             avatarUrl: userData['profileImageUrl'] ?? '',
+             status: UserStatus.online, // Assuming online for now
+             role: userData['isCoach'] == true ? 'coach' : 'user',
+             specialization: userData['specialization'] ?? '',
+           );
+           debugPrint('ChatProvider: Fetched regular user from Firestore: ${user.name}');
+         } else {
+            debugPrint('ChatProvider: User document $effectiveUserId not found in Firestore');
+            // Cache null result for user
+            user = null; 
+         }
       }
-      
-      // Regular user lookup
-      debugPrint('ChatProvider: Checking users collection for $userId');
-      final doc = await _firestore.collection('users').doc(userId).get();
-      
-      // If not found in either collection
-      if (!doc.exists) {
-        debugPrint('ChatProvider: No document found for $userId in users collection');
-        _userCache[userId] = ChatUser(
-          id: userId,
-          name: 'Unknown User',
-          avatarUrl: '',
-          status: UserStatus.offline,
-          role: 'unknown',
-          specialization: '',
-        );
-        return _userCache[userId];
-      }
-      
-      // Process the found document
-      final data = doc.data()!;
-      debugPrint('ChatProvider: User document data: ${data.toString()}');
-      
-      final name = data['name'] ?? data['displayName'] ?? 'Unknown User';
-      debugPrint('ChatProvider: Extracted name: $name for user $userId');
-      
-      final user = ChatUser(
-        id: doc.id,
-        name: name,
-        avatarUrl: data['profileImage'] ?? data['photoURL'] ?? '',
-        status: _getUserStatus(data['status']),
-        role: data['role'] ?? 'user',
-        specialization: data['specialization'] ?? '',
-      );
-      
-      debugPrint('ChatProvider: Caching user information for $userId with name: ${user.name}');
-      _userCache[userId] = user;
-      return user;
-    } catch (e, stackTrace) {
-      debugPrint('ChatProvider Error: Error getting user details for $userId: $e');
-      debugPrint('ChatProvider Error: Stack trace: $stackTrace');
-      
-      // Return a fallback user object
-      final fallbackUser = ChatUser(
-        id: userId,
-        name: 'User ($userId)',
-        avatarUrl: '',
-        status: UserStatus.offline,
-        role: 'unknown',
-        specialization: '',
-      );
-      
-      _userCache[userId] = fallbackUser;
-      return fallbackUser;
+    } catch (e) {
+      debugPrint('ChatProvider Error: Failed to get user details for $userId: $e');
+      user = null; // Ensure user is null on error
     }
+
+    // 3. Update cache (even if null, to prevent repeated lookups for non-existent users)
+    _updateCache(userId, user);
+
+    // 4. Return fetched user or a default if null
+    return user ?? _createDefaultUser(userId, userId.startsWith('coach-') ? 'Unknown Coach' : 'Unknown User');
+  }
+
+  // Helper to create a default user object
+  ChatUser _createDefaultUser(String id, String defaultName) {
+    return ChatUser(
+      id: id,
+      name: defaultName,
+      fullName: defaultName,
+      avatarUrl: '', // Default avatar?
+      status: UserStatus.offline,
+      role: 'user', // Default role?
+      specialization: '',
+    );
   }
   
   UserStatus _getUserStatus(String? status) {
@@ -406,117 +356,50 @@ class ChatProvider with ChangeNotifier {
 
   // Send a message
   Future<void> sendMessage(String chatId, String content) async {
+    if (content.trim().isEmpty) {
+      throw Exception('Message cannot be empty');
+    }
+    
+    if (currentUserId == 'unknown' || _auth.currentUser == null) {
+      throw Exception('You must be logged in to send messages');
+    }
+    
     try {
-      debugPrint('ChatProvider: Sending message to chat $chatId: $content');
-      
-      if (chatId.isEmpty) {
-        debugPrint('ChatProvider Error: Cannot send message - chat ID is empty');
-        throw Exception('Cannot send message - chat ID is empty');
-      }
-      
-      if (currentUserId == 'unknown' || _auth.currentUser == null) {
-        debugPrint('ChatProvider Error: Cannot send message - user not logged in');
-        throw Exception('You must be logged in to send messages');
-      }
-      
-      // Check if the chat exists in local state
-      final localChat = _chats.firstWhere(
-        (chat) => chat.id == chatId,
-        orElse: () => Chat(
-          id: '',
-          participantIds: [],
-          lastMessageText: '',
-          lastMessageTime: DateTime.now(),
-          lastMessageSenderId: '',
-          hasUnreadMessages: false,
-          isGroupChat: false,
-        ),
-      );
-      
-      if (localChat.id.isEmpty) {
-        debugPrint('ChatProvider Warning: Chat $chatId not found in local state, will check Firestore');
-      } else {
-        debugPrint('ChatProvider: Found chat in local state with participants: ${localChat.participantIds}');
-      }
-      
-      final messageRef = _firestore.collection('messages').doc();
       final timestamp = DateTime.now();
+      final messageRef = _firestore.collection('messages').doc();
+      final chatRef = _firestore.collection('chats').doc(chatId);
       
-      // Create message object with correct field names to match Firestore expectations
+      // Create message data
       final message = {
-        'id': messageRef.id,
         'chatId': chatId,
-        'senderId': currentUserId,
+        'chatRef': chatRef,
         'content': content,
         'timestamp': Timestamp.fromDate(timestamp),
-        'readBy': [currentUserId],
-        'type': 'text',
-        // Add reference fields that match what Firestore is expecting
-        'chatRef': _firestore.collection('chats').doc(chatId),
+        'senderId': currentUserId,
         'senderRef': _firestore.collection('users').doc(currentUserId),
+        'readBy': [currentUserId],
       };
       
-      debugPrint('ChatProvider: Checking if chat exists in Firestore: $chatId');
-      // Create or update the chat
-      final chatRef = _firestore.collection('chats').doc(chatId);
+      // Update chat document
       final chatDoc = await chatRef.get();
-      
-      if (chatDoc.exists) {
-        final data = chatDoc.data();
-        debugPrint('ChatProvider: Updating existing chat with participants: ${data?['participantIds']}');
-        // Update existing chat
-        await chatRef.update({
-          'lastMessageText': content,
-          'lastMessageTime': Timestamp.fromDate(timestamp),
-          'lastMessageSenderId': currentUserId,
-          'readBy': [currentUserId],
-        });
-      } else {
-        debugPrint('ChatProvider Error: Chat document $chatId does not exist in Firestore!');
-        debugPrint('ChatProvider: Attempting to recreate chat document from local state');
-        // Check if we have participantIds from local state
-        final participantIds = _chats
-            .where((chat) => chat.id == chatId)
-            .map((chat) => chat.participantIds)
-            .firstOrNull ?? [currentUserId];
-        
-        if (participantIds.length <= 1) {
-          debugPrint('ChatProvider Error: Cannot create chat with only one participant');
-          throw Exception('Failed to create chat - missing participants');
-        }
-        
-        debugPrint('ChatProvider: Adding participants: $participantIds');
-        
-        // Validate all participants exist in users collection
-        for (final participantId in participantIds) {
-          if (participantId != currentUserId) {
-            final userDoc = await _firestore.collection('users').doc(participantId).get();
-            if (!userDoc.exists) {
-              debugPrint('ChatProvider Error: Participant $participantId does not exist in users collection');
-              throw Exception('Cannot create chat - one or more participants do not have valid user accounts');
-            }
-          }
-        }
-        
-        // Create new chat
-        await chatRef.set({
-          'participantIds': participantIds,
-          'createdAt': Timestamp.fromDate(timestamp),
-          'createdBy': currentUserId,
-          'lastMessageText': content,
-          'lastMessageTime': Timestamp.fromDate(timestamp),
-          'lastMessageSenderId': currentUserId,
-          'isGroupChat': participantIds.length > 2,
-          'readBy': [currentUserId],
-        });
+      if (!chatDoc.exists) {
+        throw Exception('Chat does not exist');
       }
       
+      // Update chat with latest message info
+      await chatRef.update({
+        'lastMessageText': content,
+        'lastMessageTime': Timestamp.fromDate(timestamp),
+        'lastMessageSenderId': currentUserId,
+        'readBy': [currentUserId],
+      });
+      
+      // Add message to Firestore
       debugPrint('ChatProvider: Adding message to Firestore with ID: ${messageRef.id}');
-      // Add message
       await messageRef.set(message);
       debugPrint('ChatProvider: Message sent successfully with ID: ${messageRef.id}');
       
-      // Make sure the message shows up in the UI immediately without waiting for listener
+      // Add message to local state immediately
       if (_messages.containsKey(chatId)) {
         final currentMessages = _messages[chatId] ?? [];
         final newMessage = ChatMessage(
@@ -528,16 +411,22 @@ class ChatProvider with ChangeNotifier {
           reactions: null,
         );
         
+        // Add a flag to prevent duplicate from listener
+        _recentlySentMessages[messageRef.id] = DateTime.now();
+        
         debugPrint('ChatProvider: Adding message to local state immediately');
         _messages[chatId] = [...currentMessages, newMessage];
         notifyListeners();
-      } else {
-        debugPrint('ChatProvider: Chat $chatId not in _messages map, will wait for listener');
+        
+        // Remove the flag after a delay
+        Future.delayed(const Duration(seconds: 2), () {
+          _recentlySentMessages.remove(messageRef.id);
+        });
       }
     } catch (e, stackTrace) {
       debugPrint('ChatProvider Error: Error sending message: $e');
       debugPrint('ChatProvider Error: Stack trace: $stackTrace');
-      rethrow; // Re-throw the exception to be caught by the UI
+      rethrow;
     }
   }
 
@@ -653,7 +542,113 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  // Reset and reload messages for a chat
+  // Unified message handling
+  void _handleMessageUpdate(String chatId, List<QueryDocumentSnapshot> docs) {
+    debugPrint('ChatProvider: Processing ${docs.length} messages for chat $chatId');
+    
+    final messages = docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      // Skip if this message was just sent locally
+      if (_recentlySentMessages.containsKey(doc.id)) {
+        debugPrint('ChatProvider: Skipping duplicate message: ${doc.id}');
+        return null;
+      }
+      
+      // Extract content, defaulting to empty string if missing
+      final String content = data['content'] ?? '';
+      
+      // Extract senderId, either from direct field or reference
+      String senderId = data['senderId'] ?? '';
+      if (senderId.isEmpty && data['senderRef'] != null) {
+        try {
+          final senderRef = data['senderRef'];
+          if (senderRef is DocumentReference) {
+            senderId = senderRef.id;
+          } else {
+            final senderRefStr = senderRef.toString();
+            final pathParts = senderRefStr.split('/');
+            if (pathParts.length >= 2) {
+              senderId = pathParts.last.replaceAll(')', '');
+            }
+          }
+        } catch (e) {
+          debugPrint('ChatProvider Error: Error extracting senderId from reference: $e');
+        }
+      }
+      
+      // Check if this is actually a coach's associated user
+      senderId = _checkForCoachUserId(senderId);
+      
+      // Pre-cache the user details (asynchronously)
+      getUserDetails(senderId).then((user) {
+        if (user != null) {
+          // Optionally notify listeners if user details changed, but be careful
+          // This might trigger rebuilds, consider if it's needed here
+          // notifyListeners(); 
+          debugPrint('ChatProvider: Pre-fetched/updated user details for $senderId: ${user.name}');
+        }
+      });
+      
+      return ChatMessage(
+        id: doc.id,
+        senderId: senderId,
+        content: content,
+        timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        isRead: (data['readBy'] as List<dynamic>?)?.contains(currentUserId) ?? false,
+        reactions: data['reactions'] != null 
+            ? Map<String, List<String>>.from((data['reactions'] as Map).map(
+                (key, value) => MapEntry(key, List<String>.from(value))
+              ))
+            : null,
+      );
+    }).where((message) => message != null).cast<ChatMessage>().toList();
+    
+    if (messages.isNotEmpty) {
+      debugPrint('ChatProvider: Updating UI with ${messages.length} messages for chat $chatId');
+      // Only update if messages actually changed? Could compare lists.
+      _messages[chatId] = messages; 
+      notifyListeners();
+    } else if (docs.isEmpty && _messages.containsKey(chatId) && _messages[chatId]!.isNotEmpty) {
+       // Handle case where all messages were deleted
+       debugPrint('ChatProvider: All messages deleted for chat $chatId');
+       _messages[chatId] = [];
+       notifyListeners();
+    }
+  }
+
+  // Set up message listener with unified handling
+  void _listenForMessages(String chatId) {
+    debugPrint('ChatProvider: Setting up message listener for chat: $chatId');
+    
+    try {
+      final chatRef = _firestore.collection('chats').doc(chatId);
+      
+      // Cancel any existing listener for this chat
+      _messageListeners[chatId]?.cancel();
+      
+      // Set up new listener
+      _messageListeners[chatId] = _firestore.collection('messages')
+          .where(Filter.or(
+              Filter('chatId', isEqualTo: chatId),
+              Filter('chatRef', isEqualTo: chatRef)
+          ))
+          .orderBy('timestamp', descending: false)
+          .snapshots()
+          .listen((snapshot) {
+        debugPrint('ChatProvider: Message listener update: ${snapshot.docs.length} messages for chat $chatId');
+        _handleMessageUpdate(chatId, snapshot.docs);
+      }, onError: (e, stackTrace) {
+        debugPrint('ChatProvider Error: Message listener error for chat $chatId: $e');
+        debugPrint('ChatProvider Error: Stack trace: $stackTrace');
+      });
+    } catch (e, stackTrace) {
+      debugPrint('ChatProvider Error: Failed to set up message listener for chat $chatId: $e');
+      debugPrint('ChatProvider Error: Stack trace: $stackTrace');
+    }
+  }
+
+  // Reset and reload messages with unified handling
   Future<void> resetAndReloadMessages(String chatId) async {
     debugPrint('ChatProvider: Reloading messages for chat: $chatId');
     
@@ -663,18 +658,8 @@ class ChatProvider with ChangeNotifier {
     }
     
     try {
-      // Don't clear existing messages yet - keep them displayed while loading new ones
-      // This prevents the screen from looking empty during reloads
-      final existingMessages = _messages[chatId] ?? [];
-      if (existingMessages.isNotEmpty) {
-        debugPrint('ChatProvider: Preserving ${existingMessages.length} existing messages while reloading');
-      }
-      
-      // Create a reference to the chat document for use in the query
       final chatRef = _firestore.collection('chats').doc(chatId);
       
-      // Load messages from Firestore directly (one-time)
-      debugPrint('ChatProvider: Querying Firestore for messages in chat: $chatId');
       final messagesQuery = await _firestore
           .collection('messages')
           .where(Filter.or(
@@ -685,84 +670,15 @@ class ChatProvider with ChangeNotifier {
           .get();
       
       debugPrint('ChatProvider: Found ${messagesQuery.docs.length} messages for chat $chatId');
-      
-      if (messagesQuery.docs.isNotEmpty) {
-        final newMessages = messagesQuery.docs.map((doc) {
-          final data = doc.data();
-          debugPrint('ChatProvider: Message ${doc.id}: ${data['content']} from ${data['senderId']}');
-          
-          // Extract content, defaulting to empty string if missing
-          final String content = data['content'] ?? '';
-          
-          // Extract senderId, either from direct field or reference
-          String senderId = data['senderId'] ?? '';
-          if (senderId.isEmpty && data['senderRef'] != null) {
-            // Try to extract ID from document reference path
-            try {
-              final senderRef = data['senderRef'];
-              
-              // Handle both DocumentReference and serialized path string
-              if (senderRef is DocumentReference) {
-                senderId = senderRef.id;
-                debugPrint('ChatProvider: Extracted senderId from DocumentReference: $senderId');
-              } else {
-                final senderRefStr = senderRef.toString();
-                // Expected format: DocumentReference(users/userId)
-                final pathParts = senderRefStr.split('/');
-                if (pathParts.length >= 2) {
-                  senderId = pathParts.last.replaceAll(')', '');
-                  debugPrint('ChatProvider: Extracted senderId from reference string: $senderId');
-                }
-              }
-            } catch (e) {
-              debugPrint('ChatProvider Error: Error extracting senderId from reference: $e');
-            }
-          }
-          
-          // Check if this is actually a coach's associated user
-          senderId = _checkForCoachUserId(senderId);
-          
-          return ChatMessage(
-            id: doc.id,
-            senderId: senderId,
-            content: content,
-            timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            isRead: (data['readBy'] as List<dynamic>?)?.contains(currentUserId) ?? false,
-            reactions: data['reactions'] != null 
-                ? Map<String, List<String>>.from((data['reactions'] as Map).map(
-                    (key, value) => MapEntry(key, List<String>.from(value))
-                  ))
-                : null,
-          );
-        }).toList();
-        
-        // Only update messages if we got new ones, otherwise keep existing
-        if (newMessages.isNotEmpty) {
-          debugPrint('ChatProvider: Setting ${newMessages.length} messages in local state for chat $chatId');
-          _messages[chatId] = newMessages;
-          notifyListeners();
-        } else if (existingMessages.isEmpty) {
-          // If we had no existing messages and found none, initialize with empty array
-          _messages[chatId] = [];
-          notifyListeners();
-        }
-      } else if (existingMessages.isEmpty) {
-        // Only set empty array if we had no existing messages
-        _messages[chatId] = [];
-        notifyListeners();
-      }
+      _handleMessageUpdate(chatId, messagesQuery.docs);
       
       // Mark chat as read
       await markChatAsRead(chatId);
-      
-      // Start listening for future updates (even if we have existing messages)
-      _ensureMessageListener(chatId);
       
     } catch (e, stackTrace) {
       debugPrint('ChatProvider Error: Failed to reload messages for chat $chatId: $e');
       debugPrint('ChatProvider Error: Stack trace: $stackTrace');
       
-      // In case of error, make sure we have at least an empty array initialized
       if (!_messages.containsKey(chatId)) {
         _messages[chatId] = [];
         notifyListeners();
@@ -772,115 +688,25 @@ class ChatProvider with ChangeNotifier {
   
   // Ensure a message listener is active for this chat
   void _ensureMessageListener(String chatId) {
-    // We'll use a static set to track which chats have active listeners
-    // to avoid setting up duplicate listeners
-    _activeListenerChats ??= <String>{};
-    
-    if (_activeListenerChats!.contains(chatId)) {
+    if (_messageListeners.containsKey(chatId) && _messageListeners[chatId] != null) {
       debugPrint('ChatProvider: Chat $chatId already has an active listener, skipping setup');
       return;
     }
     
     debugPrint('ChatProvider: Setting up message listener for chat: $chatId');
-    _activeListenerChats!.add(chatId);
-    
     _listenForMessages(chatId);
   }
-  
-  // Static set to track which chats have active listeners
-  static Set<String>? _activeListenerChats;
 
-  // Set up message listener without all the checks and initialization
-  void _listenForMessages(String chatId) {
-    debugPrint('ChatProvider: Setting up dedicated message listener for chat: $chatId');
+  // Clean up listeners when leaving a chat
+  void cleanupChat(String chatId) {
+    debugPrint('ChatProvider: Cleaning up chat $chatId');
     
-    try {
-      // Create a reference to the chat document for use in the query
-      final chatRef = _firestore.collection('chats').doc(chatId);
-      
-      // Query messages by either chatId field or chatRef field, same as in resetAndReloadMessages
-      _firestore.collection('messages')
-          .where(Filter.or(
-              Filter('chatId', isEqualTo: chatId),
-              Filter('chatRef', isEqualTo: chatRef)
-          ))
-          .orderBy('timestamp', descending: false)
-          .snapshots()
-          .listen((snapshot) {
-        debugPrint('ChatProvider: Message listener update: ${snapshot.docs.length} messages for chat $chatId');
-        
-        // Log the message content for debugging
-        for (var doc in snapshot.docs) {
-          final data = doc.data();
-          String contentDebug = data['content'] ?? 'NO CONTENT';
-          String senderDebug = data['senderId'] ?? 'NO SENDER';
-          if (data['senderRef'] != null) senderDebug += " (has senderRef)";
-          debugPrint('ChatProvider: Message listener found: ${doc.id}: $contentDebug from $senderDebug');
-        }
-        
-        if (snapshot.docs.isEmpty) {
-          debugPrint('ChatProvider: WARNING - No messages found for chat $chatId by listener');
-        }
-        
-        final messages = snapshot.docs.map((doc) {
-          final data = doc.data();
-          
-          // Extract content, defaulting to empty string if missing
-          final String content = data['content'] ?? '';
-          
-          // Extract senderId, either from direct field or reference
-          String senderId = data['senderId'] ?? '';
-          if (senderId.isEmpty && data['senderRef'] != null) {
-            // Try to extract ID from document reference path
-            try {
-              final senderRef = data['senderRef'];
-              
-              // Handle both DocumentReference and serialized path string
-              if (senderRef is DocumentReference) {
-                senderId = senderRef.id;
-                debugPrint('ChatProvider: Extracted senderId from DocumentReference: $senderId');
-              } else {
-                final senderRefStr = senderRef.toString();
-                // Expected format: DocumentReference(users/userId)
-                final pathParts = senderRefStr.split('/');
-                if (pathParts.length >= 2) {
-                  senderId = pathParts.last.replaceAll(')', '');
-                  debugPrint('ChatProvider: Extracted senderId from reference string: $senderId');
-                }
-              }
-            } catch (e) {
-              debugPrint('ChatProvider Error: Error extracting senderId from reference: $e');
-            }
-          }
-          
-          // Check if this is actually a coach's associated user
-          senderId = _checkForCoachUserId(senderId);
-          
-          return ChatMessage(
-            id: doc.id,
-            senderId: senderId,
-            content: content,
-            timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            isRead: (data['readBy'] as List<dynamic>?)?.contains(currentUserId) ?? false,
-            reactions: data['reactions'] != null 
-                ? Map<String, List<String>>.from((data['reactions'] as Map).map(
-                    (key, value) => MapEntry(key, List<String>.from(value))
-                  ))
-                : null,
-          );
-        }).toList();
-        
-        debugPrint('ChatProvider: Listener updating UI with ${messages.length} messages for chat $chatId');
-        _messages[chatId] = messages;
-        notifyListeners();
-      }, onError: (e, stackTrace) {
-        debugPrint('ChatProvider Error: Message listener error for chat $chatId: $e');
-        debugPrint('ChatProvider Error: Stack trace: $stackTrace');
-      });
-    } catch (e, stackTrace) {
-      debugPrint('ChatProvider Error: Failed to set up message listener for chat $chatId: $e');
-      debugPrint('ChatProvider Error: Stack trace: $stackTrace');
-    }
+    // Cancel the message listener
+    _messageListeners[chatId]?.cancel();
+    _messageListeners.remove(chatId);
+    
+    // Keep the messages in memory but mark them as not being actively listened to
+    _activeListenerChats?.remove(chatId);
   }
 
   // Clear user cache for a specific user ID
@@ -895,6 +721,17 @@ class ChatProvider with ChangeNotifier {
   void clearAllUserCache() {
     debugPrint('ChatProvider: Clearing all user cache');
     _userCache.clear();
+  }
+
+  @override
+  void dispose() {
+    // _sessionTimeoutTimer?.cancel(); // Removed session timer logic
+    for (final listener in _messageListeners.values) {
+      listener.cancel();
+    }
+    _messageListeners.clear();
+    _activeListenerChats?.clear();
+    super.dispose();
   }
 
   // Debug coach information
@@ -942,14 +779,14 @@ class ChatProvider with ChangeNotifier {
             
             // Check if user is in the cache
             if (_userCache.containsKey(userId)) {
-              debugPrint('User is in cache: ${_userCache[userId]?.name}, ID: ${_userCache[userId]?.id}');
+              debugPrint('User is in cache: ${_userCache[userId]?.data?.name}, ID: ${_userCache[userId]?.data?.id}');
             } else {
               debugPrint('User is NOT in cache');
             }
             
             // Check if coach is in the cache
             if (_userCache.containsKey(coachId)) {
-              debugPrint('Coach is in cache: ${_userCache[coachId]?.name}, ID: ${_userCache[coachId]?.id}');
+              debugPrint('Coach is in cache: ${_userCache[coachId]?.data?.name}, ID: ${_userCache[coachId]?.data?.id}');
             } else {
               debugPrint('Coach is NOT in cache');
             }
