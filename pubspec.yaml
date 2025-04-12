@@ -40,7 +40,6 @@ dependencies:
   path: ^1.8.3 # Consider updating if needed
   flutter_app_badger: ^1.5.0 # This package is discontinued, consider replacement
   just_audio: ^0.9.32
-  just_audio_waveform: ^0.1.0
 
 dev_dependencies:
   flutter_test:

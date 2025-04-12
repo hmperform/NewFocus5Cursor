@@ -10,57 +10,67 @@ class AudioModuleService {
     try {
       print('🎵 AUDIO MODULE: Service called for $totalLoginDays total login days');
       
-      // Get all audio modules (remove Firestore orderBy)
+      // Fetch audio modules ordered by sequence
       final snapshot = await _firestore
           .collection('audio_modules')
-          // .orderBy('id', descending: false) // Remove Firestore ordering
+          .orderBy('sequence')
           .get();
       
       if (snapshot.docs.isEmpty) {
-        print('🎵 AUDIO MODULE: No audio modules found in Firestore');
+        print('🎵 AUDIO MODULE ERROR: No audio modules found in Firestore');
         return null;
       }
       
-      // Sort the documents in Dart by ID
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> availableModules = snapshot.docs.toList();
-      availableModules.sort((a, b) => a.id.compareTo(b.id));
+      // Sort the documents by ID as a secondary sort
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> availableModules = snapshot.docs
+        ..sort((a, b) => a.id.compareTo(b.id));
       
       final count = availableModules.length;
-      print('🎵 AUDIO MODULE: Found and sorted $count modules by ID in Dart:');
       
-      // Log modules with their indices AFTER Dart sorting
-      for (var i = 0; i < count; i++) {
-        final doc = availableModules[i];
+      print('\n🎵 AUDIO MODULE: Found $count modules in sequence:');
+      for (var doc in availableModules) {
         final data = doc.data();
         final title = data['title'] as String;
-        print('🎵 AUDIO MODULE: Index $i = Module ${doc.id} ($title)'); 
+        final sequence = data['sequence'] as int;
+        print('  - Sequence $sequence: ${doc.id} ($title)');
       }
       
-      // Calculate index
+      // Calculate index using modulo on the ordered list
       final moduleIndex = totalLoginDays > 0 ? (totalLoginDays - 1) % count : 0;
-      print('🎵 AUDIO MODULE: Calculated moduleIndex = ($totalLoginDays > 0 ? ($totalLoginDays - 1) % $count : 0) = $moduleIndex');
+      print('\n🎵 AUDIO MODULE: Selection details:');
+      print('  - Total login days: $totalLoginDays');
+      print('  - Total modules: $count');
+      print('  - Selected index: $moduleIndex');
       
       // Validate index before access
       if (moduleIndex < 0 || moduleIndex >= count) {
-        print('🎵 AUDIO MODULE ERROR: Calculated invalid module index: $moduleIndex for $count modules.');
-        return null; 
+        print('🎵 AUDIO MODULE ERROR: Invalid module index: $moduleIndex (valid range: 0-${count-1})');
+        return null;
       }
       
-      // --- Explicitly log the element being accessed --- 
-      final selectedDocId = availableModules[moduleIndex].id;
-      print('🎵 AUDIO MODULE: Accessing availableModules[$moduleIndex] which has ID: $selectedDocId');
-      
-      // Get the actual document
+      // Get the selected module
       final doc = availableModules[moduleIndex];
       final selectedModule = doc.data();
       final selectedTitle = selectedModule['title'] as String;
+      final selectedSequence = selectedModule['sequence'] as int;
       
-      print('🎵 AUDIO MODULE: Final Selected module ${doc.id} ($selectedTitle) '
-            'for login day $totalLoginDays (using index: $moduleIndex)');
+      print('\n🎵 AUDIO MODULE: Final selection:');
+      print('  - Selected ID: ${doc.id}');
+      print('  - Selected title: $selectedTitle');
+      print('  - Sequence number: $selectedSequence');
+      print('  - Index position: $moduleIndex');
+      print('  - Login day: $totalLoginDays');
+      print('----------------------------------------\n');
       
       return DailyAudio.fromJson(doc.data());
     } catch (e, stackTrace) {
-      print('🎵 AUDIO MODULE ERROR: $e');
+      // Check for specific Firestore index error
+      if (e is FirebaseException && e.code == 'failed-precondition') {
+         print('🎵 AUDIO MODULE ERROR: Missing Firestore index for orderBy("orderIndex"). Please create it.');
+         print('🎵 Firestore Error Details: ${e.message}');
+      } else {
+        print('🎵 AUDIO MODULE ERROR: $e');
+      }
       print('🎵 AUDIO MODULE STACK TRACE: $stackTrace');
       return null;
     }

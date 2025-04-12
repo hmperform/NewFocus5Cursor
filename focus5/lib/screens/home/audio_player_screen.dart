@@ -62,7 +62,26 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   Future<void> _initializeAudio() async {
     try {
       await _audioPlayer.setUrl(widget.audio.audioUrl);
-      _totalDuration = _audioPlayer.duration ?? Duration.zero;
+      // Wait for the duration to be available
+      Duration? duration;
+      while (duration == null || duration.inSeconds <= 1) {
+        duration = await _audioPlayer.duration;
+        if (duration == null) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _totalDuration = duration!;
+          print('🎵 Audio duration loaded: ${_formatDuration(_totalDuration)}');
+        });
+        
+        // Start playing automatically
+        _audioPlayer.play();
+        _slideshowController.forward();
+        print('🎵 Starting audio playback automatically');
+      }
       
       _audioPlayer.positionStream.listen((position) {
         if (mounted) {
@@ -71,7 +90,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
             _waveformProgress = _totalDuration.inMilliseconds > 0 
                 ? position.inMilliseconds / _totalDuration.inMilliseconds 
                 : 0;
-            if (position >= _totalDuration) {
+            if (position >= _totalDuration && _totalDuration > Duration.zero) {
               _isCompleted = true;
               _markAsCompleted();
             }
@@ -87,6 +106,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         }
       });
     } catch (e) {
+      print('🎵 Error loading audio: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading audio: $e')),
@@ -226,122 +246,232 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Back button and title
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Text(
-                      widget.audio.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(width: 48), // Balance the back button
-                ],
+      body: Stack(
+        children: [
+          // Full screen slideshow
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              child: FadeInImage.memoryNetwork(
+                key: ValueKey(_currentSlideIndex),
+                placeholder: kTransparentImage,
+                image: _slideshowImages[_currentSlideIndex],
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
               ),
             ),
-
-            // Slideshow
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 500),
-                child: FadeInImage.memoryNetwork(
-                  key: ValueKey(_currentSlideIndex),
-                  placeholder: kTransparentImage,
-                  image: _slideshowImages[_currentSlideIndex],
-                  fit: BoxFit.cover,
+          ),
+          // Gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.7),
+                  ],
+                  stops: const [0.0, 0.2, 0.8, 1.0],
                 ),
               ),
             ),
+          ),
+          // Content
+          SafeArea(
+            child: Column(
+              children: [
+                // Back button and title
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      Expanded(
+                        child: Text(
+                          widget.audio.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(width: 48),
+                    ],
+                  ),
+                ),
 
-            // Waveform
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: _buildWaveform(),
-            ),
+                // Time display
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _formatDuration(_currentPosition),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const Text(
+                        ' / ',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      Text(
+                        _formatDuration(_totalDuration),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
 
-            // Progress bar and time
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Text(
-                    _formatDuration(_currentPosition),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: _currentPosition.inSeconds.toDouble(),
-                      min: 0,
-                      max: _totalDuration.inSeconds.toDouble(),
-                      onChanged: (value) {
-                        _audioPlayer.seek(Duration(seconds: value.toInt()));
-                      },
-                    ),
-                  ),
-                  Text(
-                    _formatDuration(_totalDuration),
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
+                const Spacer(),
 
-            // Controls
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.skip_previous, color: Colors.white),
-                    onPressed: () {
-                      final newPosition = _currentPosition - const Duration(seconds: 30);
-                      if (newPosition >= Duration.zero) {
-                        _audioPlayer.seek(newPosition);
-                      }
-                    },
+                // Waveform with glassmorphic effect
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                  child: _buildWaveform(),
+                ),
+
+                // Controls with glassmorphic effect
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 32.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildGlassButton(
+                        icon: Icons.replay_10,
+                        onPressed: () {
+                          final newPosition = _currentPosition - const Duration(seconds: 10);
+                          if (newPosition >= Duration.zero) {
+                            _audioPlayer.seek(newPosition);
+                          }
+                        },
+                      ),
+                      _buildGlassButton(
+                        icon: _isPlaying ? Icons.pause : Icons.play_arrow,
+                        size: 48,
+                        onPressed: _togglePlayPause,
+                      ),
+                      _buildGlassButton(
+                        icon: Icons.forward_10,
+                        onPressed: () {
+                          final newPosition = _currentPosition + const Duration(seconds: 10);
+                          if (newPosition <= _totalDuration) {
+                            _audioPlayer.seek(newPosition);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Description with glassmorphic effect
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    widget.audio.description,
+                    style: const TextStyle(
                       color: Colors.white,
-                      size: 48,
+                      fontSize: 16,
+                      height: 1.5,
                     ),
-                    onPressed: _togglePlayPause,
+                    textAlign: TextAlign.center,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next, color: Colors.white),
-                    onPressed: _skipForward,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // Description
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                widget.audio.description,
-                style: const TextStyle(color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
+  Widget _buildGlassButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    double size = 24,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.white, size: size),
+        onPressed: onPressed,
       ),
     );
   }

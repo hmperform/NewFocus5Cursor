@@ -4,6 +4,8 @@ import 'package:flutter/scheduler.dart';
 import '../models/content_models.dart';
 import '../services/firebase_content_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ContentProvider with ChangeNotifier {
   List<Course> _courses = [];
@@ -95,17 +97,30 @@ class ContentProvider with ChangeNotifier {
     try {
       _audioModules = await _contentService.fetchDailyAudios();
       
-      // Set today's audio
-      _todayAudio = _audioModules.isNotEmpty 
-        ? _audioModules.firstWhere(
-            (audio) => audio.datePublished.day == DateTime.now().day,
-            orElse: () => _audioModules.first,
-          )
-        : null;
+      // Sort by document ID
+      _audioModules.sort((a, b) => a.id.compareTo(b.id));
+      
+      // Set today's audio based on total login days
+      if (_audioModules.isNotEmpty) {
+        // Get total login days from Firestore directly
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(FirebaseAuth.instance.currentUser?.uid)
+            .get();
+        
+        final totalLoginDays = userDoc.data()?['totalLoginDays'] ?? 0;
+        final moduleIndex = totalLoginDays > 0 ? (totalLoginDays - 1) % _audioModules.length : 0;
+        _todayAudio = _audioModules[moduleIndex];
+        print('\n🎵 ContentProvider: Selected audio module ${_todayAudio?.title} for day $totalLoginDays (index: $moduleIndex)');
+      } else {
+        _todayAudio = null;
+        print('\n🎵 ContentProvider: No audio modules available');
+      }
       
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to load audio modules: ${e.toString()}';
+      print('\n🎵 ContentProvider Error: $e');
       notifyListeners();
     }
   }
