@@ -326,55 +326,84 @@ class DailyAudio {
   final String title;
   final String description;
   final String audioUrl;
-  final String imageUrl;
-  final String creatorId;
-  final String creatorName;
-  final int durationMinutes;
+  final String thumbnail;
+  final String slideshow1;
+  final String slideshow2;
+  final String slideshow3;
+  final DocumentReference creatorId;
+  final DocumentReference creatorName;
   final List<String> focusAreas;
+  final int durationMinutes;
   final int xpReward;
-  final DateTime datePublished;
   final bool universityExclusive;
-  final List<String>? universityAccess;
-  final String category;
-  
-  // Add categories property with getter that returns a list with the single category
-  List<String> get categories => [category];
+  final DocumentReference? universityAccess;
+  final DateTime createdAt;
+  final DateTime datePublished;
+  final List<double> waveformData; // Add waveform data array
+  final int waveformResolution; // Add waveform resolution (samples per second)
+
+  // Add these properties to fix errors
+  String get imageUrl => thumbnail; // Alias thumbnail as imageUrl
+  String get category => focusAreas.isNotEmpty ? focusAreas.first : ""; // Use first focus area as category
+  List<String> get categories => focusAreas; // Alias focusAreas as categories
 
   DailyAudio({
     required this.id,
     required this.title,
     required this.description,
     required this.audioUrl,
-    required this.imageUrl,
+    required this.thumbnail,
+    required this.slideshow1,
+    required this.slideshow2,
+    required this.slideshow3,
     required this.creatorId,
     required this.creatorName,
-    required this.durationMinutes,
     required this.focusAreas,
+    required this.durationMinutes,
     required this.xpReward,
-    required this.datePublished,
     required this.universityExclusive,
     this.universityAccess,
-    required this.category,
+    required this.createdAt,
+    required this.datePublished,
+    this.waveformData = const [], // Default empty waveform
+    this.waveformResolution = 100, // Default 100 samples per second
   });
 
   factory DailyAudio.fromJson(Map<String, dynamic> json) {
     return DailyAudio(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      audioUrl: json['audioUrl'] as String,
-      imageUrl: json['imageUrl'] as String,
-      creatorId: json['creatorId'] as String,
-      creatorName: json['creatorName'] as String,
-      durationMinutes: json['durationMinutes'] as int,
-      focusAreas: (json['focusAreas'] as List<dynamic>).map((e) => e as String).toList(),
-      xpReward: json['xpReward'] as int,
-      datePublished: DateTime.parse(json['datePublished'] as String),
-      universityExclusive: json['universityExclusive'] as bool,
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      audioUrl: json['audioUrl'] ?? '',
+      thumbnail: json['thumbnail'] ?? '',
+      slideshow1: json['slideshow1'] ?? '',
+      slideshow2: json['slideshow2'] ?? '',
+      slideshow3: json['slideshow3'] ?? '',
+      creatorId: json['creatorId'] is DocumentReference
+          ? json['creatorId']
+          : FirebaseFirestore.instance.doc('coaches/${json['creatorId']['id'] ?? ''}'),
+      creatorName: json['creatorName'] is DocumentReference
+          ? json['creatorName']
+          : FirebaseFirestore.instance.doc('coaches/${json['creatorName']['id'] ?? ''}'),
+      focusAreas: List<String>.from(json['focusAreas'] ?? []),
+      durationMinutes: json['durationMinutes'] ?? 0,
+      xpReward: json['xpReward'] ?? 0,
+      universityExclusive: json['universityExclusive'] ?? false,
       universityAccess: json['universityAccess'] != null
-          ? (json['universityAccess'] as List<dynamic>).map((e) => e as String).toList()
+          ? FirebaseFirestore.instance.doc('universities/${json['universityAccess']['id'] ?? ''}')
           : null,
-      category: json['category'] as String,
+      createdAt: json['createdAt'] != null
+          ? (json['createdAt'] is Timestamp
+              ? (json['createdAt'] as Timestamp).toDate()
+              : DateTime.parse(json['createdAt']))
+          : DateTime.now(),
+      datePublished: json['datePublished'] != null
+          ? (json['datePublished'] is Timestamp
+              ? (json['datePublished'] as Timestamp).toDate()
+              : DateTime.parse(json['datePublished']))
+          : DateTime.now(),
+      waveformData: List<double>.from(json['waveformData'] ?? []),
+      waveformResolution: json['waveformResolution'] ?? 100,
     );
   }
 
@@ -384,16 +413,21 @@ class DailyAudio {
       'title': title,
       'description': description,
       'audioUrl': audioUrl,
-      'imageUrl': imageUrl,
+      'thumbnail': thumbnail,
+      'slideshow1': slideshow1,
+      'slideshow2': slideshow2,
+      'slideshow3': slideshow3,
       'creatorId': creatorId,
       'creatorName': creatorName,
-      'durationMinutes': durationMinutes,
       'focusAreas': focusAreas,
+      'durationMinutes': durationMinutes,
       'xpReward': xpReward,
-      'datePublished': datePublished.toIso8601String(),
       'universityExclusive': universityExclusive,
       'universityAccess': universityAccess,
-      'category': category,
+      'createdAt': createdAt.toIso8601String(),
+      'datePublished': datePublished.toIso8601String(),
+      'waveformData': waveformData,
+      'waveformResolution': waveformResolution,
     };
   }
 }
@@ -444,15 +478,17 @@ class MediaItem {
       description: audio.description,
       mediaType: MediaType.audio,
       mediaUrl: audio.audioUrl,
-      imageUrl: audio.imageUrl,
-      creatorId: audio.creatorId,
-      creatorName: audio.creatorName,
+      imageUrl: audio.thumbnail,
+      creatorId: audio.creatorId.id,
+      creatorName: audio.creatorName.id,
       durationMinutes: audio.durationMinutes,
       focusAreas: audio.focusAreas,
       xpReward: audio.xpReward,
       datePublished: audio.datePublished,
       universityExclusive: audio.universityExclusive,
-      universityAccess: audio.universityAccess,
+      universityAccess: audio.universityAccess != null
+          ? [audio.universityAccess!.id]
+          : null,
       category: audio.category,
     );
   }

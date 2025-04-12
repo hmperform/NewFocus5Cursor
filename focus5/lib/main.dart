@@ -30,6 +30,7 @@ import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/coach_provider.dart';
 import 'providers/badge_provider.dart';
+import 'providers/audio_module_provider.dart';
 import 'widgets/basic_mini_player.dart';
 import 'constants/theme.dart';
 import 'services/basic_video_service.dart';
@@ -71,6 +72,11 @@ void main() async {
         ChangeNotifierProvider(create: (context) => BasicVideoService()),
         ChangeNotifierProvider(create: (context) => CoachProvider()),
         ChangeNotifierProvider(create: (context) => BadgeProvider()),
+        ChangeNotifierProxyProvider<UserProvider, AudioModuleProvider>(
+          create: (context) => AudioModuleProvider(Provider.of<UserProvider>(context, listen: false)),
+          update: (context, userProvider, previousAudioProvider) => 
+              AudioModuleProvider(userProvider),
+        ),
       ],
       child: Focus5App(isFirstLaunch: isFirstLaunch),
     ),

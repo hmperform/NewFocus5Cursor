@@ -10,6 +10,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/content_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/audio_module_provider.dart';
 import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
@@ -132,10 +133,15 @@ class _DashboardTabState extends State<DashboardTab> {
       // Get providers safely
       final contentProvider = Provider.of<ContentProvider>(context, listen: false);
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.currentUser?.id;
       
+      if (userId == null) {
+        print('DashboardTab: User not logged in, skipping content load.');
+        return;
+      }
+      
+      // Load core content if needed
       if (contentProvider.courses.isEmpty) {
-        final userId = authProvider.currentUser?.id;
-        // Load content here
         try {
           await Future.microtask(() => null); // Delay to prevent build conflicts
           if (mounted) {
@@ -146,14 +152,16 @@ class _DashboardTabState extends State<DashboardTab> {
         }
       }
       
-      // Refresh today's audio if needed
+      // Audio module loading is now handled by AudioModuleProvider constructor/update
+      /*
       try {
-        if (mounted) {
-          await contentProvider.refreshTodayAudio();
-        }
+        print('DashboardTab: Loading current audio module...');
+        await audioModuleProvider.loadCurrentAudioModule(userId);
+        print('DashboardTab: Finished loading audio module.');
       } catch (e) {
         print('Audio refresh error: $e');
       }
+      */
     } catch (e) {
       print('Dashboard loading error: $e');
     }
@@ -671,18 +679,22 @@ class _DashboardTabState extends State<DashboardTab> {
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
-              final imageUrl = 'https://picsum.photos/800/800?random=50';
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AudioPlayerScreen(
-                    title: 'Daily Focus Session',
-                    subtitle: 'Morning Mental Preparation',
-                    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-                    imageUrl: imageUrl,
+              final currentAudio = audioModule;
+              if (currentAudio != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AudioPlayerScreen(
+                      audio: currentAudio,
+                      currentDay: totalLoginDays,
+                    ),
                   ),
-                ),
-              );
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No audio module available today'))
+                );
+              }
             },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -698,7 +710,7 @@ class _DashboardTabState extends State<DashboardTab> {
                     Positioned.fill(
                       child: FadeInImage.memoryNetwork(
                         placeholder: kTransparentImage,
-                        image: 'https://picsum.photos/800/400?random=50',
+                        image: audioModule?.thumbnail ?? 'https://picsum.photos/800/400?random=50',
                         fit: BoxFit.cover,
                         fadeInDuration: const Duration(milliseconds: 300),
                       ),
@@ -1147,6 +1159,11 @@ class _DashboardTabState extends State<DashboardTab> {
     // Return an empty container to satisfy the return type
     return Container();
   }
+
+  // Add these variables to the _DashboardTabState class
+  // Add a method to get a DailyAudio instance and totalLoginDays
+  DailyAudio? get audioModule => Provider.of<ContentProvider>(context, listen: false).todayAudio;
+  int get totalLoginDays => Provider.of<UserProvider>(context, listen: false).user?.totalLoginDays ?? 1;
 } // Close _DashboardTabState class
 
 // Moved CourseCard class definition outside _DashboardTabState

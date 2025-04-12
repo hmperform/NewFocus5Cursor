@@ -24,6 +24,8 @@ class User {
   final DateTime lastLoginDate;
   final DateTime createdAt;
   final Map<String, dynamic>? preferences;
+  final int loginStreak;
+  final int totalLoginDays;
 
   User({
     required this.id,
@@ -49,6 +51,8 @@ class User {
     DateTime? lastLoginDate,
     DateTime? createdAt,
     this.preferences,
+    this.loginStreak = 0,
+    this.totalLoginDays = 0,
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.createdAt = createdAt ?? DateTime.now();
@@ -133,6 +137,8 @@ class User {
       lastLoginDate: lastLogin,
       createdAt: created,
       preferences: data['preferences'] as Map<String, dynamic>?,
+      loginStreak: data['loginStreak'] ?? 0,
+      totalLoginDays: data['totalLoginDays'] ?? 0,
     );
   }
 
@@ -160,6 +166,8 @@ class User {
       'lastLoginDate': Timestamp.fromDate(lastLoginDate),
       'createdAt': Timestamp.fromDate(createdAt),
       if (preferences != null) 'preferences': preferences,
+      'loginStreak': loginStreak,
+      'totalLoginDays': totalLoginDays,
     };
   }
 
@@ -187,6 +195,8 @@ class User {
     DateTime? lastLoginDate,
     DateTime? createdAt,
     Map<String, dynamic>? preferences,
+    int? loginStreak,
+    int? totalLoginDays,
   }) {
     return User(
       id: id ?? this.id,
@@ -212,6 +222,8 @@ class User {
       lastLoginDate: lastLoginDate ?? this.lastLoginDate,
       createdAt: createdAt ?? this.createdAt,
       preferences: preferences ?? this.preferences,
+      loginStreak: loginStreak ?? this.loginStreak,
+      totalLoginDays: totalLoginDays ?? this.totalLoginDays,
     );
   }
 }

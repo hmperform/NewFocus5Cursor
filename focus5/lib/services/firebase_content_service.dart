@@ -272,43 +272,22 @@ class FirebaseContentService {
   // Daily Audio Media
   
   // Get all daily audio/media items
-  Future<List<DailyAudio>> getDailyAudios({String? universityCode}) async {
+  Future<List<DailyAudio>> fetchDailyAudios() async {
     try {
-      QuerySnapshot audioSnapshot = await _firestore.collection('daily_audio').get();
-      
-      List<DailyAudio> audioItems = audioSnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        return DailyAudio(
-          id: doc.id,
-          title: data['title'],
-          description: data['description'],
-          audioUrl: data['audioUrl'],
-          imageUrl: data['imageUrl'],
-          creatorId: data['creatorId'],
-          creatorName: data['creatorName'],
-          durationMinutes: data['durationMinutes'],
-          focusAreas: List<String>.from(data['focusAreas']),
-          xpReward: data['xpReward'],
-          datePublished: DateTime.parse(data['datePublished']),
-          universityExclusive: data['universityExclusive'],
-          universityAccess: data['universityAccess'] != null 
-              ? List<String>.from(data['universityAccess']) 
-              : null,
-          category: data['category'],
-        );
+      final snapshot = await _firestore
+          .collection('audio_modules')
+          .orderBy('datePublished')
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        
+        // Convert any Firestore types as needed
+        return DailyAudio.fromJson(data);
       }).toList();
-      
-      // Filter based on university access if needed
-      if (universityCode != null) {
-        audioItems = audioItems.where((audio) {
-          if (!audio.universityExclusive) return true;
-          return audio.universityAccess?.contains(universityCode) ?? false;
-        }).toList();
-      }
-      
-      return audioItems;
     } catch (e) {
-      debugPrint('Error getting daily audio: $e');
+      print('Error fetching daily audios: $e');
       return [];
     }
   }
@@ -316,29 +295,35 @@ class FirebaseContentService {
   // Create daily audio item
   Future<String?> createDailyAudio(DailyAudio audio) async {
     try {
-      final audioRef = _firestore.collection('daily_audio').doc(audio.id);
-      
-      final audioData = {
-        'id': audio.id,
+      final docRef = await _firestore.collection('audio_modules').add({
         'title': audio.title,
         'description': audio.description,
         'audioUrl': audio.audioUrl,
-        'imageUrl': audio.imageUrl,
-        'creatorId': audio.creatorId,
-        'creatorName': audio.creatorName,
+        'thumbnail': audio.thumbnail, // Use thumbnail instead of imageUrl
+        'slideshow1': audio.slideshow1,
+        'slideshow2': audio.slideshow2,
+        'slideshow3': audio.slideshow3,
+        'creatorId': {
+          'id': audio.creatorId.id,
+          'path': 'coaches'
+        },
+        'creatorName': {
+          'id': audio.creatorName.id,
+          'path': 'coaches'
+        },
+        'focusAreas': audio.focusAreas, // Use focusAreas instead of category
         'durationMinutes': audio.durationMinutes,
-        'focusAreas': audio.focusAreas,
         'xpReward': audio.xpReward,
-        'datePublished': audio.datePublished.toIso8601String(),
         'universityExclusive': audio.universityExclusive,
-        'universityAccess': audio.universityAccess,
-        'category': audio.category,
-      };
-      
-      await audioRef.set(audioData);
-      return audio.id;
+        'universityAccess': audio.universityAccess != null 
+            ? {'id': audio.universityAccess!.id, 'path': 'universities'}
+            : null,
+        'createdAt': FieldValue.serverTimestamp(),
+        'datePublished': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
     } catch (e) {
-      debugPrint('Error creating daily audio: $e');
+      print('Error creating daily audio: $e');
       return null;
     }
   }

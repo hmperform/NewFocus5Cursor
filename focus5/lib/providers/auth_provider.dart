@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../services/firebase_auth_service.dart';
+import '../providers/user_provider.dart';
 
 enum AuthStatus { initial, authenticated, unauthenticated, authenticating, error }
 
@@ -60,6 +61,12 @@ class AuthProvider extends ChangeNotifier {
       // Save user type in shared preferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_individual', _currentUser!.isIndividual);
+      
+      // New: Update login info after successful login
+      final userProvider = UserProvider();
+      await userProvider.loadUserData(userCredential.user!.uid);
+      print('AuthProvider: signInWithEmail successful for ${userCredential.user!.uid}, attempting to update login info...');
+      await userProvider.updateUserLoginInfo();
       
       _status = AuthStatus.authenticated;
       notifyListeners();
@@ -123,6 +130,12 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_individual', isIndividual);
       await prefs.setBool('is_first_launch', false);
+      
+      // New: Update login info after successful login
+      final userProvider = UserProvider();
+      await userProvider.loadUserData(userCredential.user!.uid);
+      print('AuthProvider: _handleSuccessfulSignIn for ${userCredential.user!.uid}, attempting to update login info...');
+      await userProvider.updateUserLoginInfo();
       
       _status = AuthStatus.authenticated;
       notifyListeners();

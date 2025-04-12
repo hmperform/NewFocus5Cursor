@@ -93,7 +93,7 @@ class ContentProvider with ChangeNotifier {
   
   Future<void> loadAudioModules() async {
     try {
-      _audioModules = await _contentService.getDailyAudios(universityCode: _universityCode);
+      _audioModules = await _contentService.fetchDailyAudios();
       
       // Set today's audio
       _todayAudio = _audioModules.isNotEmpty 
@@ -216,17 +216,28 @@ class ContentProvider with ChangeNotifier {
     return _audioModules.where((audio) => audio.focusAreas.contains(focusArea)).toList();
   }
   
-  List<DailyAudio> searchAudioModules(String query) {
-    if (query.isEmpty) return _audioModules;
-    
+  List<String> selectedCategories = [];
+  
+  List<DailyAudio> searchAudioModules(String query, List<String> selectedCats) {
     final lowerQuery = query.toLowerCase();
-    return _audioModules.where((audio) {
-      return audio.title.toLowerCase().contains(lowerQuery) ||
-             audio.description.toLowerCase().contains(lowerQuery) ||
-             audio.creatorName.toLowerCase().contains(lowerQuery) ||
-             audio.category.toLowerCase().contains(lowerQuery) ||
-             audio.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery));
-    }).toList();
+    List<DailyAudio> results = _audioModules;
+    
+    if (query.isNotEmpty) {
+      results = results.where((audio) =>
+          audio.title.toLowerCase().contains(lowerQuery) ||
+          audio.description.toLowerCase().contains(lowerQuery) ||
+          audio.creatorName.id.toLowerCase().contains(lowerQuery) ||
+          audio.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery))
+      ).toList();
+    }
+    
+    if (selectedCats.isNotEmpty) {
+      results = results.where((audio) =>
+          audio.focusAreas.any((area) => selectedCats.contains(area.toLowerCase()))
+      ).toList();
+    }
+    
+    return results;
   }
   
   // Article methods
@@ -408,7 +419,7 @@ class ContentProvider with ChangeNotifier {
   // Getter for audios 
   List<DailyAudio> get audios => _audioModules;
   
-  // Search for modules and audio content
+  // Method to search media content
   List<dynamic> searchMediaContent(String query, String mediaType) {
     if (query.isEmpty) {
       return mediaType == 'audio' ? audios : videos;
@@ -417,12 +428,7 @@ class ContentProvider with ChangeNotifier {
     final lowerQuery = query.toLowerCase();
     
     if (mediaType == 'audio') {
-      return _audioModules.where((audio) {
-        return audio.title.toLowerCase().contains(lowerQuery) ||
-               audio.description.toLowerCase().contains(lowerQuery) ||
-               audio.creatorName.toLowerCase().contains(lowerQuery) ||
-               audio.categories.any((category) => category.toLowerCase().contains(lowerQuery));
-      }).toList();
+      return searchAudioModules(query, selectedCategories);
     } else {
       List<Lesson> filteredLessons = [];
       for (final course in _courses) {
@@ -433,6 +439,35 @@ class ContentProvider with ChangeNotifier {
         }));
       }
       return filteredLessons;
+    }
+  }
+
+  List<dynamic> searchMedia(String mediaType, String query) {
+    final lowerQuery = query.toLowerCase();
+    
+    if (mediaType == 'audio') {
+      return searchAudioModules(query, []);
+    } else if (mediaType == 'lesson') {
+      List<Lesson> filteredLessons = [];
+      
+      for (final course in _courses) {
+        for (final lesson in course.modules) {
+          if (lesson.title.toLowerCase().contains(lowerQuery) ||
+              (lesson.description?.toLowerCase() ?? '').contains(lowerQuery) ||
+              course.title.toLowerCase().contains(lowerQuery)) {
+            filteredLessons.add(lesson);
+          }
+        }
+      }
+      
+      return filteredLessons;
+    } else {
+      return _courses.where((course) {
+        return course.title.toLowerCase().contains(lowerQuery) ||
+               course.description.toLowerCase().contains(lowerQuery) ||
+               course.creatorName.toLowerCase().contains(lowerQuery) ||
+               course.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery));
+      }).toList();
     }
   }
 } 

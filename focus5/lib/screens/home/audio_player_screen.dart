@@ -1,26 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
-import 'dart:async';
-
-import '../../providers/audio_provider.dart';
-import '../../models/content_models.dart';
 import 'package:provider/provider.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:transparent_image/transparent_image.dart';
+import 'package:focus5/models/content_models.dart';
+import 'package:focus5/providers/user_provider.dart';
+import 'package:focus5/services/media_completion_service.dart';
+import 'dart:math' as math;
 
 class AudioPlayerScreen extends StatefulWidget {
-  final String title;
-  final String subtitle;
-  final String audioUrl;
-  final String? imageUrl;
-  final DailyAudio? audioData;
+  final DailyAudio audio;
+  final int currentDay;
 
   const AudioPlayerScreen({
     Key? key,
-    required this.title,
-    required this.subtitle,
-    this.audioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    this.imageUrl,
-    this.audioData,
+    required this.audio,
+    required this.currentDay,
   }) : super(key: key);
 
   @override
@@ -29,379 +23,325 @@ class AudioPlayerScreen extends StatefulWidget {
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTickerProviderStateMixin {
   late AudioPlayer _audioPlayer;
+  late AnimationController _slideshowController;
+  int _currentSlideIndex = 0;
+  int _skipCount = 0;
   bool _isPlaying = false;
-  double _currentPosition = 0;
-  double _totalDuration = 1;
-  late AnimationController _animationController;
-  bool _disposed = false;
-  AudioProvider? _audioProvider;
-  
-  // Simulate audio playback for demo purposes
-  Timer? _playbackTimer;
-  
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _audioProvider = Provider.of<AudioProvider>(context, listen: false);
-  }
-  
+  bool _isCompleted = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  double _waveformProgress = 0.0;
+
+  final List<String> _slideshowImages = [];
+
   @override
   void initState() {
     super.initState();
+    _slideshowImages.addAll([
+      widget.audio.slideshow1,
+      widget.audio.slideshow2,
+      widget.audio.slideshow3,
+    ]);
+
     _audioPlayer = AudioPlayer();
-    
-    // Initialize the animation controller immediately
-    _animationController = AnimationController(
+    _slideshowController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    
-    // Tell the provider the full screen player is open and initialize audio
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;  // Check if widget is still mounted
-      
-      try {
-        if (_audioProvider != null) {
-          _audioProvider!.setFullScreenPlayerOpen(true);
+      duration: const Duration(seconds: 10),
+    )..addListener(() {
+        if (_slideshowController.isCompleted) {
+          setState(() {
+            _currentSlideIndex = (_currentSlideIndex + 1) % _slideshowImages.length;
+          });
+          _slideshowController.forward(from: 0.0);
         }
-        _initAudioPlayer();
-      } catch (e) {
-        debugPrint('Error in post frame callback: $e');
-      }
-    });
+      });
+
+    _initializeAudio();
   }
-  
-  Future<void> _initAudioPlayer() async {
-    if (!mounted) return;  // Check if widget is still mounted
-    
+
+  Future<void> _initializeAudio() async {
     try {
-      // For demo, we won't actually load the audio
-      // await _audioPlayer.setUrl(widget.audioUrl);
+      await _audioPlayer.setUrl(widget.audio.audioUrl);
+      _totalDuration = _audioPlayer.duration ?? Duration.zero;
       
-      // Instead, set a dummy duration
-      _totalDuration = 179; // 2:59 in seconds
-      
+      _audioPlayer.positionStream.listen((position) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = position;
+            _waveformProgress = _totalDuration.inMilliseconds > 0 
+                ? position.inMilliseconds / _totalDuration.inMilliseconds 
+                : 0;
+            if (position >= _totalDuration) {
+              _isCompleted = true;
+              _markAsCompleted();
+            }
+          });
+        }
+      });
+
       _audioPlayer.playerStateStream.listen((state) {
-        if (!mounted) return;  // Check if widget is still mounted
-        if (state.playing != _isPlaying) {
+        if (mounted) {
           setState(() {
             _isPlaying = state.playing;
           });
         }
       });
-      
-      _audioPlayer.positionStream.listen((position) {
-        if (!mounted) return;  // Check if widget is still mounted
-        setState(() {
-          _currentPosition = position.inSeconds.toDouble();
-        });
-      });
-      
-      // Simulate playback with a timer instead of using actual audio
-      if (mounted) {
-        _startSimulatedPlayback();
-      }
-      
     } catch (e) {
-      debugPrint('Error initializing audio player: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading audio: $e')),
+        );
+      }
     }
   }
 
-  void _startSimulatedPlayback() {
-    _togglePlayPause();
-  }
-  
-  void _togglePlayPause() {
-    if (!mounted || _disposed) return;
-    
-    try {
-      if (_audioProvider == null) return;
-      
-      setState(() {
-        _isPlaying = !_isPlaying;
-        
-        if (_isPlaying) {
-          _animationController.forward();
-          // Update the audio provider
-          _audioProvider!.startAudio(
-            widget.title, 
-            widget.subtitle, 
-            widget.audioUrl,
-            widget.imageUrl ?? 'https://picsum.photos/800/800?random=42',
-            audioData: widget.audioData,
-          );
-          
-          // Start playback simulation
-          _playbackTimer?.cancel();
-          _playbackTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
-            if (!mounted || _disposed) {
-              timer.cancel();
-              return;
-            }
-            
-            setState(() {
-              if (_currentPosition < _totalDuration) {
-                _currentPosition += 1;
-              } else {
-                _currentPosition = 0;
-                if (mounted && !_disposed) {
-                  _togglePlayPause(); // Auto-pause when finished
-                }
-              }
-            });
-          });
-        } else {
-          _animationController.reverse();
-          // Pause in the provider
-          _audioProvider!.pauseAudio();
-          // Stop simulation
-          _playbackTimer?.cancel();
-        }
-      });
-    } catch (e) {
-      debugPrint('Error toggling play/pause: $e');
+  void _markAsCompleted() {
+    final userId = Provider.of<UserProvider>(context, listen: false).user?.id;
+    if (userId != null) {
+      final mediaCompletionService = MediaCompletionService();
+      mediaCompletionService.markMediaCompleted(userId, widget.audio.id, MediaType.audio);
     }
   }
-  
-  String _formatDuration(double seconds) {
-    final int mins = (seconds / 60).floor();
-    final int secs = (seconds % 60).floor();
-    return '$mins:${secs.toString().padLeft(2, '0')}';
+
+  void _togglePlayPause() {
+    if (_isPlaying) {
+      _audioPlayer.pause();
+    } else {
+      _audioPlayer.play();
+      _slideshowController.forward();
+    }
   }
-  
+
+  void _skipForward() {
+    if (_skipCount >= 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum skip limit reached')),
+      );
+      return;
+    }
+
+    final newPosition = _currentPosition + const Duration(seconds: 30);
+    if (newPosition <= _totalDuration) {
+      _audioPlayer.seek(newPosition);
+      _skipCount++;
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(duration.inHours);
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return duration.inHours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  }
+
   @override
   void dispose() {
-    _disposed = true;
-    _playbackTimer?.cancel();
-    
-    // Don't call methods on AudioProvider directly during dispose
-    // Instead schedule it for after the current frame
-    if (_audioProvider != null) {
-      final provider = _audioProvider;
-      Future.microtask(() {
-        provider?.setFullScreenPlayerOpen(false);
-      });
-    }
-    
     _audioPlayer.dispose();
-    _animationController.dispose();
+    _slideshowController.dispose();
     super.dispose();
   }
-  
+
+  // Custom waveform widget
+  Widget _buildWaveform() {
+    return SizedBox(
+      height: 80,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final waveformData = widget.audio.waveformData;
+          final resolution = widget.audio.waveformResolution;
+          
+          // If no waveform data, show a placeholder
+          if (waveformData.isEmpty) {
+            return _buildPlaceholderWaveform(width);
+          }
+          
+          // Calculate number of bars based on resolution and width
+          final barCount = (width / 4).floor(); // One bar every 4 pixels
+          final barWidth = width / (barCount * 2);
+          
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(barCount, (index) {
+              // Calculate the sample index based on the waveform resolution
+              final sampleIndex = (index * resolution / barCount).floor();
+              final sampleIndexNext = ((index + 1) * resolution / barCount).floor();
+              
+              // Get the average amplitude for this segment
+              double amplitude = 0;
+              int count = 0;
+              for (int i = sampleIndex; i < sampleIndexNext && i < waveformData.length; i++) {
+                amplitude += waveformData[i].abs();
+                count++;
+              }
+              amplitude = count > 0 ? amplitude / count : 0;
+              
+              // Normalize amplitude to bar height (0-40) and cast to double
+              final height = (amplitude * 40).clamp(2, 40).toDouble();
+              final isActive = index / barCount <= _waveformProgress;
+              
+              return Container(
+                width: barWidth,
+                height: height,
+                margin: EdgeInsets.symmetric(horizontal: barWidth / 2),
+                decoration: BoxDecoration(
+                  color: isActive ? Colors.white : Colors.white.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
+
+  // Placeholder waveform when no data is available
+  Widget _buildPlaceholderWaveform(double width) {
+    final barCount = (width / 4).floor();
+    final barWidth = width / (barCount * 2);
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(barCount, (index) {
+        // Generate a simple sine wave pattern and cast to double
+        final height = (20 + (20 * math.sin(index * 0.2)).abs()).toDouble();
+        final isActive = index / barCount <= _waveformProgress;
+        
+        return Container(
+          width: barWidth,
+          height: height,
+          margin: EdgeInsets.symmetric(horizontal: barWidth / 2),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Background image
-          Positioned.fill(
-            child: Image.network(
-              widget.imageUrl ?? 'https://picsum.photos/800/800?random=42',
-              fit: BoxFit.cover,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Back button and title
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.audio.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 48), // Balance the back button
+                ],
+              ),
             ),
-          ),
-          
-          // Gradient overlay for better visibility
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.5),
-                    Colors.black.withOpacity(0.8),
-                  ],
-                  stops: const [0.0, 0.5, 0.9],
+
+            // Slideshow
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                child: FadeInImage.memoryNetwork(
+                  key: ValueKey(_currentSlideIndex),
+                  placeholder: kTransparentImage,
+                  image: _slideshowImages[_currentSlideIndex],
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
-          ),
-          
-          // Content
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Close button
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.close,
-                          color: Color(0xFFB4FF00),
-                          size: 28,
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                      ),
+
+            // Waveform
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildWaveform(),
+            ),
+
+            // Progress bar and time
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  Text(
+                    _formatDuration(_currentPosition),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: _currentPosition.inSeconds.toDouble(),
+                      min: 0,
+                      max: _totalDuration.inSeconds.toDouble(),
+                      onChanged: (value) {
+                        _audioPlayer.seek(Duration(seconds: value.toInt()));
+                      },
                     ),
                   ),
-                ),
-                
-                const Spacer(flex: 1),
-                
-                // Title and subtitle
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.subtitle,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    _formatDuration(_totalDuration),
+                    style: const TextStyle(color: Colors.white),
                   ),
-                ),
-                
-                const Spacer(flex: 4),
-                
-                // Progress bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    children: [
-                      // Timer display
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatDuration(_currentPosition),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              _formatDuration(_totalDuration),
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Progress bar
-                      SizedBox(
-                        height: 20,
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 4.0,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.0),
-                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12.0),
-                            thumbColor: const Color(0xFFB4FF00),
-                            activeTrackColor: const Color(0xFFB4FF00),
-                            inactiveTrackColor: Colors.white24,
-                            overlayColor: const Color(0x29B4FF00),
-                          ),
-                          child: Slider(
-                            value: _currentPosition,
-                            min: 0.0,
-                            max: _totalDuration,
-                            onChanged: (value) {
-                              setState(() {
-                                _currentPosition = value;
-                              });
-                            },
-                            onChangeEnd: (value) {
-                              // Seek to the new position
-                              // _audioPlayer.seek(Duration(seconds: value.toInt()));
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // Playback controls
-                Padding(
-                  padding: const EdgeInsets.only(top: 32.0, bottom: 48.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.replay_10, color: Colors.white, size: 40),
-                        onPressed: () {
-                          // Skip backwards 10 seconds
-                          final newPosition = _currentPosition - 10;
-                          setState(() {
-                            _currentPosition = newPosition < 0 ? 0 : newPosition;
-                          });
-                          // _audioPlayer.seek(Duration(seconds: _currentPosition.toInt()));
-                        },
-                      ),
-                      const SizedBox(width: 24),
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFB4FF00),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFB4FF00).withOpacity(0.3),
-                              blurRadius: 20,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          icon: AnimatedIcon(
-                            icon: AnimatedIcons.play_pause,
-                            progress: _animationController,
-                            color: Colors.black,
-                            size: 40,
-                          ),
-                          onPressed: _togglePlayPause,
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      IconButton(
-                        icon: const Icon(Icons.forward_30, color: Colors.white, size: 40),
-                        onPressed: () {
-                          // Skip forward 30 seconds
-                          final newPosition = _currentPosition + 30;
-                          setState(() {
-                            _currentPosition = newPosition > _totalDuration ? _totalDuration : newPosition;
-                          });
-                          // _audioPlayer.seek(Duration(seconds: _currentPosition.toInt()));
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+
+            // Controls
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous, color: Colors.white),
+                    onPressed: () {
+                      final newPosition = _currentPosition - const Duration(seconds: 30);
+                      if (newPosition >= Duration.zero) {
+                        _audioPlayer.seek(newPosition);
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                    onPressed: _togglePlayPause,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.skip_next, color: Colors.white),
+                    onPressed: _skipForward,
+                  ),
+                ],
+              ),
+            ),
+
+            // Description
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                widget.audio.description,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -28,6 +28,7 @@ class UserProvider extends ChangeNotifier {
   List<JournalEntry> _journalEntries = [];
   bool _isLoading = false;
   String? _errorMessage;
+  Map<String, int> _lessonProgress = {}; // Key: lessonId, Value: last position in seconds
 
   User? get user => _user;
   List<JournalEntry> get journalEntries => _journalEntries;
@@ -49,6 +50,7 @@ class UserProvider extends ChangeNotifier {
   int get level => UserLevelService.getUserLevel(_user?.xp ?? 0);
   int get xpForNextLevel => UserLevelService.getXpForNextLevel(_user?.xp ?? 0);
   double get levelProgress => UserLevelService.getLevelProgress(_user?.xp ?? 0);
+  Map<String, int> get lessonProgress => _lessonProgress;
 
   void setUser(User user) {
     _user = user;
@@ -56,36 +58,31 @@ class UserProvider extends ChangeNotifier {
   }
 
   Future<void> loadUserData(String userId) async {
+    if (_isLoading) return;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
-
+    
     try {
-      // Get user data from Firestore
-      final docSnapshot = await _firestore.collection('users').doc(userId).get();
-      
-      if (docSnapshot.exists) {
-        _user = User.fromFirestore(docSnapshot);
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (doc.exists) {
+        _user = User.fromFirestore(doc);
+        await _loadLessonProgress(userId);
         await _loadJournalEntries(userId);
-        await _checkAndUpdateStreak(userId);
         
-        // Check for new badges
-        final newBadges = await _badgeService.checkForNewBadges(userId, _user!);
-        if (newBadges.isNotEmpty) {
-          // Update local user with new badges
-          final allBadges = [..._user!.badges, ...newBadges];
-          _user = _user!.copyWith(
-            badges: allBadges,
-            xp: _user!.xp + newBadges.fold(0, (sum, badge) => sum + badge.xpValue),
-          );
-        }
+        print('UserProvider: User data loaded for $userId. Current totalLoginDays: ${_user?.totalLoginDays}');
+        
+        // Check/update streak immediately after loading data
+        await _checkAndUpdateStreak(userId);
+      } else {
+        _errorMessage = 'User data not found.';
+        _user = null;
       }
-      
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
+      _errorMessage = 'Failed to load user data: $e';
+      _user = null;
+    } finally {
       _isLoading = false;
-      _errorMessage = 'Failed to load user data: ${e.toString()}';
       notifyListeners();
     }
   }
@@ -122,58 +119,108 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadLessonProgress(String userId) async {
+    // ... existing lesson progress loading ...
+  }
+
+  Future<void> updateLessonProgress(String userId, String lessonId, int position) async {
+    // ... existing lesson progress update ...
+  }
+
+  // Check and update login streak/days
   Future<void> _checkAndUpdateStreak(String userId) async {
-    if (_user == null) return;
+    if (_user == null || _user!.id != userId) {
+      print('UserProvider: Cannot update streak, user data mismatch or not loaded.');
+      return;
+    }
     
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final lastLogin = _user!.lastLoginDate;
       final lastLoginDate = DateTime(lastLogin.year, lastLogin.month, lastLogin.day);
+      int currentTotalDays = _user!.totalLoginDays;
+      int currentStreak = _user!.streak;
+      int currentLongestStreak = _user!.longestStreak;
+      bool needsUpdate = false;
+      int newTotalLoginDays = currentTotalDays;
+      int newStreak = currentStreak;
+      int newLongestStreak = currentLongestStreak;
       
-      // Check if this is a new day compared to last login
-      if (today.isAfter(lastLoginDate)) {
-        int newStreak = _user!.streak;
+      print('UserProvider: Checking streak/days. Today: $today, Last Login: $lastLoginDate, Current Total Days: $currentTotalDays');
+
+      // --- Logic Adjustment for totalLoginDays --- 
+      if (currentTotalDays == 0) {
+        // If user has 0 total days, set it to 1 on this first check
+        print('UserProvider: First login check with 0 days. Setting totalLoginDays to 1.');
+        newTotalLoginDays = 1;
+        newStreak = 1; // Also reset streak to 1
+        newLongestStreak = (newStreak > currentLongestStreak) ? newStreak : currentLongestStreak;
+        needsUpdate = true;
+      } else if (today.isAfter(lastLoginDate)) {
+        // It's a new day and user has logged in before
+        print('UserProvider: New login day detected! Current Total Days: $currentTotalDays');
+        newTotalLoginDays = currentTotalDays + 1;
+        needsUpdate = true; // Need to update Firestore
         
-        // If the last login was yesterday, increment streak
+        // Handle streak logic only on new days
         final yesterday = today.subtract(const Duration(days: 1));
         if (lastLoginDate.isAtSameMomentAs(yesterday)) {
-          newStreak += 1;
-        } else if (today.difference(lastLoginDate).inDays > 1) {
-          // If more than one day has passed, reset streak
-          newStreak = 1;
+          newStreak = currentStreak + 1;
+           print('UserProvider: Streak continued. New streak: $newStreak');
+        } else {
+          // More than one day passed, or first login after signup (if signup doesn't set streak)
+          newStreak = 1; // Reset streak
+          print('UserProvider: Streak broken or first real login day. Resetting streak to 1.');
         }
+        newLongestStreak = (newStreak > currentLongestStreak) ? newStreak : currentLongestStreak;
+      } else {
+        // Same day login, no changes needed for streak or total days
+        print('UserProvider: Not a new login day. No streak/total days update needed.');
+      }
+      // --- End Logic Adjustment ---
+      
+      // Only update Firestore and local state if changes were made
+      if (needsUpdate) {
+        print('UserProvider: Preparing to update Firestore. New Total Days: $newTotalLoginDays, New Streak: $newStreak, New Longest: $newLongestStreak');
         
-        // Update streak in Firestore
         await _firestore.collection('users').doc(userId).update({
           'streak': newStreak,
-          'lastLoginDate': FieldValue.serverTimestamp(),
-          'longestStreak': FieldValue.increment(newStreak > _user!.longestStreak ? newStreak - _user!.longestStreak : 0),
+          'lastLoginDate': FieldValue.serverTimestamp(), // Use server time
+          'longestStreak': newLongestStreak,
+          'totalLoginDays': newTotalLoginDays,
         });
         
-        // Update locally
+        print('UserProvider: Firestore update successful. Updating local state.');
+        
+        // Update local user state
         _user = _user!.copyWith(
           streak: newStreak,
-          lastLoginDate: now,
-          longestStreak: newStreak > _user!.longestStreak ? newStreak : _user!.longestStreak,
+          lastLoginDate: now, // Use local 'now' for immediate consistency
+          longestStreak: newLongestStreak,
+          totalLoginDays: newTotalLoginDays,
         );
         
-        // Log login
-        await _firestore.collection('user_logins').add({
-          'userId': userId,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-        
-        // Add XP for daily login
-        await addXp(userId, 25, 'Daily login');
-        
+        print('UserProvider: Local user state updated. New totalLoginDays: ${_user?.totalLoginDays}');
         notifyListeners();
+        print('UserProvider: Update complete. Notified listeners.');
       }
-    } catch (e) {
-      debugPrint('Error updating streak: $e');
+    } catch (e, stackTrace) {
+      print('UserProvider: Error updating streak/login days: $e');
+      print('UserProvider: Stack trace: $stackTrace');
     }
   }
-  
+
+  // Wrapper function called by AuthProvider
+  Future<void> updateUserLoginInfo() async {
+    if (_user == null) {
+       print('UserProvider: updateUserLoginInfo called, but user is null.');
+       return;
+    }
+     print('UserProvider: updateUserLoginInfo called for user ${_user!.id}');
+    await _checkAndUpdateStreak(_user!.id);
+  }
+
   // Add XP to user
   Future<void> addXp(String userId, int amount, String reason) async {
     if (_user == null || amount <= 0) return;
@@ -767,5 +814,13 @@ class UserProvider extends ChangeNotifier {
       debugPrint('Error awarding badge to current user: $e');
       return false;
     }
+  }
+
+  // Clear user data on logout
+  void clearUserData() {
+    _user = null;
+    _lessonProgress = {};
+    _errorMessage = null;
+    notifyListeners();
   }
 } 

@@ -26,7 +26,7 @@ dependencies:
 
   # UI/UX
   cupertino_icons: ^1.0.2
-  transparent_image: ^2.0.0
+  transparent_image: ^2.0.1
   url_launcher: ^6.0.0 # Add url_launcher if not present or update
 
   # Video
@@ -39,6 +39,8 @@ dependencies:
   uuid: ^4.0.0
   path: ^1.8.3 # Consider updating if needed
   flutter_app_badger: ^1.5.0 # This package is discontinued, consider replacement
+  just_audio: ^0.9.32
+  just_audio_waveform: ^0.1.0
 
 dev_dependencies:
   flutter_test:
