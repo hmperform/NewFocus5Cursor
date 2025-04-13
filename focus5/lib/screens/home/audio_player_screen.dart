@@ -23,14 +23,10 @@ class AudioPlayerScreen extends StatefulWidget {
 }
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTickerProviderStateMixin {
-  late AudioPlayer _audioPlayer;
   late AnimationController _slideshowController;
   int _currentSlideIndex = 0;
   int _skipCount = 0;
-  bool _isPlaying = false;
   bool _isCompleted = false;
-  Duration _currentPosition = Duration.zero;
-  Duration _totalDuration = Duration.zero;
   double _waveformProgress = 0.0;
 
   final List<String> _slideshowImages = [];
@@ -39,14 +35,18 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   void initState() {
     super.initState();
     debugPrint('[AudioPlayerScreen] initState for audio: ${widget.audio.title} (ID: ${widget.audio.id})');
-    Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(true);
+    
+    // Get the provider and ensure it's ready
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    audioProvider.setFullScreenPlayerOpen(true);
+    
+    // Initialize slideshow
     _slideshowImages.addAll([
       widget.audio.slideshow1,
       widget.audio.slideshow2,
       widget.audio.slideshow3,
-    ]);
+    ].where((s) => s.isNotEmpty).toList());
 
-    _audioPlayer = AudioPlayer();
     _slideshowController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
@@ -59,63 +59,42 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         }
       });
 
-    _initializeAudio();
-  }
-
-  Future<void> _initializeAudio() async {
-    try {
-      await _audioPlayer.setUrl(widget.audio.audioUrl);
-      // Wait for the duration to be available
-      Duration? duration;
-      while (duration == null || duration.inSeconds <= 1) {
-        duration = await _audioPlayer.duration;
-        if (duration == null) {
-          await Future.delayed(const Duration(milliseconds: 100));
+    // Start audio playback
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      debugPrint('[AudioPlayerScreen] Starting audio playback...');
+      try {
+        final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+        // Only initialize audio if it's not already playing the same track
+        if (audioProvider.currentAudio?.id != widget.audio.id) {
+          // Convert DailyAudio to Audio
+          final audio = Audio(
+            id: widget.audio.id,
+            title: widget.audio.title,
+            subtitle: widget.audio.focusAreas.join(', '),
+            audioUrl: widget.audio.audioUrl,
+            imageUrl: widget.audio.thumbnail,
+            description: widget.audio.description,
+            sequence: 0,
+            slideshowImages: [
+              widget.audio.slideshow1,
+              widget.audio.slideshow2,
+              widget.audio.slideshow3,
+            ].where((s) => s.isNotEmpty).toList(),
+          );
+          
+          await audioProvider.startAudioFromDaily(audio);
+          debugPrint('[AudioPlayerScreen] Audio playback started successfully');
+        } else {
+          debugPrint('[AudioPlayerScreen] Same audio already playing, skipping initialization');
         }
-      }
-      
-      if (mounted) {
-        setState(() {
-          _totalDuration = duration!;
-          print('🎵 Audio duration loaded: ${_formatDuration(_totalDuration)}');
-        });
         
-        // Start playing automatically
-        _audioPlayer.play();
-        _slideshowController.forward();
-        print('🎵 Starting audio playback automatically');
-      }
-      
-      _audioPlayer.positionStream.listen((position) {
-        if (mounted) {
-          setState(() {
-            _currentPosition = position;
-            _waveformProgress = _totalDuration.inMilliseconds > 0 
-                ? position.inMilliseconds / _totalDuration.inMilliseconds 
-                : 0;
-            if (position >= _totalDuration && _totalDuration > Duration.zero) {
-              _isCompleted = true;
-              _markAsCompleted();
-            }
-          });
+        if (audioProvider.isPlaying) {
+          _slideshowController.forward();
         }
-      });
-
-      _audioPlayer.playerStateStream.listen((state) {
-        if (mounted) {
-          setState(() {
-            _isPlaying = state.playing;
-          });
-        }
-      });
-    } catch (e) {
-      print('🎵 Error loading audio: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading audio: $e')),
-        );
+      } catch (e) {
+        debugPrint('[AudioPlayerScreen] Error starting audio: $e');
       }
-    }
+    });
   }
 
   void _markAsCompleted() {
@@ -127,11 +106,13 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   }
 
   void _togglePlayPause() {
-    if (_isPlaying) {
-      _audioPlayer.pause();
-    } else {
-      _audioPlayer.play();
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    audioProvider.togglePlayPause();
+    
+    if (audioProvider.isPlaying) {
       _slideshowController.forward();
+    } else {
+      _slideshowController.stop();
     }
   }
 
@@ -143,11 +124,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
       return;
     }
 
-    final newPosition = _currentPosition + const Duration(seconds: 30);
-    if (newPosition <= _totalDuration) {
-      _audioPlayer.seek(newPosition);
-      _skipCount++;
-    }
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    audioProvider.seekRelative(const Duration(seconds: 30));
+    _skipCount++;
   }
 
   String _formatDuration(Duration duration) {
@@ -160,22 +139,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
   @override
   void dispose() {
-    debugPrint('[AudioPlayerScreen] Disposing player for audio ID: ${widget.audio.id}');
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    debugPrint('[AudioPlayerScreen] Disposing screen for audio ID: ${widget.audio.id}');
     
-    // Tell the provider the full screen is closing.
-    audioProvider.setFullScreenPlayerOpen(false); 
+    // Tell the provider the full screen is closing
+    Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(false);
     debugPrint('[AudioPlayerScreen] Called setFullScreenPlayerOpen(false) on provider.');
 
-    // Dispose local resources for this screen
+    // Dispose local resources
     _slideshowController.dispose();
     debugPrint('[AudioPlayerScreen] Slideshow controller disposed.');
-    
-    // If this screen MANAGES its own player instance separate from the provider,
-    // it should be disposed here.
-    // If it solely relies on the provider's player, this line might be unnecessary or cause issues.
-    // _audioPlayer.dispose(); 
-    // debugPrint('[AudioPlayerScreen] Local audio player disposed (if applicable).');
     
     super.dispose();
     debugPrint('[AudioPlayerScreen] super.dispose() called.');
@@ -183,9 +155,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
   // Add logging to back button press
   void _handleBackButton() {
-      debugPrint('[AudioPlayerScreen] Back button pressed.');
-      Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(false);
-      Navigator.pop(context);
+    debugPrint('[AudioPlayerScreen] Back button pressed.');
+    Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(false);
+    Navigator.pop(context);
   }
 
   // Custom waveform widget
@@ -270,18 +242,19 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    // Add a Consumer here to log provider state changes relevant to this screen
     return Consumer<AudioProvider>(
       builder: (context, audioProvider, child) {
         debugPrint('[AudioPlayerScreen] Build method. Provider state: isPlaying=${audioProvider.isPlaying}, showMiniPlayer=${audioProvider.showMiniPlayer}, isFullScreen=${audioProvider.isFullScreenPlayerOpen}, currentAudioId=${audioProvider.currentAudio?.id}');
         
-        // Check if the audio this screen was opened for is still the current one in the provider
-        if (audioProvider.currentAudio?.id != widget.audio.id) {
-          debugPrint('[AudioPlayerScreen] WARNING: Provider\'s current audio ID (${audioProvider.currentAudio?.id}) does not match this screen\'s audio ID (${widget.audio.id}). Might need to pop or update.');
-          // Consider popping the screen if the provider moved on: 
-          // WidgetsBinding.instance.addPostFrameCallback((_) { 
-          //   if (mounted) Navigator.pop(context); 
-          // });
+        // Calculate waveform progress from provider state
+        _waveformProgress = audioProvider.totalDuration > 0 
+            ? audioProvider.currentPosition / audioProvider.totalDuration 
+            : 0.0;
+            
+        // Check for completion
+        if (!_isCompleted && audioProvider.currentPosition >= audioProvider.totalDuration && audioProvider.totalDuration > 0) {
+          _isCompleted = true;
+          _markAsCompleted();
         }
 
         // Original Scaffold structure
@@ -376,7 +349,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            _formatDuration(_currentPosition),
+                            _formatDuration(Duration(seconds: audioProvider.currentPosition.toInt())),
                             style: const TextStyle(color: Colors.white),
                           ),
                           const Text(
@@ -384,7 +357,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                             style: TextStyle(color: Colors.white),
                           ),
                           Text(
-                            _formatDuration(_totalDuration),
+                            _formatDuration(Duration(seconds: audioProvider.totalDuration.toInt())),
                             style: const TextStyle(color: Colors.white),
                           ),
                         ],
@@ -434,23 +407,23 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
                           _buildGlassButton(
                             icon: Icons.replay_10,
                             onPressed: () {
-                              final newPosition = _currentPosition - const Duration(seconds: 10);
-                              if (newPosition >= Duration.zero) {
-                                _audioPlayer.seek(newPosition);
+                              final newPosition = audioProvider.currentPosition - 10;
+                              if (newPosition >= 0) {
+                                audioProvider.seekTo(Duration(seconds: newPosition.toInt()));
                               }
                             },
                           ),
                           _buildGlassButton(
-                            icon: _isPlaying ? Icons.pause : Icons.play_arrow,
+                            icon: audioProvider.isPlaying ? Icons.pause : Icons.play_arrow,
                             size: 48,
                             onPressed: _togglePlayPause,
                           ),
                           _buildGlassButton(
                             icon: Icons.forward_10,
                             onPressed: () {
-                              final newPosition = _currentPosition + const Duration(seconds: 10);
-                              if (newPosition <= _totalDuration) {
-                                _audioPlayer.seek(newPosition);
+                              final newPosition = audioProvider.currentPosition + 10;
+                              if (newPosition <= audioProvider.totalDuration) {
+                                audioProvider.seekTo(Duration(seconds: newPosition.toInt()));
                               }
                             },
                           ),

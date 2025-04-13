@@ -51,42 +51,55 @@ class AudioModuleCard extends StatelessWidget {
               slideshowImages: [audio.slideshow1, audio.slideshow2, audio.slideshow3].where((s) => s.isNotEmpty).toList(),
             );
 
-            // If this is the currently playing audio, just open the full screen player
-            if (currentPlayingAudioId == audio.id) {
-              debugPrint('[AudioModuleCard] Opening full screen for currently playing audio');
-              // Set the current audio again to ensure state is consistent
-              audioProvider.setCurrentAudio(basicAudio);
-              audioProvider.setFullScreenPlayerOpen(true);
-              if (!context.mounted) return;
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AudioPlayerScreen(
-                    audio: audio,
-                    currentDay: totalLoginDays,
+            try {
+              // If this is the currently playing audio, just open the full screen player
+              if (currentPlayingAudioId == audio.id) {
+                debugPrint('[AudioModuleCard] Opening full screen for currently playing audio');
+                audioProvider.setFullScreenPlayerOpen(true);
+                if (!context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AudioPlayerScreen(
+                      audio: audio,
+                      currentDay: totalLoginDays,
+                    ),
                   ),
-                ),
-              );
-              return;
-            }
+                );
+                return;
+              }
 
-            // If it's a different audio, start playing it
-            debugPrint('[AudioModuleCard] Starting new audio via provider.');
-            await audioProvider.startAudioFromDaily(basicAudio);
-            
-            // Only navigate if we're still mounted and the audio was successfully started
-            if (context.mounted && audioProvider.currentAudio?.id == basicAudio.id) {
-              debugPrint('[AudioModuleCard] Audio started successfully, opening full screen player');
-              audioProvider.setFullScreenPlayerOpen(true);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AudioPlayerScreen(
-                    audio: audio,
-                    currentDay: totalLoginDays,
+              // If it's a different audio, start playing it
+              debugPrint('[AudioModuleCard] Starting new audio via provider.');
+              await audioProvider.startAudioFromDaily(basicAudio);
+              
+              // Only navigate if we're still mounted and the audio was successfully started
+              if (!context.mounted) return;
+              if (audioProvider.currentAudio?.id == basicAudio.id) {
+                debugPrint('[AudioModuleCard] Audio started successfully, opening full screen player');
+                audioProvider.setFullScreenPlayerOpen(true);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AudioPlayerScreen(
+                      audio: audio,
+                      currentDay: totalLoginDays,
+                    ),
                   ),
-                ),
-              );
+                );
+              } else {
+                debugPrint('[AudioModuleCard] Audio failed to start or was interrupted');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to start audio playback')),
+                );
+              }
+            } catch (e) {
+              debugPrint('[AudioModuleCard] Error handling audio tap: $e');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error playing audio: $e')),
+                );
+              }
             }
           },
           child: Container(

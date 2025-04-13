@@ -127,7 +127,7 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
       if (videoService.videoController == null) return;
       
       videoService.setFullScreen(true);
-      Navigator.of(context).push(
+      Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(
           builder: (context) => const BasicPlayerScreen(),
         ),
@@ -140,7 +140,6 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
     } else {
       // Audio Logic
       debugPrint('[BasicMiniPlayer] _openFullScreenPlayer called for AUDIO.');
-      final navigator = Navigator.of(context);
       final audioProvider = Provider.of<AudioProvider>(context, listen: false);
       final audio = audioProvider.currentAudio;
       if (audio == null) {
@@ -149,43 +148,42 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
       }
       debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: Current audio ID: ${audio.id}');
 
-      // Delay setting the provider state until after the current frame
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-         if (!mounted) return;
-         debugPrint('[BasicMiniPlayer] _openFullScreenPlayer (post-frame): Setting fullScreenPlayerOpen(true).');
-         audioProvider.setFullScreenPlayerOpen(true);
+      // Set the full screen state before navigation
+      audioProvider.setFullScreenPlayerOpen(true);
 
-         // Create the DailyAudio object for the screen
-         final dailyAudio = DailyAudio(
-            id: audio.id,
-            title: audio.title,
-            description: audio.description,
-            audioUrl: audio.audioUrl,
-            thumbnail: audio.imageUrl,
-            slideshow1: audio.slideshowImages.isNotEmpty ? audio.slideshowImages[0] : '',
-            slideshow2: audio.slideshowImages.length > 1 ? audio.slideshowImages[1] : '',
-            slideshow3: audio.slideshowImages.length > 2 ? audio.slideshowImages[2] : '',
-            creatorId: FirebaseFirestore.instance.doc('coaches/default'),
-            creatorName: FirebaseFirestore.instance.doc('coaches/default'),
-            focusAreas: [audio.subtitle ?? ''],
-            durationMinutes: 10,
-            xpReward: 50,
-            universityExclusive: false,
-            createdAt: DateTime.now(),
-            datePublished: DateTime.now(),
-         );
+      // Create the DailyAudio object for the screen
+      final dailyAudio = DailyAudio(
+        id: audio.id,
+        title: audio.title,
+        description: audio.description,
+        audioUrl: audio.audioUrl,
+        thumbnail: audio.imageUrl,
+        slideshow1: audio.slideshowImages.isNotEmpty ? audio.slideshowImages[0] : '',
+        slideshow2: audio.slideshowImages.length > 1 ? audio.slideshowImages[1] : '',
+        slideshow3: audio.slideshowImages.length > 2 ? audio.slideshowImages[2] : '',
+        creatorId: FirebaseFirestore.instance.doc('coaches/default'),
+        creatorName: FirebaseFirestore.instance.doc('coaches/default'),
+        focusAreas: [audio.subtitle ?? ''],
+        durationMinutes: 10,
+        xpReward: 50,
+        universityExclusive: false,
+        createdAt: DateTime.now(),
+        datePublished: DateTime.now(),
+      );
 
-         debugPrint('[BasicMiniPlayer] _openFullScreenPlayer (post-frame): Pushing AudioPlayerScreen route using saved navigator...');
-         navigator.push(
-           MaterialPageRoute(
-             builder: (context) => AudioPlayerScreen(
-               audio: dailyAudio,
-               currentDay: 1,
-             ),
-           ),
-         ).then((_) {
-           debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: AudioPlayerScreen was popped.');
-         });
+      // Use rootNavigator to ensure we're using the top-level navigator
+      Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (context) => AudioPlayerScreen(
+            audio: dailyAudio,
+            currentDay: 1,
+          ),
+        ),
+      ).then((_) {
+        debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: AudioPlayerScreen was popped.');
+        if (mounted) {
+          audioProvider.setFullScreenPlayerOpen(false);
+        }
       });
     }
   }

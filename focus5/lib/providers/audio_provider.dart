@@ -119,12 +119,8 @@ class AudioProvider extends ChangeNotifier {
 
   Future<void> startAudioFromDaily(Audio audio) async {
     debugPrint('[AudioProvider] startAudioFromDaily called for ID: ${audio.id}');
-    if (_disposed) {
-      debugPrint('[AudioProvider] startAudioFromDaily: Disposed, returning.');
-      return;
-    }
-
-    // If the same audio is already playing, just show the mini player
+    
+    // If the same audio is already playing, just ensure mini player is shown
     if (_currentAudio?.id == audio.id) {
       debugPrint('[AudioProvider] Same audio already playing, ensuring mini player is shown');
       _showMiniPlayer = true;
@@ -132,39 +128,38 @@ class AudioProvider extends ChangeNotifier {
       return;
     }
 
-    // Stop current playback if any
-    if (_player.playing || _player.processingState != ProcessingState.idle) {
-      debugPrint('[AudioProvider] startAudioFromDaily: Stopping existing player state: ${_player.processingState}');
-      await _player.stop();
-    }
-
-    _currentAudio = audio;
-    _title = audio.title;
-    _subtitle = audio.subtitle;
-    _audioUrl = audio.audioUrl;
-    _imageUrl = audio.imageUrl;
-    _isPlaying = false; // Will be set true by stream listener after play()
-    _showMiniPlayer = true; // Always show mini player when starting audio
-    _currentPosition = 0;
-    _totalDuration = 0;
-
-    debugPrint('[AudioProvider] startAudioFromDaily: Set internal state. showMiniPlayer=$_showMiniPlayer, isFullScreenPlayerOpen=$_isFullScreenPlayerOpen');
-
     try {
-      debugPrint('[AudioProvider] startAudioFromDaily: Setting URL: ${audio.audioUrl}');
+      // Set metadata first
+      _currentAudio = audio;
+      _title = audio.title;
+      _subtitle = audio.subtitle;
+      _audioUrl = audio.audioUrl;
+      _imageUrl = audio.imageUrl;
+      
+      // Initialize audio
       await _player.setUrl(audio.audioUrl);
-      debugPrint('[AudioProvider] startAudioFromDaily: URL set. Calling play...');
-      await _player.play(); // isPlaying will be updated by the stream listener
-      debugPrint('[AudioProvider] startAudioFromDaily: Play called. Caching data...');
+      await _player.play();
+      
+      // Update state after successful initialization
+      _isPlaying = true;
+      _showMiniPlayer = true;
+      _isInitialized = true;
+      
+      // Cache the audio data
       _cacheAudioData();
+      
+      debugPrint('[AudioProvider] Audio started successfully: ${audio.id}');
+      notifyListeners();
     } catch (e) {
-      debugPrint('[AudioProvider] Error starting audio from DailyAudio: $e');
+      debugPrint('[AudioProvider] Error starting audio: $e');
+      // Reset state on error
+      _currentAudio = null;
       _isPlaying = false;
       _showMiniPlayer = false;
-      _currentAudio = null; // Clear audio if loading failed
+      _isInitialized = false;
+      notifyListeners();
+      rethrow;
     }
-
-    notifyListeners(); // Notify UI about potential state changes (title, image, initial showMiniPlayer)
   }
 
   Future<void> startAudio(
@@ -275,17 +270,19 @@ class AudioProvider extends ChangeNotifier {
 
   void closeMiniPlayer() {
     debugPrint('[AudioProvider] closeMiniPlayer called.');
-    if (_disposed) return;
+    if (_disposed || _isFullScreenPlayerOpen) return; // Don't close if in full screen
 
-    // Stop playback
+    // Stop playback first
     _player.stop();
-    
-    // Reset all state
     _isPlaying = false;
+    
+    // Reset state in correct order
     _showMiniPlayer = false;
     _currentPosition = 0;
     _totalDuration = 0;
-    _currentAudio = null; // Clear current audio last
+    
+    // Clear current audio last to ensure proper cleanup
+    _currentAudio = null;
     
     // Clear cached data
     _clearCachedAudioData();
@@ -348,19 +345,29 @@ class AudioProvider extends ChangeNotifier {
     debugPrint('[AudioProvider] setFullScreenPlayerOpen called with: $isOpen. Current state: isFullScreen=$_isFullScreenPlayerOpen');
     
     // Don't do anything if the state isn't actually changing
-    if (_isFullScreenPlayerOpen == isOpen) return;
+    if (_isFullScreenPlayerOpen == isOpen) {
+      debugPrint('[AudioProvider] No state change needed, returning');
+      return;
+    }
     
     _isFullScreenPlayerOpen = isOpen;
     
-    if (!isOpen) {
-      // When closing full screen, ensure mini player shows if audio is loaded and playing
-      if (_currentAudio != null) {
-        debugPrint('[AudioProvider] Exiting full screen with active audio, showing mini player');
-        _showMiniPlayer = true;
+    // When closing full screen, ensure mini player shows if audio is active
+    if (!isOpen && _currentAudio != null) {
+      debugPrint('[AudioProvider] Exiting full screen with active audio, showing mini player');
+      _showMiniPlayer = true;
+      
+      // If audio was playing, ensure it continues
+      if (_isPlaying && !_player.playing) {
+        debugPrint('[AudioProvider] Resuming playback after full screen close');
+        _player.play();
       }
+    } else if (isOpen) {
+      // When opening full screen, temporarily hide mini player
+      _showMiniPlayer = false;
     }
     
-    debugPrint('[AudioProvider] setFullScreenPlayerOpen: Updated state: isFullScreen=$_isFullScreenPlayerOpen, showMiniPlayer=$_showMiniPlayer, currentAudio ID=${_currentAudio?.id}, isPlaying=$_isPlaying');
+    debugPrint('[AudioProvider] Updated state: isFullScreen=$_isFullScreenPlayerOpen, showMiniPlayer=$_showMiniPlayer, currentAudio ID=${_currentAudio?.id}, isPlaying=$_isPlaying');
     notifyListeners();
   }
 
