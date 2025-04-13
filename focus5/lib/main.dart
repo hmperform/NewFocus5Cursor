@@ -37,6 +37,7 @@ import 'services/basic_video_service.dart';
 import 'services/initialize_database.dart';
 import 'screens/coaches/coaches_list_screen.dart';
 import 'screens/badges/all_badges_screen.dart';
+import 'providers/audio_provider.dart';
 
 // Add global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -77,6 +78,7 @@ void main() async {
           update: (context, userProvider, previousAudioProvider) => 
               AudioModuleProvider(userProvider),
         ),
+        ChangeNotifierProvider(create: (_) => AudioProvider()),
       ],
       child: Focus5App(isFirstLaunch: isFirstLaunch),
     ),
@@ -169,6 +171,12 @@ class Focus5App extends StatelessWidget {
         return Stack(
           children: [
             child!,
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BasicMiniPlayer(),
+            ),
           ],
         );
       },

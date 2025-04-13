@@ -7,6 +7,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/media_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/chat_provider.dart';
+import '../../providers/audio_provider.dart';
 import '../../constants/theme.dart';
 import '../../services/basic_video_service.dart';
 import '../auth/login_screen.dart';
@@ -141,14 +142,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             left: 0,
             right: 0,
             bottom: 0,
-            child: Consumer<BasicVideoService>(
-              builder: (context, videoService, _) {
-                if (videoService.showMiniPlayer) {
+            child: Consumer2<AudioProvider, BasicVideoService>(
+              builder: (context, audioProvider, videoService, _) {
+                final showAudioMiniPlayer = audioProvider.showMiniPlayer && !audioProvider.isFullScreenPlayerOpen;
+                final showVideoMiniPlayer = videoService.showMiniPlayer && !videoService.isFullScreen;
+                
+                debugPrint('[HomeScreen] Mini Player Consumer Build: showAudio=$showAudioMiniPlayer (provider state: show=${audioProvider.showMiniPlayer}, fullScreen=${audioProvider.isFullScreenPlayerOpen}), showVideo=$showVideoMiniPlayer');
+
+                if (showAudioMiniPlayer || showVideoMiniPlayer) {
+                  final double bottomPadding = kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom;
+                  debugPrint('[HomeScreen] Rendering BasicMiniPlayer.');
                   return Padding(
-                    padding: EdgeInsets.only(bottom: kBottomNavigationBarHeight),
-                    child: const BasicMiniPlayer(),
+                    padding: EdgeInsets.only(bottom: bottomPadding - 16), 
+                    child: BasicMiniPlayer(bottomPadding: 0), 
                   );
                 } else {
+                  debugPrint('[HomeScreen] Not rendering BasicMiniPlayer.');
                   return const SizedBox.shrink();
                 }
               },

@@ -714,4 +714,56 @@ class Article {
       'universityAccess': universityAccess,
     };
   }
+}
+
+class Audio {
+  final String id;
+  final String title;
+  final String subtitle;
+  final String description;
+  final String imageUrl;
+  final String audioUrl;
+  final int sequence;
+  final String? waveformUrl;
+  final List<String> slideshowImages;
+
+  Audio({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+    required this.imageUrl,
+    required this.audioUrl,
+    required this.sequence,
+    this.waveformUrl,
+    required this.slideshowImages,
+  });
+
+  factory Audio.fromMap(Map<String, dynamic> map) {
+    return Audio(
+      id: map['id'] as String,
+      title: map['title'] as String,
+      subtitle: map['subtitle'] as String? ?? '',
+      description: map['description'] as String,
+      imageUrl: map['imageUrl'] as String,
+      audioUrl: map['audioUrl'] as String,
+      sequence: map['sequence'] as int,
+      waveformUrl: map['waveformUrl'] as String?,
+      slideshowImages: List<String>.from(map['slideshowImages'] as List<dynamic>),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'subtitle': subtitle,
+      'description': description,
+      'imageUrl': imageUrl,
+      'audioUrl': audioUrl,
+      'sequence': sequence,
+      'waveformUrl': waveformUrl,
+      'slideshowImages': slideshowImages,
+    };
+  }
 } 

@@ -6,6 +6,7 @@ import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/user_provider.dart';
 import 'package:focus5/services/media_completion_service.dart';
 import 'dart:math' as math;
+import 'package:focus5/providers/audio_provider.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final DailyAudio audio;
@@ -37,6 +38,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
+    debugPrint('[AudioPlayerScreen] initState for audio: ${widget.audio.title} (ID: ${widget.audio.id})');
+    Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(true);
     _slideshowImages.addAll([
       widget.audio.slideshow1,
       widget.audio.slideshow2,
@@ -157,9 +160,32 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    debugPrint('[AudioPlayerScreen] Disposing player for audio ID: ${widget.audio.id}');
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    
+    // Tell the provider the full screen is closing.
+    audioProvider.setFullScreenPlayerOpen(false); 
+    debugPrint('[AudioPlayerScreen] Called setFullScreenPlayerOpen(false) on provider.');
+
+    // Dispose local resources for this screen
     _slideshowController.dispose();
+    debugPrint('[AudioPlayerScreen] Slideshow controller disposed.');
+    
+    // If this screen MANAGES its own player instance separate from the provider,
+    // it should be disposed here.
+    // If it solely relies on the provider's player, this line might be unnecessary or cause issues.
+    // _audioPlayer.dispose(); 
+    // debugPrint('[AudioPlayerScreen] Local audio player disposed (if applicable).');
+    
     super.dispose();
+    debugPrint('[AudioPlayerScreen] super.dispose() called.');
+  }
+
+  // Add logging to back button press
+  void _handleBackButton() {
+      debugPrint('[AudioPlayerScreen] Back button pressed.');
+      Provider.of<AudioProvider>(context, listen: false).setFullScreenPlayerOpen(false);
+      Navigator.pop(context);
   }
 
   // Custom waveform widget
@@ -244,210 +270,227 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Full screen slideshow
-          Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 500),
-              child: FadeInImage.memoryNetwork(
-                key: ValueKey(_currentSlideIndex),
-                placeholder: kTransparentImage,
-                image: _slideshowImages[_currentSlideIndex],
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
-          ),
-          // Gradient overlay
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.7),
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.7),
-                  ],
-                  stops: const [0.0, 0.2, 0.8, 1.0],
+    // Add a Consumer here to log provider state changes relevant to this screen
+    return Consumer<AudioProvider>(
+      builder: (context, audioProvider, child) {
+        debugPrint('[AudioPlayerScreen] Build method. Provider state: isPlaying=${audioProvider.isPlaying}, showMiniPlayer=${audioProvider.showMiniPlayer}, isFullScreen=${audioProvider.isFullScreenPlayerOpen}, currentAudioId=${audioProvider.currentAudio?.id}');
+        
+        // Check if the audio this screen was opened for is still the current one in the provider
+        if (audioProvider.currentAudio?.id != widget.audio.id) {
+          debugPrint('[AudioPlayerScreen] WARNING: Provider\'s current audio ID (${audioProvider.currentAudio?.id}) does not match this screen\'s audio ID (${widget.audio.id}). Might need to pop or update.');
+          // Consider popping the screen if the provider moved on: 
+          // WidgetsBinding.instance.addPostFrameCallback((_) { 
+          //   if (mounted) Navigator.pop(context); 
+          // });
+        }
+
+        // Original Scaffold structure
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            children: [
+              // Full screen slideshow
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  child: FadeInImage.memoryNetwork(
+                    key: ValueKey(_currentSlideIndex),
+                    placeholder: kTransparentImage,
+                    image: _slideshowImages[_currentSlideIndex],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
                 ),
               ),
-            ),
-          ),
-          // Content
-          SafeArea(
-            child: Column(
-              children: [
-                // Back button and title
-                Container(
-                  margin: const EdgeInsets.all(16.0),
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              // Gradient overlay
+              Positioned.fill(
+                child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      Expanded(
-                        child: Text(
-                          widget.audio.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
-
-                // Time display
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _formatDuration(_currentPosition),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      const Text(
-                        ' / ',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        _formatDuration(_totalDuration),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Spacer(),
-
-                // Waveform with glassmorphic effect
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: _buildWaveform(),
-                ),
-
-                // Controls with glassmorphic effect
-                Container(
-                  margin: const EdgeInsets.all(16.0),
-                  padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 32.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildGlassButton(
-                        icon: Icons.replay_10,
-                        onPressed: () {
-                          final newPosition = _currentPosition - const Duration(seconds: 10);
-                          if (newPosition >= Duration.zero) {
-                            _audioPlayer.seek(newPosition);
-                          }
-                        },
-                      ),
-                      _buildGlassButton(
-                        icon: _isPlaying ? Icons.pause : Icons.play_arrow,
-                        size: 48,
-                        onPressed: _togglePlayPause,
-                      ),
-                      _buildGlassButton(
-                        icon: Icons.forward_10,
-                        onPressed: () {
-                          final newPosition = _currentPosition + const Duration(seconds: 10);
-                          if (newPosition <= _totalDuration) {
-                            _audioPlayer.seek(newPosition);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Description with glassmorphic effect
-                Container(
-                  margin: const EdgeInsets.all(16.0),
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    widget.audio.description,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      height: 1.5,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.black.withOpacity(0.3),
+                        Colors.black.withOpacity(0.3),
+                        Colors.black.withOpacity(0.7),
+                      ],
+                      stops: const [0.0, 0.2, 0.8, 1.0],
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Content
+              SafeArea(
+                child: Column(
+                  children: [
+                    // Back button and title
+                    Container(
+                      margin: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
+                            onPressed: _handleBackButton,
+                          ),
+                          Expanded(
+                            child: Text(
+                              widget.audio.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(width: 48),
+                        ],
+                      ),
+                    ),
+
+                    // Time display
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _formatDuration(_currentPosition),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          const Text(
+                            ' / ',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          Text(
+                            _formatDuration(_totalDuration),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Waveform with glassmorphic effect
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: _buildWaveform(),
+                    ),
+
+                    // Controls with glassmorphic effect
+                    Container(
+                      margin: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 32.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildGlassButton(
+                            icon: Icons.replay_10,
+                            onPressed: () {
+                              final newPosition = _currentPosition - const Duration(seconds: 10);
+                              if (newPosition >= Duration.zero) {
+                                _audioPlayer.seek(newPosition);
+                              }
+                            },
+                          ),
+                          _buildGlassButton(
+                            icon: _isPlaying ? Icons.pause : Icons.play_arrow,
+                            size: 48,
+                            onPressed: _togglePlayPause,
+                          ),
+                          _buildGlassButton(
+                            icon: Icons.forward_10,
+                            onPressed: () {
+                              final newPosition = _currentPosition + const Duration(seconds: 10);
+                              if (newPosition <= _totalDuration) {
+                                _audioPlayer.seek(newPosition);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Description with glassmorphic effect
+                    Container(
+                      margin: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        widget.audio.description,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

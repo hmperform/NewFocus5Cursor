@@ -35,6 +35,29 @@ class AudioModuleCard extends StatelessWidget {
 
         return GestureDetector(
           onTap: () {
+            debugPrint('[AudioModuleCard] onTap triggered for audio: ${audio.title} (ID: ${audio.id})');
+            final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+            final currentPlayingAudioId = audioProvider.currentAudio?.id;
+            debugPrint('[AudioModuleCard] Current playing audio ID in provider: $currentPlayingAudioId');
+
+            if (currentPlayingAudioId != audio.id) {
+              debugPrint('[AudioModuleCard] Starting new audio via provider.');
+              final basicAudio = Audio(
+                  id: audio.id,
+                  title: audio.title,
+                  subtitle: audio.focusAreas.join(', '),
+                  audioUrl: audio.audioUrl,
+                  imageUrl: audio.thumbnail,
+                  slideshowImages: [audio.slideshow1, audio.slideshow2, audio.slideshow3].where((s) => s.isNotEmpty).toList(),
+              );
+              // Using await here might be important if startAudioFromDaily does async work before UI update
+              audioProvider.startAudioFromDaily(basicAudio); 
+            } else {
+               debugPrint('[AudioModuleCard] Tapped audio is already playing.');
+            }
+
+            debugPrint('[AudioModuleCard] Setting full screen player open and navigating...');
+            audioProvider.setFullScreenPlayerOpen(true); // Explicitly set before navigating
             Navigator.push(
               context,
               MaterialPageRoute(

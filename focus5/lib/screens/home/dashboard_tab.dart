@@ -206,10 +206,9 @@ class _DashboardTabState extends State<DashboardTab> {
                   children: [
                     const SizedBox(height: 8),
                     _buildDayStreak(),
-                    _buildDailyVideo(context),
+                    _buildStartYourDay(context),
                     _buildRecentCourses(),
                     _buildFeaturedCourses(context),
-                    _buildStartYourDay(context),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -631,13 +630,13 @@ class _DashboardTabState extends State<DashboardTab> {
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final surfaceColor = Theme.of(context).colorScheme.surface;
 
-    final featuredVideo = contentProvider.todayAudio;
+    final audioModule = contentProvider.todayAudio;
 
-    if (contentProvider.isLoading && featuredVideo == null) {
-      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+    if (contentProvider.isLoading && audioModule == null) {
+      return const SizedBox(height: 300, child: Center(child: CircularProgressIndicator()));
     }
 
-    if (featuredVideo == null) {
+    if (audioModule == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: Text(
@@ -647,21 +646,8 @@ class _DashboardTabState extends State<DashboardTab> {
       );
     }
 
-    final courses = contentProvider.courses;
-    bool isFeatured = false;
-    if (courses.isNotEmpty && courses[0].title == featuredVideo.title) {
-      isFeatured = true;
-    }
-    if (courses.length > 1 && courses[1].title == featuredVideo.title) {
-      isFeatured = true;
-    }
-
-    if (isFeatured) {
-      return const SizedBox.shrink();
-    }
-
-    final containerWidth = MediaQuery.of(context).size.width - 32; // Full width minus padding
-    final containerHeight = containerWidth * 0.5; // Make height 50% of width for a better aspect ratio
+    final containerWidth = MediaQuery.of(context).size.width - 32;
+    final containerHeight = containerWidth * 0.7; // Increased height ratio
     
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -679,168 +665,132 @@ class _DashboardTabState extends State<DashboardTab> {
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () {
-              final currentAudio = audioModule;
-              if (currentAudio != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AudioPlayerScreen(
-                      audio: currentAudio,
-                      currentDay: totalLoginDays,
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AudioPlayerScreen(
+                    audio: audioModule,
+                    currentDay: Provider.of<UserProvider>(context, listen: false).user?.totalLoginDays ?? 1,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              height: containerHeight,
+              width: containerWidth,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                image: DecorationImage(
+                  image: NetworkImage(audioModule.imageUrl),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withOpacity(0.3),
+                    BlendMode.darken,
+                  ),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  // Gradient overlay
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
                     ),
                   ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No audio module available today'))
-                );
-              }
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: containerWidth,
-                height: containerHeight,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1E1E1E),
-                ),
-                child: Stack(
-                  children: [
-                    // Background image with fade-in effect
-                    Positioned.fill(
-                      child: FadeInImage.memoryNetwork(
-                        placeholder: kTransparentImage,
-                        image: audioModule?.thumbnail ?? 'https://picsum.photos/800/400?random=50',
-                        fit: BoxFit.cover,
-                        fadeInDuration: const Duration(milliseconds: 300),
-                      ),
-                    ),
-                    
-                    // Gradient overlay for better text readability
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withOpacity(0.6),
-                              Colors.black.withOpacity(0.9),
-                            ],
-                            stops: const [0.5, 0.8, 1.0],
+                  // Content
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'DAILY AUDIO',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    
-                    // Content overlay
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 12),
+                        Text(
+                          audioModule.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          audioModule.description,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
                           children: [
+                            Icon(
+                              Icons.play_circle_filled,
+                              color: accentColor,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
                             Text(
-                              'Daily Focus Session',
+                              '${audioModule.durationMinutes} min',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Morning Mental Preparation • 10 min',
-                              style: const TextStyle(
-                                color: Colors.grey,
                                 fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                // Play button
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFB4FF00),
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFB4FF00).withOpacity(0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: const [
-                                      Icon(
-                                        Icons.play_arrow,
-                                        color: Colors.black,
-                                        size: 18,
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Play',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // Bookmark button
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.bookmark_border,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                              ],
+                            const Spacer(),
+                            Icon(
+                              Icons.star,
+                              color: accentColor,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${audioModule.xpReward} XP',
+                              style: TextStyle(
+                                color: accentColor,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
-                    
-                    // Session type indicator
-                    Positioned(
-                      top: 16,
-                      right: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFB4FF00), width: 1),
-                        ),
-                        child: const Text(
-                          'Today',
-                          style: TextStyle(
-                            color: Color(0xFFB4FF00),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
