@@ -34,39 +34,60 @@ class AudioModuleCard extends StatelessWidget {
         final totalLoginDays = userService.currentUser?.totalLoginDays ?? 0;
 
         return GestureDetector(
-          onTap: () {
+          onTap: () async {
             debugPrint('[AudioModuleCard] onTap triggered for audio: ${audio.title} (ID: ${audio.id})');
             final audioProvider = Provider.of<AudioProvider>(context, listen: false);
             final currentPlayingAudioId = audioProvider.currentAudio?.id;
             debugPrint('[AudioModuleCard] Current playing audio ID in provider: $currentPlayingAudioId');
 
-            if (currentPlayingAudioId != audio.id) {
-              debugPrint('[AudioModuleCard] Starting new audio via provider.');
-              final basicAudio = Audio(
-                  id: audio.id,
-                  title: audio.title,
-                  subtitle: audio.focusAreas.join(', '),
-                  audioUrl: audio.audioUrl,
-                  imageUrl: audio.thumbnail,
-                  slideshowImages: [audio.slideshow1, audio.slideshow2, audio.slideshow3].where((s) => s.isNotEmpty).toList(),
+            // Create the Audio object
+            final basicAudio = Audio(
+              id: audio.id,
+              title: audio.title,
+              subtitle: audio.focusAreas.join(', '),
+              audioUrl: audio.audioUrl,
+              imageUrl: audio.thumbnail,
+              description: audio.description,
+              slideshowImages: [audio.slideshow1, audio.slideshow2, audio.slideshow3].where((s) => s.isNotEmpty).toList(),
+            );
+
+            // If this is the currently playing audio, just open the full screen player
+            if (currentPlayingAudioId == audio.id) {
+              debugPrint('[AudioModuleCard] Opening full screen for currently playing audio');
+              // Set the current audio again to ensure state is consistent
+              audioProvider.setCurrentAudio(basicAudio);
+              audioProvider.setFullScreenPlayerOpen(true);
+              if (!context.mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AudioPlayerScreen(
+                    audio: audio,
+                    currentDay: totalLoginDays,
+                  ),
+                ),
               );
-              // Using await here might be important if startAudioFromDaily does async work before UI update
-              audioProvider.startAudioFromDaily(basicAudio); 
-            } else {
-               debugPrint('[AudioModuleCard] Tapped audio is already playing.');
+              return;
             }
 
-            debugPrint('[AudioModuleCard] Setting full screen player open and navigating...');
-            audioProvider.setFullScreenPlayerOpen(true); // Explicitly set before navigating
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => AudioPlayerScreen(
-                  audio: audio,
-                  currentDay: totalLoginDays,
+            // If it's a different audio, start playing it
+            debugPrint('[AudioModuleCard] Starting new audio via provider.');
+            await audioProvider.startAudioFromDaily(basicAudio);
+            
+            // Only navigate if we're still mounted and the audio was successfully started
+            if (context.mounted && audioProvider.currentAudio?.id == basicAudio.id) {
+              debugPrint('[AudioModuleCard] Audio started successfully, opening full screen player');
+              audioProvider.setFullScreenPlayerOpen(true);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AudioPlayerScreen(
+                    audio: audio,
+                    currentDay: totalLoginDays,
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

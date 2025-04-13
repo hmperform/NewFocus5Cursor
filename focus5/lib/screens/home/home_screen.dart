@@ -142,25 +142,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             left: 0,
             right: 0,
             bottom: 0,
-            child: Consumer2<AudioProvider, BasicVideoService>(
-              builder: (context, audioProvider, videoService, _) {
-                final showAudioMiniPlayer = audioProvider.showMiniPlayer && !audioProvider.isFullScreenPlayerOpen;
-                final showVideoMiniPlayer = videoService.showMiniPlayer && !videoService.isFullScreen;
-                
-                debugPrint('[HomeScreen] Mini Player Consumer Build: showAudio=$showAudioMiniPlayer (provider state: show=${audioProvider.showMiniPlayer}, fullScreen=${audioProvider.isFullScreenPlayerOpen}), showVideo=$showVideoMiniPlayer');
+            child: Material(
+              color: Colors.transparent,
+              child: Consumer2<AudioProvider, BasicVideoService>(
+                builder: (context, audioProvider, videoService, _) {
+                  final showAudioMiniPlayer = audioProvider.showMiniPlayer && !audioProvider.isFullScreenPlayerOpen;
+                  final showVideoMiniPlayer = videoService.showMiniPlayer && !videoService.isFullScreen;
+                  
+                  debugPrint('[HomeScreen] Mini Player Consumer Build: showAudio=$showAudioMiniPlayer (provider state: show=${audioProvider.showMiniPlayer}, fullScreen=${audioProvider.isFullScreenPlayerOpen}), showVideo=$showVideoMiniPlayer');
 
-                if (showAudioMiniPlayer || showVideoMiniPlayer) {
-                  final double bottomPadding = kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom;
-                  debugPrint('[HomeScreen] Rendering BasicMiniPlayer.');
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: bottomPadding - 16), 
-                    child: BasicMiniPlayer(bottomPadding: 0), 
-                  );
-                } else {
-                  debugPrint('[HomeScreen] Not rendering BasicMiniPlayer.');
-                  return const SizedBox.shrink();
-                }
-              },
+                  if (showAudioMiniPlayer || showVideoMiniPlayer) {
+                    final double bottomPadding = kBottomNavigationBarHeight + MediaQuery.of(context).padding.bottom;
+                    debugPrint('[HomeScreen] Rendering BasicMiniPlayer.');
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: bottomPadding), 
+                      child: BasicMiniPlayer(bottomPadding: 16), 
+                    );
+                  } else {
+                    debugPrint('[HomeScreen] Not rendering BasicMiniPlayer.');
+                    return const SizedBox.shrink();
+                  }
+                },
+              ),
             ),
           ),
         ],

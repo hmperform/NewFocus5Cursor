@@ -290,9 +290,9 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             height: 64,
-            width: screenWidth,
+            width: screenWidth - 32, // Account for horizontal padding
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.black.withOpacity(0.5), // Darker background for better visibility
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: Colors.white.withOpacity(0.2),
@@ -300,7 +300,7 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),

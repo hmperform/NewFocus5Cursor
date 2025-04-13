@@ -124,6 +124,14 @@ class AudioProvider extends ChangeNotifier {
       return;
     }
 
+    // If the same audio is already playing, just show the mini player
+    if (_currentAudio?.id == audio.id) {
+      debugPrint('[AudioProvider] Same audio already playing, ensuring mini player is shown');
+      _showMiniPlayer = true;
+      notifyListeners();
+      return;
+    }
+
     // Stop current playback if any
     if (_player.playing || _player.processingState != ProcessingState.idle) {
       debugPrint('[AudioProvider] startAudioFromDaily: Stopping existing player state: ${_player.processingState}');
@@ -136,7 +144,7 @@ class AudioProvider extends ChangeNotifier {
     _audioUrl = audio.audioUrl;
     _imageUrl = audio.imageUrl;
     _isPlaying = false; // Will be set true by stream listener after play()
-    _showMiniPlayer = !_isFullScreenPlayerOpen;
+    _showMiniPlayer = true; // Always show mini player when starting audio
     _currentPosition = 0;
     _totalDuration = 0;
 
@@ -269,16 +277,20 @@ class AudioProvider extends ChangeNotifier {
     debugPrint('[AudioProvider] closeMiniPlayer called.');
     if (_disposed) return;
 
-    _player.stop(); // Stop the actual player
-    _currentAudio = null; // Clear current audio
+    // Stop playback
+    _player.stop();
+    
+    // Reset all state
     _isPlaying = false;
     _showMiniPlayer = false;
     _currentPosition = 0;
     _totalDuration = 0;
-
+    _currentAudio = null; // Clear current audio last
+    
     // Clear cached data
     _clearCachedAudioData();
 
+    debugPrint('[AudioProvider] Mini player closed and state reset');
     notifyListeners();
   }
 
@@ -334,10 +346,21 @@ class AudioProvider extends ChangeNotifier {
 
   void setFullScreenPlayerOpen(bool isOpen) {
     debugPrint('[AudioProvider] setFullScreenPlayerOpen called with: $isOpen. Current state: isFullScreen=$_isFullScreenPlayerOpen');
+    
+    // Don't do anything if the state isn't actually changing
+    if (_isFullScreenPlayerOpen == isOpen) return;
+    
     _isFullScreenPlayerOpen = isOpen;
-    // Only show mini player if NOT in full screen AND there is audio loaded
-    _showMiniPlayer = !_isFullScreenPlayerOpen && _currentAudio != null;
-    debugPrint('[AudioProvider] setFullScreenPlayerOpen: Updated state: isFullScreen=$_isFullScreenPlayerOpen, showMiniPlayer=$_showMiniPlayer, currentAudio ID=${_currentAudio?.id}');
+    
+    if (!isOpen) {
+      // When closing full screen, ensure mini player shows if audio is loaded and playing
+      if (_currentAudio != null) {
+        debugPrint('[AudioProvider] Exiting full screen with active audio, showing mini player');
+        _showMiniPlayer = true;
+      }
+    }
+    
+    debugPrint('[AudioProvider] setFullScreenPlayerOpen: Updated state: isFullScreen=$_isFullScreenPlayerOpen, showMiniPlayer=$_showMiniPlayer, currentAudio ID=${_currentAudio?.id}, isPlaying=$_isPlaying');
     notifyListeners();
   }
 
