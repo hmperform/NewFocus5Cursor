@@ -9,6 +9,74 @@ import '../models/content_models.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Data class to hold selected state for Selector2
+class _MiniPlayerData {
+  final bool shouldShowAudio;
+  final bool shouldShowVideo;
+
+  // Audio data
+  final String? audioId; // Needed for debugging/key
+  final String? audioTitle;
+  final String? audioSubtitle;
+  final String? audioImageUrl; // For thumbnail
+  final bool isAudioPlaying;
+
+  // Video data
+  final String? videoTitle;
+  final String? videoSubtitle;
+  final VideoPlayerController? videoController; // For thumbnail
+  final bool isVideoPlaying;
+
+  _MiniPlayerData({
+    required this.shouldShowAudio,
+    required this.shouldShowVideo,
+    this.audioId,
+    this.audioTitle,
+    this.audioSubtitle,
+    this.audioImageUrl,
+    required this.isAudioPlaying,
+    this.videoTitle,
+    this.videoSubtitle,
+    this.videoController,
+    required this.isVideoPlaying,
+  });
+
+  // Equality operator for Selector2 optimization
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _MiniPlayerData &&
+          runtimeType == other.runtimeType &&
+          shouldShowAudio == other.shouldShowAudio &&
+          shouldShowVideo == other.shouldShowVideo &&
+          audioId == other.audioId &&
+          audioTitle == other.audioTitle &&
+          audioSubtitle == other.audioSubtitle &&
+          audioImageUrl == other.audioImageUrl &&
+          isAudioPlaying == other.isAudioPlaying &&
+          videoTitle == other.videoTitle &&
+          videoSubtitle == other.videoSubtitle &&
+          // Comparing controllers directly might be problematic if internal state changes often.
+          // Consider comparing controller existence or relevant value properties if needed.
+          videoController?.textureId == other.videoController?.textureId &&
+          isVideoPlaying == other.isVideoPlaying;
+
+  @override
+  int get hashCode => Object.hash(
+        shouldShowAudio,
+        shouldShowVideo,
+        audioId,
+        audioTitle,
+        audioSubtitle,
+        audioImageUrl,
+        isAudioPlaying,
+        videoTitle,
+        videoSubtitle,
+        videoController?.textureId, // Use a stable property for hash
+        isVideoPlaying,
+      );
+}
+
 class BasicMiniPlayer extends StatefulWidget {
   final double bottomPadding;
 
@@ -70,88 +138,133 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
         }
       });
     } else {
+      // Audio Logic
+      debugPrint('[BasicMiniPlayer] _openFullScreenPlayer called for AUDIO.');
+      final navigator = Navigator.of(context);
       final audioProvider = Provider.of<AudioProvider>(context, listen: false);
       final audio = audioProvider.currentAudio;
-      if (audio == null) return;
-      
-      audioProvider.setFullScreenPlayerOpen(true);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => AudioPlayerScreen(
-            audio: DailyAudio(
-              id: audio.id,
-              title: audio.title,
-              description: audio.description,
-              audioUrl: audio.audioUrl,
-              thumbnail: audio.imageUrl,
-              slideshow1: audio.slideshowImages.isNotEmpty ? audio.slideshowImages[0] : '',
-              slideshow2: audio.slideshowImages.length > 1 ? audio.slideshowImages[1] : '',
-              slideshow3: audio.slideshowImages.length > 2 ? audio.slideshowImages[2] : '',
-              creatorId: FirebaseFirestore.instance.doc('coaches/default'),
-              creatorName: FirebaseFirestore.instance.doc('coaches/default'),
-              focusAreas: [audio.subtitle ?? ''],
-              durationMinutes: 10,
-              xpReward: 50,
-              universityExclusive: false,
-              createdAt: DateTime.now(),
-              datePublished: DateTime.now(),
-            ),
-            currentDay: 1,
-          ),
-        ),
-      ).then((_) {
-        if (mounted) {
-          audioProvider.setFullScreenPlayerOpen(false);
-          _checkPlaybackState();
-        }
+      if (audio == null) {
+        debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: audio is null, returning.');
+        return;
+      }
+      debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: Current audio ID: ${audio.id}');
+
+      // Delay setting the provider state until after the current frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+         if (!mounted) return;
+         debugPrint('[BasicMiniPlayer] _openFullScreenPlayer (post-frame): Setting fullScreenPlayerOpen(true).');
+         audioProvider.setFullScreenPlayerOpen(true);
+
+         // Create the DailyAudio object for the screen
+         final dailyAudio = DailyAudio(
+            id: audio.id,
+            title: audio.title,
+            description: audio.description,
+            audioUrl: audio.audioUrl,
+            thumbnail: audio.imageUrl,
+            slideshow1: audio.slideshowImages.isNotEmpty ? audio.slideshowImages[0] : '',
+            slideshow2: audio.slideshowImages.length > 1 ? audio.slideshowImages[1] : '',
+            slideshow3: audio.slideshowImages.length > 2 ? audio.slideshowImages[2] : '',
+            creatorId: FirebaseFirestore.instance.doc('coaches/default'),
+            creatorName: FirebaseFirestore.instance.doc('coaches/default'),
+            focusAreas: [audio.subtitle ?? ''],
+            durationMinutes: 10,
+            xpReward: 50,
+            universityExclusive: false,
+            createdAt: DateTime.now(),
+            datePublished: DateTime.now(),
+         );
+
+         debugPrint('[BasicMiniPlayer] _openFullScreenPlayer (post-frame): Pushing AudioPlayerScreen route using saved navigator...');
+         navigator.push(
+           MaterialPageRoute(
+             builder: (context) => AudioPlayerScreen(
+               audio: dailyAudio,
+               currentDay: 1,
+             ),
+           ),
+         ).then((_) {
+           debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: AudioPlayerScreen was popped.');
+         });
       });
     }
   }
   
   @override
   Widget build(BuildContext context) {
-    return Consumer2<BasicVideoService, AudioProvider>(
-      builder: (context, videoService, audioProvider, child) {
-        // Show video mini player
-        if (videoService.videoController != null && 
-            videoService.showMiniPlayer &&
-            !videoService.isFullScreen) {
-          return _buildGlassMorphicMiniPlayer(
-            title: videoService.title,
-            subtitle: videoService.subtitle,
-            thumbnailWidget: _buildVideoThumbnail(videoService),
-            isPlaying: videoService.isPlaying,
-            onPlayPause: () => videoService.togglePlayPause(),
-            onBackward: () => videoService.seekBackward(seconds: 10),
-            onForward: () => videoService.seekForward(seconds: 10),
-            onClose: () => videoService.closePlayer(),
-            onTap: () => _openFullScreenPlayer(context, isVideo: true),
-          );
-        }
-        
-        // Show audio mini player
-        if (audioProvider.currentAudio != null && 
-            audioProvider.showMiniPlayer &&
-            !audioProvider.isFullScreenPlayerOpen) {
-          return _buildGlassMorphicMiniPlayer(
-            title: audioProvider.title ?? '',
-            subtitle: audioProvider.subtitle ?? '',
-            thumbnailWidget: _buildAudioThumbnail(audioProvider),
-            isPlaying: audioProvider.isPlaying,
-            onPlayPause: () => audioProvider.togglePlayPause(),
-            onBackward: () => audioProvider.seekRelative(const Duration(seconds: -10)),
-            onForward: () => audioProvider.seekRelative(const Duration(seconds: 10)),
-            onClose: () => audioProvider.closeMiniPlayer(),
-            onTap: () => _openFullScreenPlayer(context),
-          );
-        }
+    // Use Selector2 for optimized rebuilds
+    return Selector2<AudioProvider, BasicVideoService, _MiniPlayerData>(
+      selector: (context, audioProvider, videoService) {
+        // Select only the data needed for the build logic
+        final audio = audioProvider.currentAudio;
+        final showAudio = audioProvider.showMiniPlayer &&
+                           !audioProvider.isFullScreenPlayerOpen &&
+                           audio != null;
+        final showVideo = videoService.showMiniPlayer &&
+                           !videoService.isFullScreen &&
+                           videoService.videoController != null;
 
-        return const SizedBox.shrink();
+        return _MiniPlayerData(
+          shouldShowAudio: showAudio,
+          shouldShowVideo: showVideo,
+          // Audio data (only if needed)
+          audioId: showAudio ? audio?.id : null,
+          audioTitle: showAudio ? audioProvider.title : null, // Or audio.title
+          audioSubtitle: showAudio ? audioProvider.subtitle : null, // Or audio.subtitle
+          audioImageUrl: showAudio ? audio?.imageUrl : null,
+          isAudioPlaying: showAudio ? audioProvider.isPlaying : false,
+          // Video data (only if needed)
+          videoTitle: showVideo ? videoService.title : null,
+          videoSubtitle: showVideo ? videoService.subtitle : null,
+          videoController: showVideo ? videoService.videoController : null,
+          isVideoPlaying: showVideo ? videoService.isPlaying : false,
+        );
+      },
+      builder: (context, data, child) {
+        // The builder now uses the selected data object
+        debugPrint('[BasicMiniPlayer] Selector Build: showAudio=${data.shouldShowAudio}, showVideo=${data.shouldShowVideo}');
+
+        if (data.shouldShowAudio) {
+             debugPrint('[BasicMiniPlayer] Building audio mini player for ID: ${data.audioId}');
+             return _buildGlassMorphicMiniPlayer(
+                key: ValueKey('audio_${data.audioId}'), // Add key for stability
+                title: data.audioTitle ?? '',
+                subtitle: data.audioSubtitle ?? '',
+                thumbnailWidget: _buildAudioThumbnailFromUrl(data.audioImageUrl),
+                isPlaying: data.isAudioPlaying,
+                onPlayPause: () => context.read<AudioProvider>().togglePlayPause(),
+                onBackward: () => context.read<AudioProvider>().seekRelative(const Duration(seconds: -10)),
+                onForward: () => context.read<AudioProvider>().seekRelative(const Duration(seconds: 10)),
+                onClose: () => context.read<AudioProvider>().closeMiniPlayer(),
+                onTap: () {
+                  debugPrint('[BasicMiniPlayer] onTap detected for audio mini player.');
+                  _openFullScreenPlayer(context);
+                },
+             );
+        } else if (data.shouldShowVideo) {
+           debugPrint('[BasicMiniPlayer] Building video mini player');
+           return _buildGlassMorphicMiniPlayer(
+             key: ValueKey('video_${data.videoController?.textureId}'), // Add key
+             title: data.videoTitle ?? '',
+             subtitle: data.videoSubtitle ?? '',
+             thumbnailWidget: _buildVideoThumbnailFromController(data.videoController),
+             isPlaying: data.isVideoPlaying,
+             onPlayPause: () => context.read<BasicVideoService>().togglePlayPause(),
+             onBackward: () => context.read<BasicVideoService>().seekBackward(seconds: 10),
+             onForward: () => context.read<BasicVideoService>().seekForward(seconds: 10),
+             onClose: () => context.read<BasicVideoService>().closePlayer(),
+             onTap: () => _openFullScreenPlayer(context, isVideo: true),
+           );
+        } else {
+           debugPrint('[BasicMiniPlayer] Building SizedBox.shrink (no mini player to show).');
+           return const SizedBox.shrink();
+        }
       },
     );
   }
 
   Widget _buildGlassMorphicMiniPlayer({
+    Key? key,
     required String title,
     required String subtitle,
     required Widget thumbnailWidget,
@@ -165,6 +278,7 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
     final screenWidth = MediaQuery.of(context).size.width;
     
     return Padding(
+      key: key,
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
@@ -300,24 +414,86 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
   }
 
   Widget _buildAudioThumbnail(AudioProvider audioProvider) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(12),
-        bottomLeft: Radius.circular(12),
-      ),
-      child: Image.network(
-        audioProvider.imageUrl ?? '',
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[900],
-            child: const Icon(
-              Icons.music_note,
-              color: Colors.white54,
-              size: 32,
-            ),
-          );
-        },
+    final imageUrl = audioProvider.currentAudio?.imageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.network(
+          imageUrl,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.music_note, size: 30),
+        ),
+      );
+    } else {
+      return const SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: Icon(Icons.music_note, size: 30)));
+    }
+  }
+
+  Widget _buildVideoThumbnailFromController(VideoPlayerController? controller) {
+    if (controller != null && controller.value.isInitialized) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4.0),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio,
+            child: VideoPlayer(controller),
+          ),
+        ),
+      );
+    } else {
+      // Placeholder for video thumbnail if needed
+      return const SizedBox(
+        width: 48,
+        height: 48,
+        child: Center(child: Icon(Icons.videocam, size: 30, color: Colors.white70)),
+      );
+    }
+  }
+
+  Widget _buildAudioThumbnailFromUrl(String? imageUrl) {
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.network(
+          imageUrl,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.music_note, size: 30, color: Colors.white70),
+        ),
+      );
+    } else {
+      return const SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: Icon(Icons.music_note, size: 30, color: Colors.white70)));
+    }
+  }
+}
+
+// Define a const placeholder widget
+class _AudioPlaceholder extends StatelessWidget {
+  const _AudioPlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      color: Colors.grey[900],
+      child: const Icon(
+        Icons.music_note,
+        color: Colors.white54,
+        size: 32,
       ),
     );
   }
