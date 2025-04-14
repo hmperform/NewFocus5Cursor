@@ -7,6 +7,7 @@ import 'package:focus5/providers/user_provider.dart';
 import 'package:focus5/services/media_completion_service.dart';
 import 'dart:math' as math;
 import 'package:focus5/providers/audio_provider.dart';
+import '../post_completion_screen.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final DailyAudio audio;
@@ -255,6 +256,20 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         if (!_isCompleted && audioProvider.currentPosition >= audioProvider.totalDuration && audioProvider.totalDuration > 0) {
           _isCompleted = true;
           _markAsCompleted();
+          
+          // Show post-completion screens if they exist
+          if (widget.audio.postCompletionScreens != null && 
+              widget.audio.postCompletionScreens!['screenschosen'] != null &&
+              (widget.audio.postCompletionScreens!['screenschosen'] as List).isNotEmpty) {
+            // Use Future.delayed to avoid calling Navigator during build
+            Future.delayed(Duration.zero, () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PostCompletionScreen(module: widget.audio),
+                ),
+              );
+            });
+          }
         }
 
         // Original Scaffold structure

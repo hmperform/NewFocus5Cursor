@@ -64,8 +64,14 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
-        ChangeNotifierProvider(create: (context) => AuthProvider()),
+        // UserProvider needs to be defined before AuthProvider depends on it
         ChangeNotifierProvider(create: (context) => UserProvider()),
+        // AuthProvider now depends on UserProvider
+        ChangeNotifierProxyProvider<UserProvider, AuthProvider>(
+          create: (context) => AuthProvider(null), // Initial state with null provider
+          update: (context, userProvider, previousAuthProvider) =>
+              AuthProvider(userProvider), // Pass the userProvider instance
+        ),
         ChangeNotifierProvider(create: (context) => ContentProvider()),
         ChangeNotifierProvider(create: (context) => MediaProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),

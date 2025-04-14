@@ -341,6 +341,7 @@ class DailyAudio {
   final DateTime datePublished;
   final List<double> waveformData; // Add waveform data array
   final int waveformResolution; // Add waveform resolution (samples per second)
+  final Map<String, dynamic>? postCompletionScreens; // Add post-completion screens data
 
   // Add these properties to fix errors
   String get imageUrl => thumbnail; // Alias thumbnail as imageUrl
@@ -367,6 +368,7 @@ class DailyAudio {
     required this.datePublished,
     this.waveformData = const [], // Default empty waveform
     this.waveformResolution = 100, // Default 100 samples per second
+    this.postCompletionScreens, // Add post-completion screens parameter
   });
 
   factory DailyAudio.fromJson(Map<String, dynamic> json) {
@@ -404,6 +406,7 @@ class DailyAudio {
           : DateTime.now(),
       waveformData: List<double>.from(json['waveformData'] ?? []),
       waveformResolution: json['waveformResolution'] ?? 100,
+      postCompletionScreens: json['postCompletionScreens'],
     );
   }
 
@@ -428,6 +431,7 @@ class DailyAudio {
       'datePublished': datePublished.toIso8601String(),
       'waveformData': waveformData,
       'waveformResolution': waveformResolution,
+      'postCompletionScreens': postCompletionScreens,
     };
   }
 }

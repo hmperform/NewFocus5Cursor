@@ -26,6 +26,7 @@ class User {
   final Map<String, dynamic>? preferences;
   final int loginStreak;
   final int totalLoginDays;
+  final List<Map<String, dynamic>> badgesgranted;
 
   User({
     required this.id,
@@ -53,6 +54,7 @@ class User {
     this.preferences,
     this.loginStreak = 0,
     this.totalLoginDays = 0,
+    this.badgesgranted = const [],
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.createdAt = createdAt ?? DateTime.now();
@@ -60,32 +62,26 @@ class User {
   factory User.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    // Get list of badges
-    List<AppBadge> badgesList = [];
-    if (data['badges'] != null) {
-      // Handle the case where badges is a reference object instead of an array
-      if (data['badges'] is Map<String, dynamic>) {
-        // If badges is a reference object with id and path
-        final badgeRef = data['badges'] as Map<String, dynamic>;
-        if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
-          // Create a single badge from the reference
-          badgesList.add(AppBadge(
-            id: badgeRef['id'],
-            name: 'Badge',
-            description: 'A badge',
-            imageUrl: '',
-            earnedAt: DateTime.now(),
-            xpValue: 0,
-          ));
-        }
-      } else if (data['badges'] is List) {
-        // Normal case - badges is a list
-        badgesList = List<AppBadge>.from(
-          (data['badges'] as List).map((badge) => AppBadge.fromJson(badge))
-        );
+    // Parse badgesgranted first (the references)
+    List<Map<String, dynamic>> grantedBadgesList = [];
+    if (data['badgesgranted'] != null && data['badgesgranted'] is List) {
+       grantedBadgesList = List<Map<String, dynamic>>.from(
+          (data['badgesgranted'] as List).map((item) {
+            // Ensure each item is a map before casting
+            if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            }
+            return {}; // Return empty map or handle error if item is not a map
+          }).where((item) => item.isNotEmpty) // Filter out empty maps
+       );
+    } else if (data['badgesgranted'] != null && data['badgesgranted'] is Map) {
+      // Handle legacy case if it was ever a single map reference
+      final badgeRef = data['badgesgranted'] as Map<String, dynamic>; 
+      if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
+         grantedBadgesList.add(Map<String, dynamic>.from(badgeRef));
       }
     }
-    
+
     // Parse date fields
     DateTime? lastLogin;
     if (data['lastLoginDate'] != null) {
@@ -121,7 +117,7 @@ class User {
       focusAreas: data['focusAreas'] != null 
           ? List<String>.from(data['focusAreas']) 
           : [],
-      badges: badgesList,
+      badges: [],
       completedCourses: data['completedCourses'] != null 
           ? List<String>.from(data['completedCourses']) 
           : [],
@@ -139,6 +135,7 @@ class User {
       preferences: data['preferences'] as Map<String, dynamic>?,
       loginStreak: data['loginStreak'] ?? 0,
       totalLoginDays: data['totalLoginDays'] ?? 0,
+      badgesgranted: grantedBadgesList,
     );
   }
 
@@ -158,7 +155,7 @@ class User {
       'streak': streak,
       'longestStreak': longestStreak,
       'focusAreas': focusAreas,
-      'badges': badges.map((badge) => badge.toJson()).toList(),
+      'badgesgranted': badgesgranted,
       'completedCourses': completedCourses,
       'completedAudios': completedAudios,
       'completedLessons': completedLessons,
@@ -197,6 +194,7 @@ class User {
     Map<String, dynamic>? preferences,
     int? loginStreak,
     int? totalLoginDays,
+    List<Map<String, dynamic>>? badgesgranted,
   }) {
     return User(
       id: id ?? this.id,
@@ -224,6 +222,7 @@ class User {
       preferences: preferences ?? this.preferences,
       loginStreak: loginStreak ?? this.loginStreak,
       totalLoginDays: totalLoginDays ?? this.totalLoginDays,
+      badgesgranted: badgesgranted ?? this.badgesgranted,
     );
   }
 }

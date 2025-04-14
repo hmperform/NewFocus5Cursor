@@ -27,34 +27,50 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Wait for a short delay to show the splash screen
+    // Short delay for splash visibility
     await Future.delayed(const Duration(seconds: 2));
-    
     if (!mounted) return;
-    
-    // Get the auth provider and check the authentication status
+
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await authProvider.checkAuthStatus();
-    
-    if (!mounted) return;
-    
-    // Navigate to the appropriate screen based on authentication status and whether it's the first launch
-    if (widget.isFirstLaunch) {
-      // First launch, go to onboarding
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-      );
-    } else if (authProvider.isAuthenticated) {
-      // User is authenticated, go to home screen
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } else {
-      // User is not authenticated, go to login screen
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+
+    // Listen to status changes to wait for data loading
+    // Using a listener is more robust than a simple await here
+    void listener() {
+      if (!mounted) return; // Check mounted status inside listener
+
+      final currentStatus = authProvider.status;
+      final isReady = authProvider.isAuthenticatedAndReady; // Use the new flag
+
+      print("SplashScreen Listener: Auth Status: $currentStatus, IsReady: $isReady, IsFirstLaunch: ${widget.isFirstLaunch}");
+
+      // Check conditions for navigation *only when status is not authenticating*
+      if (currentStatus != AuthStatus.authenticating && currentStatus != AuthStatus.initial) {
+        authProvider.removeListener(listener); // Remove listener once decided
+
+        if (widget.isFirstLaunch) {
+           print("SplashScreen: Navigating to Onboarding (First Launch)");
+          Navigator.of(context).pushReplacementNamed('/onboarding');
+        } else if (isReady) { // Navigate to home ONLY if authenticated AND data is ready
+           print("SplashScreen: Navigating to Home (Authenticated & Ready)");
+          Navigator.of(context).pushReplacementNamed('/home');
+        } else if (currentStatus == AuthStatus.unauthenticated || currentStatus == AuthStatus.error) {
+           print("SplashScreen: Navigating to Login (Unauthenticated or Error)");
+          Navigator.of(context).pushReplacementNamed('/login');
+        } else {
+           // Should ideally not happen if isReady logic is correct, but fallback to login
+           print("SplashScreen: Fallback - Navigating to Login (State: $currentStatus, Ready: $isReady)");
+           Navigator.of(context).pushReplacementNamed('/login');
+        }
+      }
     }
+
+    authProvider.addListener(listener);
+
+    // Initial check - This triggers the process, the listener handles the navigation result
+     print("SplashScreen: Triggering initial authProvider.checkAuthStatus()...");
+    await authProvider.checkAuthStatus();
+    // The listener added above will handle the navigation once checkAuthStatus and subsequent loadUserData complete.
+     print("SplashScreen: Initial checkAuthStatus() completed. Waiting for listener callback...");
   }
 
   @override

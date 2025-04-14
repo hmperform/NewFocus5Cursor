@@ -16,6 +16,7 @@ import '../services/firebase_auth_service.dart';
 import 'package:provider/provider.dart';
 import '../main.dart'; // Import to access navigatorKey
 import '../services/media_completion_service.dart';
+import 'dart:async'; // Import async
 
 class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -23,15 +24,16 @@ class UserProvider extends ChangeNotifier {
   final BadgeService _badgeService = BadgeService();
   final AuthProvider? _authProvider = null;
   final MediaCompletionService _mediaCompletionService = MediaCompletionService();
+  StreamSubscription<User?>? _userSubscription; // To manage the listener
   
   User? _user;
-  List<JournalEntry> _journalEntries = [];
+  // List<JournalEntry> _journalEntries = []; // Commented out - Collection doesn't exist
   bool _isLoading = false;
   String? _errorMessage;
   Map<String, int> _lessonProgress = {}; // Key: lessonId, Value: last position in seconds
 
   User? get user => _user;
-  List<JournalEntry> get journalEntries => _journalEntries;
+  // List<JournalEntry> get journalEntries => _journalEntries; // Commented out
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   int get xp => _user?.xp ?? 0;
@@ -57,50 +59,132 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadUserData(String userId) async {
-    if (_isLoading) return;
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-    
+  // Load user data from Firestore based on userId
+  Future<void> loadUserData(String? userId) async {
+    if (_isLoading) return; // Prevent concurrent loads
+
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      if (doc.exists) {
-        _user = User.fromFirestore(doc);
-        await _loadLessonProgress(userId);
-        await _loadJournalEntries(userId);
-        
-        print('UserProvider: User data loaded for $userId. Current totalLoginDays: ${_user?.totalLoginDays}');
-        
-        // Check/update streak immediately after loading data
-        await _checkAndUpdateStreak(userId);
-      } else {
-        _errorMessage = 'User data not found.';
-        _user = null;
+      if (userId == null || userId.isEmpty) {
+        print('UserProvider: No user ID provided, clearing data.');
+        clearUserData(); // Clear data and notify
+        return;
       }
-    } catch (e) {
-      _errorMessage = 'Failed to load user data: $e';
-      _user = null;
-    } finally {
+
+      print('UserProvider: Loading user data for user ID: $userId');
+      _isLoading = true;
+      notifyListeners(); // Notify UI that loading has started
+
+      // Cancel previous subscription before starting a new one
+      await _userSubscription?.cancel();
+      _userSubscription = null;
+      print('UserProvider: Previous user subscription cancelled.');
+
+      _userSubscription = _firestore.collection('users').doc(userId).snapshots().listen(
+        (doc) async {
+          print('UserProvider: Received user document snapshot. Exists: ${doc.exists}');
+          if (doc.exists) {
+            // Log the raw data from the snapshot
+            print('UserProvider: Raw snapshot data: ${doc.data()}');
+
+            try {
+              _user = User.fromFirestore(doc); // Parses user with badgesgranted references
+              print('UserProvider: User object created/updated from Firestore data.');
+              print('UserProvider: User.badgesgranted: ${_user!.badgesgranted}'); // Log parsed references
+
+              // *** Fetch Full Badge Details ***
+              if (_user!.badgesgranted.isNotEmpty) {
+                 print('UserProvider: Found ${_user!.badgesgranted.length} badge references: ${_user!.badgesgranted}');
+                await _fetchBadgeDetails(_user!.badgesgranted);
+                 print('UserProvider: Finished fetching badge details.');
+              } else {
+                print('UserProvider: No badge references found in user data. Skipping badge fetch.');
+                _user = _user!.copyWith(badges: []); // Ensure badges list is empty if no refs
+              }
+            } catch (e, stacktrace) {
+               print('UserProvider: Error processing snapshot data or fetching badges: $e');
+               print('UserProvider: Stacktrace: $stacktrace');
+               _user = null; // Or handle error state appropriately
+            }
+
+          } else {
+            print('UserProvider: Document for user ID $userId does not exist.');
+            _user = null; // User not found
+          }
+          _isLoading = false;
+          notifyListeners(); // Notify UI about the updated user data (or lack thereof) and loading state
+        },
+        onError: (error, stackTrace) {
+          print('UserProvider Listener Error: Error fetching user data: $error');
+          print('UserProvider Listener StackTrace: $stackTrace');
+          _isLoading = false;
+          _user = null; // Clear user data on error
+          notifyListeners(); // Notify UI about the error and loading state
+        },
+        onDone: () {
+          print('UserProvider Listener: Stream closed.');
+          _isLoading = false;
+          notifyListeners(); // Notify UI if stream closes unexpectedly
+        }
+      );
+      print('UserProvider: Subscribed to user document updates.');
+
+    } catch (e, stacktrace) {
+      print('UserProvider: Error setting up user data stream for $userId: $e');
+      print('UserProvider: Setup Stacktrace: $stacktrace');
       _isLoading = false;
-      notifyListeners();
+      _user = null;
+      notifyListeners(); // Notify UI about the setup error and loading state
     }
   }
 
-  // Get real-time updates for user data
-  Stream<User?> getUserStream(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((snapshot) {
-          if (snapshot.exists) {
-            return User.fromFirestore(snapshot);
+  // Fetch detailed badge information based on references
+  Future<void> _fetchBadgeDetails(List<Map<String, dynamic>> badgeRefs) async {
+     print('UserProvider [_fetchBadgeDetails]: Starting fetch for ${badgeRefs.length} references.');
+    List<AppBadge> fetchedBadges = [];
+    Set<String> processedIds = {}; // Track processed badge IDs
+
+    for (var badgeRef in badgeRefs) {
+      final badgeId = badgeRef['id'] as String?;
+      //final badgePath = badgeRef['path'] as String?; // Currently unused path
+
+      if (badgeId != null && badgeId.isNotEmpty && !processedIds.contains(badgeId)) {
+        processedIds.add(badgeId); // Mark as processing
+         print('UserProvider [_fetchBadgeDetails]: Processing badge reference ID: $badgeId');
+        try {
+           print('UserProvider [_fetchBadgeDetails]: Fetching badge document: badges/$badgeId');
+          final badgeDoc = await _firestore.collection('badges').doc(badgeId).get();
+          if (badgeDoc.exists) {
+             print('UserProvider [_fetchBadgeDetails]: Badge document $badgeId found.');
+            final badgeData = AppBadge.fromFirestore(badgeDoc);
+            fetchedBadges.add(badgeData);
+             print('UserProvider [_fetchBadgeDetails]: Successfully created AppBadge for $badgeId.');
+          } else {
+             print('UserProvider [_fetchBadgeDetails]: Warning - Badge document not found for ID: $badgeId');
           }
-          return null;
-        });
+        } catch (e, stacktrace) {
+           print('UserProvider [_fetchBadgeDetails]: Error fetching badge details for ID $badgeId: $e');
+           print('UserProvider [_fetchBadgeDetails]: Stacktrace: $stacktrace');
+          // Decide how to handle error: skip badge, retry, etc.
+        }
+      } else if (badgeId == null || badgeId.isEmpty) {
+         print('UserProvider [_fetchBadgeDetails]: Warning - Invalid or missing badge ID in reference: $badgeRef');
+      } else {
+         print('UserProvider [_fetchBadgeDetails]: Skipping already processed badge ID: $badgeId');
+      }
+    }
+
+     print('UserProvider [_fetchBadgeDetails]: Finished processing all references. Fetched ${fetchedBadges.length} unique badges.');
+
+    // Update the user object's badges list safely
+    if (_user != null) {
+      _user = _user!.copyWith(badges: fetchedBadges);
+       print('UserProvider: Updated internal _user.badges with ${fetchedBadges.length} badges.');
+    } else {
+       print('UserProvider [_fetchBadgeDetails]: Warning - User became null during badge fetching.');
+    }
   }
 
+  /* // Commented out - Collection doesn't exist
   Future<void> _loadJournalEntries(String userId) async {
     try {
       final querySnapshot = await _firestore
@@ -118,6 +202,7 @@ class UserProvider extends ChangeNotifier {
       debugPrint('Error loading journal entries: $e');
     }
   }
+  */
 
   Future<void> _loadLessonProgress(String userId) async {
     // ... existing lesson progress loading ...
@@ -244,13 +329,17 @@ class UserProvider extends ChangeNotifier {
       
       // Update local user
       _user = _user!.copyWith(xp: newXp);
+      notifyListeners(); // Notify listeners IMMEDIATELY after local XP update
       
       // Check for level up
       await UserLevelService.checkAndProcessLevelUp(userId, oldXp, newXp);
       
-      notifyListeners();
+      // Check for new badges after XP update (using the correct method)
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
     } catch (e) {
-      debugPrint('Error adding XP: $e');
+      _errorMessage = 'Failed to add XP: $e';
+      notifyListeners();
     }
   }
   
@@ -816,11 +905,29 @@ class UserProvider extends ChangeNotifier {
     }
   }
 
-  // Clear user data on logout
+  // Method to clear user data
   void clearUserData() {
+    print('UserProvider: Clearing user data and cancelling subscription.');
+    _userSubscription?.cancel();
+    _userSubscription = null;
     _user = null;
+    _isLoading = false;
     _lessonProgress = {};
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // Ensure subscription is cancelled when provider is disposed
+  @override
+  void dispose() {
+    print('UserProvider: Disposing.');
+    clearUserData(); // Ensure subscription is cancelled on dispose
+    super.dispose();
+  }
+
+  // Helper to update user data fields (example)
+  Future<void> updateUserField(String field, dynamic value) async {
+    if (_user == null) return;
+    await _firestore.collection('users').doc(_user!.id).update({field: value});
   }
 } 

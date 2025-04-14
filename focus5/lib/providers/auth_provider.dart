@@ -15,77 +15,105 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   User? _currentUser;
   final FirebaseAuthService _authService = FirebaseAuthService();
+  final UserProvider? _userProvider;
 
   AuthStatus get status => _status;
   String? get errorMessage => _errorMessage;
   User? get currentUser => _currentUser;
-  bool get isAuthenticated => _status == AuthStatus.authenticated;
+  bool get isUserDataReady => _userProvider?.user != null && !_userProvider!.isLoading;
+  bool get isAuthenticatedAndReady => status == AuthStatus.authenticated && isUserDataReady;
 
-  AuthProvider() {
-    // Check if we have a stored auth token on initialization
+  AuthProvider(this._userProvider) {
     checkAuthStatus();
   }
 
   Future<void> checkAuthStatus() async {
     _status = AuthStatus.authenticating;
-    notifyListeners();
 
     try {
-      final user = _authService.currentUser;
-      if (user != null) {
-        await _loadUser(user.uid);
-        _status = AuthStatus.authenticated;
+      final firebaseUser = _authService.currentUser;
+      if (firebaseUser != null) {
+        await _loadUser(firebaseUser.uid);
+        bool dataLoadSuccess = false;
+        if (_userProvider != null) {
+          print('AuthProvider: checkAuthStatus - User authenticated (${firebaseUser.uid}). Triggering UserProvider.loadUserData...');
+          await _userProvider!.loadUserData(firebaseUser.uid);
+          if (_userProvider!.user != null && _userProvider!.user!.id == firebaseUser.uid) {
+            dataLoadSuccess = true;
+            print('AuthProvider: checkAuthStatus - UserProvider successfully loaded data for ${firebaseUser.uid}.');
+          } else {
+            print('AuthProvider: checkAuthStatus - UserProvider FAILED to load data for ${firebaseUser.uid} (Document likely missing).');
+          }
+        } else {
+          print('AuthProvider: checkAuthStatus - UserProvider is null, cannot load detailed data.');
+        }
+
+        if (dataLoadSuccess) {
+          _status = AuthStatus.authenticated;
+        } else {
+          _status = AuthStatus.unauthenticated;
+          _errorMessage = 'User profile data missing. Please sign up again or contact support.';
+          _userProvider?.clearUserData();
+          notifyListeners();
+        }
       } else {
+        print('AuthProvider: checkAuthStatus - No Firebase user found.');
         _status = AuthStatus.unauthenticated;
+        _userProvider?.clearUserData();
+        notifyListeners();
       }
     } catch (e) {
+      print('AuthProvider: checkAuthStatus - Error: $e');
       _status = AuthStatus.unauthenticated;
+      _userProvider?.clearUserData();
       _errorMessage = 'Failed to check authentication status';
+      notifyListeners();
     }
-    
-    notifyListeners();
   }
 
   Future<bool> login(String email, String password) async {
     _status = AuthStatus.authenticating;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       final userCredential = await _authService.signInWithEmailAndPassword(email, password);
-      await _loadUser(userCredential.user!.uid);
-      
-      // Update last active time
-      await _authService.updateLastActive(userCredential.user!.uid);
-      
-      // Save user type in shared preferences
+      final userId = userCredential.user!.uid;
+
+      await _loadUser(userId);
+
+      if (_userProvider != null) {
+        print('AuthProvider: login successful for $userId. Triggering UserProvider.loadUserData...');
+        await _userProvider!.loadUserData(userId);
+        print('AuthProvider: login - Calling updateUserLoginInfo for $userId...');
+        await _userProvider!.updateUserLoginInfo();
+      } else {
+        print('AuthProvider: login - UserProvider is null.');
+      }
+
+      await _authService.updateLastActive(userId);
+
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_individual', _currentUser!.isIndividual);
-      
-      // New: Update login info after successful login
-      final userProvider = UserProvider();
-      await userProvider.loadUserData(userCredential.user!.uid);
-      print('AuthProvider: signInWithEmail successful for ${userCredential.user!.uid}, attempting to update login info...');
-      await userProvider.updateUserLoginInfo();
-      
+      if (_currentUser != null) {
+        await prefs.setBool('is_individual', _currentUser!.isIndividual);
+      }
+
       _status = AuthStatus.authenticated;
-      notifyListeners();
       return true;
     } on firebase_auth.FirebaseAuthException catch (e) {
+      print('AuthProvider: login error - ${e.code}');
       _status = AuthStatus.error;
-      if (e.code == 'user-not-found') {
+      if (e.code == 'user-not-found' || e.code == 'invalid-email') {
         _errorMessage = 'No user found with this email.';
-      } else if (e.code == 'wrong-password') {
+      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
         _errorMessage = 'Incorrect password.';
       } else {
         _errorMessage = 'Login failed: ${e.message}';
       }
-      notifyListeners();
       return false;
     } catch (e) {
+      print('AuthProvider: login error - $e');
       _status = AuthStatus.error;
       _errorMessage = 'Login failed: ${e.toString()}';
-      notifyListeners();
       return false;
     }
   }
@@ -106,7 +134,6 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _status = AuthStatus.authenticating;
     _errorMessage = null;
-    notifyListeners();
 
     try {
       final userCredential = await _authService.createUserWithEmailAndPassword(
@@ -123,24 +150,27 @@ class AuthProvider extends ChangeNotifier {
         profileImageBytes,
         profileImageName,
       );
-      
-      await _loadUser(userCredential.user!.uid);
-      
-      // Save user type in shared preferences
+      final userId = userCredential.user!.uid;
+
+      await _loadUser(userId);
+
+      if (_userProvider != null) {
+        print('AuthProvider: register successful for $userId. Triggering UserProvider.loadUserData...');
+        await _userProvider!.loadUserData(userId);
+        print('AuthProvider: register - Calling updateUserLoginInfo for $userId...');
+        await _userProvider!.updateUserLoginInfo();
+      } else {
+        print('AuthProvider: register - UserProvider is null.');
+      }
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_individual', isIndividual);
       await prefs.setBool('is_first_launch', false);
-      
-      // New: Update login info after successful login
-      final userProvider = UserProvider();
-      await userProvider.loadUserData(userCredential.user!.uid);
-      print('AuthProvider: _handleSuccessfulSignIn for ${userCredential.user!.uid}, attempting to update login info...');
-      await userProvider.updateUserLoginInfo();
-      
+
       _status = AuthStatus.authenticated;
-      notifyListeners();
       return true;
     } on firebase_auth.FirebaseAuthException catch (e) {
+      print('AuthProvider: register error - ${e.code}');
       _status = AuthStatus.error;
       if (e.code == 'weak-password') {
         _errorMessage = 'The password provided is too weak.';
@@ -149,12 +179,11 @@ class AuthProvider extends ChangeNotifier {
       } else {
         _errorMessage = 'Registration failed: ${e.message}';
       }
-      notifyListeners();
       return false;
     } catch (e) {
+      print('AuthProvider: register error - $e');
       _status = AuthStatus.error;
       _errorMessage = 'Registration failed: ${e.toString()}';
-      notifyListeners();
       return false;
     }
   }
@@ -165,11 +194,12 @@ class AuthProvider extends ChangeNotifier {
       
       _currentUser = null;
       _status = AuthStatus.unauthenticated;
+      _userProvider?.clearUserData();
       notifyListeners();
       return true;
     } catch (e) {
+      print('AuthProvider: logout error - $e');
       _errorMessage = 'Logout failed: ${e.toString()}';
-      notifyListeners();
       return false;
     }
   }
@@ -179,13 +209,15 @@ class AuthProvider extends ChangeNotifier {
       final userData = await _authService.getUserData(uid);
       if (userData != null) {
         _currentUser = userData;
+        print('AuthProvider: _loadUser successful for $uid. Name: ${_currentUser?.fullName}');
+      } else {
+        print('AuthProvider: _loadUser - No user data found in Firestore for $uid');
       }
     } catch (e) {
-      print('Error loading user data: $e');
+      print('AuthProvider: _loadUser error: $e');
     }
   }
   
-  // Verify a university code
   Future<bool> verifyUniversityCode(String code) async {
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -201,7 +233,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Update user profile through auth service
   Future<String?> updateUserProfile({
     required String uid,
     String? fullName,
@@ -233,7 +264,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Get university name from code
   Future<String?> getUniversityNameFromCode(String code) async {
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -252,7 +282,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
   
-  // Send password reset email
   Future<bool> sendPasswordResetEmail(String email) async {
     try {
       await _authService.sendPasswordResetEmail(email);

@@ -255,7 +255,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     
-    if (authProvider.isAuthenticated) {
+    if (authProvider.status == AuthStatus.authenticated) {
       try {
         await userProvider.updateUserProfile(
           fullName: _nameController.text.trim(),
