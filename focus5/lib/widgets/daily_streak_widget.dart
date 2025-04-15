@@ -39,32 +39,25 @@ class DailyStreakWidget extends StatelessWidget {
   
   Widget _buildWeekDayRow(BuildContext context) {
     // Days of the week
-    final List<String> days = ["T", "W", "T", "F", "S", "S", "M"];
+    final List<String> days = ["M", "T", "W", "T", "F", "S", "S"];
     
     // Get current day of week (0 = Sunday, 1 = Monday, etc.)
     final now = DateTime.now();
     int currentDayIndex = now.weekday - 1; // Convert to 0-based index (0 = Monday)
-    if (currentDayIndex < 0) currentDayIndex = 6; // Handle Sunday
     
-    // Remap current day to our array index (which starts with Tuesday)
-    int mappedCurrentDayIndex = (currentDayIndex + 6) % 7;
+    // We're already using Monday as index 0, so no need for remapping
+    // The currentDayIndex is already correct (0 for Monday, 1 for Tuesday, etc.)
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: List.generate(7, (index) {
         // Determine if this day is active (part of the streak)
-        // In this implementation, active days should be today and days before today
-        // up to the streak count
-        
         bool isActive = false;
         
         // Calculate position relative to current day
-        // If index <= mappedCurrentDayIndex, it's today or past
-        // If index > mappedCurrentDayIndex, it's future
-        
-        if (index <= mappedCurrentDayIndex) {
+        if (index <= currentDayIndex) {
           // For past days (and today), mark as active if within streak range
-          int daysAgo = mappedCurrentDayIndex - index;
+          int daysAgo = currentDayIndex - index;
           isActive = daysAgo < currentStreak;
         }
         
