@@ -46,6 +46,9 @@ class ChatProvider extends ChangeNotifier {
   bool get isAdmin => _isAdmin;
   bool get canCreateChatWithAnyone => isCoach || isAdmin;
   
+  String? _lastLoadedUserId;
+  Timer? _authDebounceTimer;
+  
   ChatProvider() {
     // Initialize by loading chats when user is authenticated
     if (_auth.currentUser != null) {
@@ -53,14 +56,32 @@ class ChatProvider extends ChangeNotifier {
       loadChats();
     }
     
-    // Listen for auth state changes
+    // Listen for auth state changes - but debounce to avoid excessive updates
     _subscriptions.add(
       _auth.authStateChanges().listen((user) {
+        // Avoid triggering this too frequently during app startup or navigation
+        if (_authDebounceTimer?.isActive ?? false) {
+          debugPrint('ChatProvider: Debouncing rapid auth state change');
+          return;
+        }
+        
+        _authDebounceTimer = Timer(const Duration(milliseconds: 500), () {}); 
+        
         if (user != null) {
-          _loadCurrentUserDetails();
-          loadChats();
+          final currentUserId = user.uid;
+          // Only reload if we have a different user or first time loading
+          if (currentUserId != _lastLoadedUserId) {
+            debugPrint('ChatProvider: Auth state change - loading data for user: ${user.uid}');
+            _lastLoadedUserId = currentUserId;
+            _loadCurrentUserDetails();
+            loadChats();
+          } else {
+            debugPrint('ChatProvider: Auth state change - same user, skipping reload');
+          }
         } else {
           // Clear data when user logs out
+          debugPrint('ChatProvider: Auth state change - user logged out, clearing data');
+          _lastLoadedUserId = null;
           _chats = [];
           _messages = {};
           _users = {};

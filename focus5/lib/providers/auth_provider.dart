@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../services/firebase_auth_service.dart';
 import '../providers/user_provider.dart';
+import 'dart:async';
 
 enum AuthStatus { initial, authenticated, unauthenticated, authenticating, error }
 
@@ -16,6 +17,8 @@ class AuthProvider extends ChangeNotifier {
   User? _currentUser;
   final FirebaseAuthService _authService = FirebaseAuthService();
   final UserProvider? _userProvider;
+  Timer? _authDebounceTimer;
+  String? _lastLoadedUserId;
 
   AuthStatus get status => _status;
   String? get errorMessage => _errorMessage;
@@ -28,6 +31,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuthStatus() async {
+    // Debounce rapid successive calls
+    if (_authDebounceTimer?.isActive ?? false) {
+      print('AuthProvider: Debouncing rapid checkAuthStatus call');
+      return; // Skip if a check is already in progress
+    }
+    
+    // Set debounce timer
+    _authDebounceTimer?.cancel();
+    _authDebounceTimer = Timer(const Duration(milliseconds: 500), () {});
+    
+    // If we recently loaded this user, don't reload
+    final currentUid = _authService.currentUser?.uid;
+    if (currentUid != null && currentUid == _lastLoadedUserId && _status == AuthStatus.authenticated) {
+      print('AuthProvider: Skipping reload for already loaded user: $currentUid');
+      return;
+    }
+    
     _status = AuthStatus.authenticating;
 
     try {
@@ -40,6 +60,7 @@ class AuthProvider extends ChangeNotifier {
           await _userProvider!.loadUserData(firebaseUser.uid);
           if (_userProvider!.user != null && _userProvider!.user!.id == firebaseUser.uid) {
             dataLoadSuccess = true;
+            _lastLoadedUserId = firebaseUser.uid; // Track successfully loaded user
             print('AuthProvider: checkAuthStatus - UserProvider successfully loaded data for ${firebaseUser.uid}.');
           } else {
             print('AuthProvider: checkAuthStatus - UserProvider FAILED to load data for ${firebaseUser.uid} (Document likely missing).');
@@ -290,5 +311,11 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = 'Failed to send password reset email: ${e.toString()}';
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _authDebounceTimer?.cancel();
+    super.dispose();
   }
 } 

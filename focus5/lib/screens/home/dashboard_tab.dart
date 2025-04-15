@@ -625,7 +625,7 @@ class _DashboardTabState extends State<DashboardTab> {
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
-            height: containerHeight,
+            height: 220, // Increased height for more square appearance
             width: containerWidth,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
@@ -649,16 +649,16 @@ class _DashboardTabState extends State<DashboardTab> {
               children: [
                 // Content
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20), // Increased padding
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // DAILY AUDIO tag
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
                           color: accentColor,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
                           'DAILY AUDIO',
@@ -669,30 +669,30 @@ class _DashboardTabState extends State<DashboardTab> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
                       
                       // Title
                       Text(
                         audioModule.title,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: 24, // Increased font size
                           fontWeight: FontWeight.bold,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       
                       // Description
                       Text(
                         audioModule.description,
                         style: const TextStyle(
                           color: Colors.white70,
-                          fontSize: 13,
+                          fontSize: 14, // Increased font size
                         ),
-                        maxLines: 1,
+                        maxLines: 2, // Show 2 lines instead of 1
                         overflow: TextOverflow.ellipsis,
                       ),
                       
@@ -704,7 +704,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           Icon(
                             Icons.play_circle_filled,
                             color: Colors.white,
-                            size: 20,
+                            size: 22, // Slightly larger icon
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -718,7 +718,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           Icon(
                             Icons.star,
                             color: accentColor,
-                            size: 18,
+                            size: 20, // Slightly larger icon
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1176,7 +1176,7 @@ class CourseCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: Colors.grey[800],
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -1188,7 +1188,7 @@ class CourseCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             '$focusPointsCost',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,

@@ -171,7 +171,7 @@ class FeaturedCourseCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: textColor,
+                                color: Colors.grey[700],
                               ),
                             ),
                           ],

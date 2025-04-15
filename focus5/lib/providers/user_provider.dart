@@ -75,131 +75,201 @@ class UserProvider extends ChangeNotifier {
 
     try {
       if (userId == null || userId.isEmpty) {
-        print('UserProvider: No user ID provided, clearing data.');
+        // Don't log here - reduce noise
         clearUserData(); // Clear data and notify
         return;
       }
 
-      print('UserProvider: Loading user data for user ID: $userId');
+      // Minimize logging
       _isLoading = true;
       notifyListeners(); // Notify UI that loading has started
 
       // Cancel previous subscription before starting a new one
       await _userSubscription?.cancel();
       _userSubscription = null;
-      print('UserProvider: Previous user subscription cancelled.');
 
+      // Get the user document once to immediately display data
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+      
+      if (!docSnapshot.exists) {
+        _user = null;
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      
+      // Parse the user data
+      _user = User.fromFirestore(docSnapshot);
+      
+      // If we have badge references, always attempt to load them
+      // This ensures badges are loaded correctly from Firebase
+      if (_user!.badgesgranted.isNotEmpty) {
+        print('UserProvider [loadUserData]: User has ${_user!.badgesgranted.length} badge references. Loading badge details from Firebase.');
+        // Set a short timeout to notify UI of the user data first
+        Timer(const Duration(milliseconds: 100), () {
+          notifyListeners();
+        });
+        
+        // Then fetch badge details
+        await _fetchBadgeDetails(_user!.badgesgranted);
+      } else {
+        _isLoading = false;
+        notifyListeners();
+      }
+
+      // Add a debounce timer to reduce frequent updates
+      Timer? _debounceTimer;
+      
       _userSubscription = _firestore.collection('users').doc(userId).snapshots().listen(
         (doc) async {
-          print('UserProvider: Received user document snapshot. Exists: ${doc.exists}');
-          if (doc.exists) {
-            // Log the raw data from the snapshot
-            print('UserProvider: Raw snapshot data: ${doc.data()}');
-
-            try {
-              _user = User.fromFirestore(doc); // Parses user with badgesgranted references
-              print('UserProvider: User object created/updated from Firestore data.');
-              print('UserProvider: User.badgesgranted: ${_user!.badgesgranted}'); // Log parsed references
-
-              // *** Fetch Full Badge Details ***
-              if (_user!.badgesgranted.isNotEmpty) {
-                 print('UserProvider: Found ${_user!.badgesgranted.length} badge references: ${_user!.badgesgranted}');
-                await _fetchBadgeDetails(_user!.badgesgranted);
-                 print('UserProvider: Finished fetching badge details.');
-              } else {
-                print('UserProvider: No badge references found in user data. Skipping badge fetch.');
-                _user = _user!.copyWith(badges: []); // Ensure badges list is empty if no refs
-              }
-            } catch (e, stacktrace) {
-               print('UserProvider: Error processing snapshot data or fetching badges: $e');
-               print('UserProvider: Stacktrace: $stacktrace');
-               _user = null; // Or handle error state appropriately
-            }
-
-          } else {
-            print('UserProvider: Document for user ID $userId does not exist.');
+          if (!doc.exists) {
             _user = null; // User not found
+            _isLoading = false;
+            notifyListeners();
+            return;
           }
-          _isLoading = false;
-          notifyListeners(); // Notify UI about the updated user data (or lack thereof) and loading state
+          
+          try {
+            // Cancel any pending debounce
+            _debounceTimer?.cancel();
+            
+            // Process user data with debounce to avoid excessive updates
+            _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+              // Parse the user data first
+              User newUser = User.fromFirestore(doc);
+              
+              // Only fetch badge details if we have new references or no badges currently
+              if (newUser.badgesgranted.isNotEmpty && 
+                  (_user?.badges.isEmpty ?? true || 
+                   !_haveSameBadgeRefs(newUser.badgesgranted, _user?.badgesgranted ?? []))) {
+                await _fetchBadgeDetails(newUser.badgesgranted);
+              } else {
+                // If no badge changes, just update the user object
+                _user = newUser;
+                if (newUser.badges.isEmpty && (_user?.badges.isNotEmpty ?? false)) {
+                  // Keep existing badges if new user doesn't have them
+                  _user = _user!.copyWith(badges: _user!.badges);
+                }
+                _isLoading = false;
+                notifyListeners();
+              }
+            });
+          } catch (e) {
+            _isLoading = false;
+            _user = null;
+            notifyListeners();
+          }
         },
         onError: (error, stackTrace) {
-          print('UserProvider Listener Error: Error fetching user data: $error');
-          print('UserProvider Listener StackTrace: $stackTrace');
           _isLoading = false;
-          _user = null; // Clear user data on error
-          notifyListeners(); // Notify UI about the error and loading state
+          _user = null;
+          notifyListeners();
         },
         onDone: () {
-          print('UserProvider Listener: Stream closed.');
           _isLoading = false;
-          notifyListeners(); // Notify UI if stream closes unexpectedly
+          notifyListeners();
         }
       );
-      print('UserProvider: Subscribed to user document updates.');
-
-    } catch (e, stacktrace) {
-      print('UserProvider: Error setting up user data stream for $userId: $e');
-      print('UserProvider: Setup Stacktrace: $stacktrace');
+    } catch (e) {
       _isLoading = false;
       _user = null;
-      notifyListeners(); // Notify UI about the setup error and loading state
+      notifyListeners();
     }
+  }
+  
+  // Check if two badge reference lists contain the same badge IDs
+  bool _haveSameBadgeRefs(List<Map<String, dynamic>> newRefs, List<Map<String, dynamic>> oldRefs) {
+    if (newRefs.length != oldRefs.length) return false;
+    
+    final newIds = newRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
+    final oldIds = oldRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
+    
+    return newIds.length == oldIds.length && newIds.every((id) => oldIds.contains(id));
   }
 
   // Fetch detailed badge information based on references
   Future<void> _fetchBadgeDetails(List<Map<String, dynamic>> badgeRefs) async {
-     print('UserProvider [_fetchBadgeDetails]: Starting fetch for ${badgeRefs.length} references.');
+    if (badgeRefs.isEmpty) {
+      print('UserProvider [_fetchBadgeDetails]: No badge references to process');
+      if (_user != null) {
+        _user = _user!.copyWith(badges: []);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+    
+    print('UserProvider [_fetchBadgeDetails]: Processing ${badgeRefs.length} badge references');
     List<AppBadge> fetchedBadges = [];
     Set<String> processedIds = {}; // Track processed badge IDs
 
+    // If we've already processed these same badge references recently, skip processing
+    final badgeRefIds = badgeRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
+    final currentBadgeIds = _user?.badges.map((badge) => badge.id).toSet() ?? {};
+    
+    // Only refetch if the badge IDs have changed
+    if (_user != null && badgeRefIds.length == currentBadgeIds.length && 
+        badgeRefIds.every((id) => currentBadgeIds.contains(id))) {
+      print('UserProvider [_fetchBadgeDetails]: Badge IDs unchanged, skipping fetch');
+      return;
+    }
+
     for (var badgeRef in badgeRefs) {
-      print('UserProvider [_fetchBadgeDetails]: Processing reference: $badgeRef');
       final badgeId = badgeRef['id'] as String?;
-      //final badgePath = badgeRef['path'] as String?; // Currently unused path
 
       if (badgeId != null && badgeId.isNotEmpty && !processedIds.contains(badgeId)) {
         processedIds.add(badgeId); // Mark as processing
-         print('UserProvider [_fetchBadgeDetails]: Processing badge reference ID: $badgeId');
+        print('UserProvider [_fetchBadgeDetails]: Processing badge ID: $badgeId');
+        
         try {
-           print('UserProvider [_fetchBadgeDetails]: Fetching badge document: badges/$badgeId');
           final badgeDoc = await _firestore.collection('badges').doc(badgeId).get();
-          print('UserProvider [_fetchBadgeDetails]: Badge document data: ${badgeDoc.data()}');
-          
-          // Log specifically for badgeImage field
-          if (badgeDoc.exists) {
-            final data = badgeDoc.data();
-            print('UserProvider [_fetchBadgeDetails]: Badge image URL: ${data?['badgeImage']}');
-          }
           
           if (badgeDoc.exists) {
-             print('UserProvider [_fetchBadgeDetails]: Badge document $badgeId found.');
-            final badgeData = AppBadge.fromFirestore(badgeDoc);
-            fetchedBadges.add(badgeData);
-             print('UserProvider [_fetchBadgeDetails]: Successfully created AppBadge for $badgeId with image ${badgeData.badgeImage}');
+            final badgeData = badgeDoc.data() as Map<String, dynamic>;
+            
+            // Create badge with data from Firestore
+            final AppBadge badge = AppBadge(
+              id: badgeId,
+              name: badgeData['name'] ?? 'Unknown Badge',
+              description: badgeData['description'] ?? '',
+              imageUrl: badgeData['imageUrl'],
+              badgeImage: badgeData['badgeImage'], // Ensure badgeImage is captured
+              earnedAt: DateTime.now(), // Default if not available
+              xpValue: badgeData['xpValue'] is int ? badgeData['xpValue'] : 0,
+            );
+            
+            print('UserProvider [_fetchBadgeDetails]: Successfully loaded badge from Firestore: ${badge.name}');
+            fetchedBadges.add(badge);
           } else {
-             print('UserProvider [_fetchBadgeDetails]: Warning - Badge document not found for ID: $badgeId');
+            print('UserProvider [_fetchBadgeDetails]: Badge document does not exist in Firestore for ID: $badgeId');
+            
+            // Create a placeholder badge when document doesn't exist in Firestore
+            final AppBadge badge = AppBadge(
+              id: badgeId,
+              name: 'Badge',
+              description: 'A badge you earned',
+              imageUrl: '',
+              badgeImage: '',
+              earnedAt: DateTime.now(),
+              xpValue: 0,
+            );
+            fetchedBadges.add(badge);
           }
-        } catch (e, stacktrace) {
-           print('UserProvider [_fetchBadgeDetails]: Error fetching badge details for ID $badgeId: $e');
-           print('UserProvider [_fetchBadgeDetails]: Stacktrace: $stacktrace');
-          // Decide how to handle error: skip badge, retry, etc.
+        } catch (e) {
+          print('UserProvider [_fetchBadgeDetails]: Error loading badge $badgeId: $e');
         }
-      } else if (badgeId == null || badgeId.isEmpty) {
-         print('UserProvider [_fetchBadgeDetails]: Warning - Invalid or missing badge ID in reference: $badgeRef');
-      } else {
-         print('UserProvider [_fetchBadgeDetails]: Skipping already processed badge ID: $badgeId');
       }
     }
 
-     print('UserProvider [_fetchBadgeDetails]: Finished processing all references. Fetched ${fetchedBadges.length} unique badges.');
-
+    print('UserProvider [_fetchBadgeDetails]: Loaded ${fetchedBadges.length} badges');
+    
     // Update the user object's badges list safely
     if (_user != null) {
       _user = _user!.copyWith(badges: fetchedBadges);
-       print('UserProvider: Updated internal _user.badges with ${fetchedBadges.length} badges.');
-    } else {
-       print('UserProvider [_fetchBadgeDetails]: Warning - User became null during badge fetching.');
+      
+      // Only notify listeners once at the end of the entire badge fetch process
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -1011,17 +1081,7 @@ class UserProvider extends ChangeNotifier {
   // Method to check if a course is already purchased
   bool isCoursePurchased(String courseId) {
     if (_user == null) {
-      debugPrint('UserProvider [isCoursePurchased]: No user found, returning false');
       return false;
-    }
-    
-    debugPrint('UserProvider [isCoursePurchased]: Checking for course ID: "$courseId"');
-    debugPrint('UserProvider [isCoursePurchased]: User has ${_user!.purchasedCourses.length} purchased courses');
-    
-    // Debug - print all purchased course IDs
-    for (int i = 0; i < _user!.purchasedCourses.length; i++) {
-      final courseRef = _user!.purchasedCourses[i];
-      debugPrint('UserProvider [isCoursePurchased]: Purchased course #$i: id="${courseRef['id']}", path="${courseRef['path'] ?? 'null'}"');
     }
     
     // Check if any reference in purchasedCourses has the matching courseId
@@ -1029,7 +1089,6 @@ class UserProvider extends ChangeNotifier {
       courseRef['id'] == courseId
     );
     
-    debugPrint('UserProvider [isCoursePurchased]: Check for "$courseId", result: $isPurchased');
     return isPurchased;
   }
   

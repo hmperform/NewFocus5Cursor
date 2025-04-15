@@ -45,29 +45,9 @@ class DailyStreakWidget extends StatelessWidget {
     // Days of the week
     final List<String> days = ["M", "T", "W", "T", "F", "S", "S"];
     
-    // Get current day of week (0 = Sunday, 1 = Monday, etc.)
+    // Get current day of week (1-7, where 1 is Monday)
     final now = DateTime.now();
     int currentDayIndex = now.weekday - 1; // Convert to 0-based index (0 = Monday)
-    
-    // Calculate the start day of the streak based on the streak length
-    // We use lastActive as our reference point for the most recent streak day
-    DateTime streakStartDate;
-    
-    if (lastActive != null) {
-      // If we have lastActive, use that as the most recent streak day
-      // Then calculate the streak start by subtracting (streak-1) days
-      streakStartDate = DateTime(
-        lastActive!.year, 
-        lastActive!.month, 
-        lastActive!.day
-      ).subtract(Duration(days: currentStreak - 1));
-    } else {
-      // Fallback if no lastActive is available
-      streakStartDate = DateTime.now().subtract(Duration(days: currentStreak - 1));
-    }
-    
-    // Get the weekday of the streak start (0-6, with 0 being Monday)
-    int streakStartDayIndex = streakStartDate.weekday - 1;
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -76,22 +56,29 @@ class DailyStreakWidget extends StatelessWidget {
         
         // Only proceed if there's an active streak
         if (currentStreak > 0) {
-          // We need to determine which days of the week are part of the current streak
-          
-          // First, get the date for this weekday
-          final int daysFromToday = (currentDayIndex - index + 7) % 7;
-          final DateTime thisWeekdayDate = DateTime.now().subtract(Duration(days: daysFromToday));
-          
-          // A day is active if it falls between the streak start date and the last active date
-          if (lastActive != null) {
-            final DateTime lastActiveDay = DateTime(lastActive!.year, lastActive!.month, lastActive!.day);
-            final DateTime streakStartDay = DateTime(streakStartDate.year, streakStartDate.month, streakStartDate.day);
+          if (currentStreak == 1) {
+            // For a 1-day streak, just highlight today's day
+            isActive = index == currentDayIndex;
+          } else if (lastActive != null) {
+            // For streaks > 1, calculate which days should be active
             
-            // Check if this weekday's date is within the streak range
-            isActive = !thisWeekdayDate.isBefore(streakStartDay) && 
+            // Get date for the weekday at this index
+            final int daysFromToday = (currentDayIndex - index + 7) % 7;
+            final DateTime thisWeekdayDate = DateTime.now().subtract(Duration(days: daysFromToday));
+            
+            // Calculate streak start date
+            final DateTime lastActiveDay = DateTime(lastActive!.year, lastActive!.month, lastActive!.day);
+            final DateTime streakStartDate = DateTime(
+              lastActiveDay.year, 
+              lastActiveDay.month, 
+              lastActiveDay.day
+            ).subtract(Duration(days: currentStreak - 1));
+            
+            // A day is active if it falls between streak start and last active date
+            isActive = !thisWeekdayDate.isBefore(streakStartDate) && 
                       !thisWeekdayDate.isAfter(lastActiveDay);
           } else {
-            // Fallback to the simpler logic if no lastActive is available
+            // Fallback if no lastActive is available
             int daysFromCurrent = (currentDayIndex - index + 7) % 7;
             isActive = daysFromCurrent < currentStreak;
           }

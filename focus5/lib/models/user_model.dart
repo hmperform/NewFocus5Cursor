@@ -102,6 +102,10 @@ class User {
       }
     }
     
+    // We'll let the badge details be fetched separately by UserProvider
+    // rather than hardcoding them here
+    List<AppBadge> badgesList = [];
+    
     // Parse purchasedCourses references
     List<Map<String, dynamic>> purchasedCoursesList = [];
     if (data['purchasedCourses'] != null && data['purchasedCourses'] is List) {
@@ -165,7 +169,7 @@ class User {
       focusAreas: data['focusAreas'] != null 
           ? List<String>.from(data['focusAreas']) 
           : [],
-      badges: [],
+      badges: badgesList,
       completedCourses: data['completedCourses'] != null 
           ? List<String>.from(data['completedCourses']) 
           : [],
@@ -329,16 +333,19 @@ class AppBadge {
 
   factory AppBadge.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    
     print('AppBadge.fromFirestore called with doc ID: ${doc.id}, data: $data');
     
     return AppBadge(
       id: doc.id,
       name: data['name'] ?? 'Unknown Badge',
-      description: data['description'] ?? 'No description available',
-      imageUrl: data['imageUrl'] ?? '',
-      badgeImage: data['badgeImage'] as String?,
-      earnedAt: null,
-      xpValue: data['xpValue'] is int ? data['xpValue'] : 50,
+      description: data['description'] ?? '',
+      imageUrl: data['imageUrl'],
+      badgeImage: data['badgeImage'],
+      earnedAt: data['earnedAt'] != null 
+          ? (data['earnedAt'] as Timestamp).toDate() 
+          : DateTime.now(),
+      xpValue: data['xpValue'] is int ? data['xpValue'] : 0,
     );
   }
 

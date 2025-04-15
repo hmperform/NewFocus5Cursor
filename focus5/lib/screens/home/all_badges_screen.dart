@@ -4,6 +4,9 @@ import '../../providers/user_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/user_model.dart';
 import '../../constants/theme.dart';
+import '../../utils/formatters.dart';
+import '../badges/badge_detail_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AllBadgesScreen extends StatelessWidget {
   const AllBadgesScreen({Key? key}) : super(key: key);
@@ -82,158 +85,136 @@ class AllBadgesScreen extends StatelessWidget {
                   ),
                 ),
               )
-            : ListView.builder(
+            : GridView.builder(
                 padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.85,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
                 itemCount: badges.length,
-                itemBuilder: (context, index) => _buildBadgeListItem(
+                itemBuilder: (context, index) => _buildBadgeGridItem(
                   badges[index],
                   context,
                   accentColor,
-                  textColor,
-                  secondaryTextColor,
                 ),
               ),
       ),
     );
   }
   
-  Widget _buildBadgeListItem(
+  Widget _buildBadgeGridItem(
     AppBadge badge,
     BuildContext context,
     Color accentColor,
-    Color textColor,
-    Color? secondaryTextColor,
   ) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDarkMode = themeProvider.isDarkMode;
+    final textColor = Theme.of(context).colorScheme.onBackground;
     
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  badge.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Center(
-                      child: Icon(
-                        Icons.emoji_events,
-                        color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
-                        size: 30,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    badge.name,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    badge.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: secondaryTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accentColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.star,
-                              color: accentColor,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "+${badge.xpValue} XP",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        badge.earnedAt != null
-                          ? "Earned ${_formatDate(badge.earnedAt)}"
-                          : "Not yet earned",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: secondaryTextColor,
-                        ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BadgeDetailScreen(badge: badge),
+          ),
+        );
+      },
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Hero(
+                tag: 'badge_${badge.id}',
+                child: Container(
+                  height: 90,
+                  width: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        spreadRadius: 1,
                       ),
                     ],
                   ),
-                ],
+                  child: ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: badge.imageUrl ?? badge.badgeImage ?? '',
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                        child: Icon(
+                          Icons.emoji_events,
+                          color: accentColor,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                badge.name ?? 'Unknown Badge',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                badge.earnedAt != null
+                  ? Formatters.formatDate(badge.earnedAt!)
+                  : "Not yet earned",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (badge.xpValue != null && badge.xpValue! > 0) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "+${badge.xpValue} XP",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: accentColor,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
-  }
-  
-  String _formatDate(DateTime? date) {
-    if (date == null) {
-      return 'No date';
-    }
-    final now = DateTime.now();
-    final difference = now.difference(date);
-    
-    if (difference.inDays == 0) {
-      return 'today';
-    } else if (difference.inDays == 1) {
-      return 'yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
-      return '$weeks ${weeks == 1 ? "week" : "weeks"} ago';
-    } else if (difference.inDays < 365) {
-      final months = (difference.inDays / 30).floor();
-      return '$months ${months == 1 ? "month" : "months"} ago';
-    } else {
-      return '${date.month}/${date.day}/${date.year}';
-    }
   }
 } 

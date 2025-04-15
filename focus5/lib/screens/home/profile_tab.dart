@@ -12,6 +12,8 @@ import 'all_badges_screen.dart';
 import 'edit_profile_screen.dart';
 import '../../utils/app_icons.dart';
 import '../profile/profile_screen.dart';
+import '../../providers/auth_provider.dart';
+import '../badges/badge_detail_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -80,13 +82,76 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    // In a real app, we would use the UserProvider here
-    final userProvider = Provider.of<UserProvider>(context);
-    // Use real user data when available
-    final user = userProvider.user ?? _dummyUser;
+  void initState() {
+    super.initState();
     
+    // Force refresh user data to load badges from Firebase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      if (userProvider.user != null) {
+        print('ProfileTab [initState]: Refreshing user data to load badges from Firebase');
+        userProvider.refreshUser();
+        
+        // If user has badges in badgesgranted but none loaded yet, force a second refresh
+        // after a short delay to ensure they load properly
+        if (userProvider.user!.badgesgranted.isNotEmpty && 
+            userProvider.user!.badges.isEmpty) {
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted && userProvider.user != null) {
+              print('ProfileTab [initState]: Badge data still missing, initiating second attempt');
+              userProvider.refreshUser();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    
+    // Handle loading and error states
+    if (userProvider.isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    
+    if (userProvider.user == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text("Error loading profile"),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  userProvider.refreshUser();
+                },
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    final user = userProvider.user!;
+    
+    // Debug output for badges
+    print('Profile tab - User has ${user.badges.length} badges and ${user.badgesgranted.length} badgesgranted');
+    for (var badge in user.badges) {
+      print('Badge: ${badge.name}, id: ${badge.id}, imageUrl: ${badge.imageUrl}, badgeImage: ${badge.badgeImage}');
+    }
+    for (var badgeRef in user.badgesgranted) {
+      print('BadgeRef: id: ${badgeRef['id']}, path: ${badgeRef['path']}');
+    }
     
     // Get level info
     final int userLevel = userProvider.level;
@@ -453,7 +518,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               color: textColor,
                             ),
                           ),
-                          if (user.badges.length > 3)
+                          if (user.badges.length > 3 || user.badgesgranted.length > 3)
                             TextButton(
                               onPressed: _navigateToAllBadges,
                               child: Text(
@@ -467,7 +532,7 @@ class _ProfileTabState extends State<ProfileTab> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      if (user.badges.isEmpty)
+                      if (user.badges.isEmpty && user.badgesgranted.isEmpty)
                         Center(
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
@@ -483,18 +548,46 @@ class _ProfileTabState extends State<ProfileTab> {
                         )
                       else
                         SizedBox(
-                          height: 110,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: user.badges.length > 3 ? 3 : user.badges.length,
-                            itemBuilder: (context, index) {
-                              final badge = user.badges[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 16),
-                                child: _buildBadgeItem(badge, context),
-                              );
-                            },
-                          ),
+                          height: 120,
+                          child: user.badges.isNotEmpty ? 
+                            ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: user.badges.length > 3 ? 3 : user.badges.length,
+                              itemBuilder: (context, index) {
+                                final badge = user.badges[index];
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 16),
+                                  child: _buildBadgeItem(context, badge),
+                                );
+                              },
+                            ) :
+                            // If no badges are loaded yet, but we have references, show a loading indicator
+                            Center(
+                              child: user.badgesgranted.isNotEmpty ? 
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      "Loading badges...",
+                                      style: TextStyle(
+                                        color: secondaryTextColor,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ) :
+                                Text(
+                                  "No badges earned yet.",
+                                  style: TextStyle(
+                                    color: secondaryTextColor,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                            ),
                         ),
                     ],
                   ),
@@ -508,7 +601,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatCircle("${user.badges.length}", "Badges", context),
+                      _buildStatCircle("${user.badges.isNotEmpty ? user.badges.length : user.badgesgranted.length}", "Badges", context),
                       _buildStatCircle("${user.streak}/${user.longestStreak}", "Current/\nBest Streak", context),
                       _buildStatCircle("${user.completedAudios.length}", "Audio\ncompleted", context),
                       _buildStatCircle("${user.completedCourses.length}", "Courses\ncompleted", context),
@@ -600,64 +693,96 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
   
-  Widget _buildBadgeItem(AppBadge badge, BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final textColor = Theme.of(context).colorScheme.onBackground;
+  Widget _buildBadgeItem(BuildContext context, AppBadge badge) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final accentColor = themeProvider.isDarkMode 
+      ? AppColors.accentDark 
+      : AppColors.accentLight;
     
-    return Column(
-      children: [
-        Container(
-          width: 70,
-          height: 70,
-          decoration: BoxDecoration(
-            color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: themeProvider.isDarkMode ? Colors.white24 : Colors.black12,
-              width: 2,
-            ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BadgeDetailScreen(badge: badge),
           ),
-          child: ClipOval(
-            child: (badge.badgeImage != null && badge.badgeImage!.isNotEmpty)
-                ? Image.network(
-                    badge.badgeImage!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      print('Error loading badge image: $error for ${badge.name}');
-                      return Center(
-                        child: Icon(
-                          Icons.emoji_events,
-                          color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
-                          size: 36,
-                        ),
-                      );
-                    },
-                  )
-                : Center(
-                    child: Icon(
-                      Icons.emoji_events,
-                      color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
-                      size: 36,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        width: 100,
+        child: Column(
+          children: [
+            Hero(
+              tag: 'badge_${badge.id}',
+              child: Container(
+                height: 85,
+                width: 85,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor.withOpacity(0.2),
+                      blurRadius: 10,
+                      spreadRadius: 1,
                     ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 80,
-          child: Text(
-            badge.name,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
-            style: TextStyle(
-              fontSize: 12,
-              color: textColor,
-              fontWeight: FontWeight.w500,
+                  ],
+                ),
+                child: ClipOval(
+                  child: badge.badgeImage != null && badge.badgeImage!.isNotEmpty
+                      ? Image.network(
+                          badge.badgeImage!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Icon(
+                                Icons.emoji_events,
+                                color: accentColor,
+                                size: 40,
+                              ),
+                            );
+                          },
+                        )
+                      : (badge.imageUrl != null && badge.imageUrl!.startsWith('http'))
+                          ? Image.network(
+                              badge.imageUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Icon(
+                                    Icons.emoji_events,
+                                    color: accentColor,
+                                    size: 40,
+                                  ),
+                                );
+                              },
+                            )
+                          : Center(
+                              child: Icon(
+                                Icons.emoji_events,
+                                color: accentColor,
+                                size: 40,
+                              ),
+                            ),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              badge.name ?? 'Unknown Badge',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
   

@@ -32,11 +32,12 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
+    bool navigationHandled = false;
+    
     // Listen to status changes to wait for data loading
     // Using a listener is more robust than a simple await here
     void listener() {
-      if (!mounted) return; // Check mounted status inside listener
+      if (!mounted || navigationHandled) return; // Check mounted status inside listener and if already navigated
 
       final currentStatus = authProvider.status;
       final isReady = authProvider.isAuthenticatedAndReady; // Use the new flag
@@ -45,6 +46,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
       // Check conditions for navigation *only when status is not authenticating*
       if (currentStatus != AuthStatus.authenticating && currentStatus != AuthStatus.initial) {
+        // Mark navigation as handled to prevent multiple navigations
+        navigationHandled = true;
         authProvider.removeListener(listener); // Remove listener once decided
 
         if (widget.isFirstLaunch) {
@@ -67,10 +70,10 @@ class _SplashScreenState extends State<SplashScreen> {
     authProvider.addListener(listener);
 
     // Initial check - This triggers the process, the listener handles the navigation result
-     print("SplashScreen: Triggering initial authProvider.checkAuthStatus()...");
+    print("SplashScreen: Triggering initial authProvider.checkAuthStatus()...");
     await authProvider.checkAuthStatus();
     // The listener added above will handle the navigation once checkAuthStatus and subsequent loadUserData complete.
-     print("SplashScreen: Initial checkAuthStatus() completed. Waiting for listener callback...");
+    print("SplashScreen: Initial checkAuthStatus() completed. Waiting for listener callback...");
   }
 
   @override

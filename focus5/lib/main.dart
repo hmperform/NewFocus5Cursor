@@ -69,8 +69,10 @@ void main() async {
         // AuthProvider now depends on UserProvider
         ChangeNotifierProxyProvider<UserProvider, AuthProvider>(
           create: (context) => AuthProvider(null), // Initial state with null provider
-          update: (context, userProvider, previousAuthProvider) =>
-              AuthProvider(userProvider), // Pass the userProvider instance
+          update: (context, userProvider, previousAuthProvider) {
+            // Return existing provider if it exists rather than creating a new one
+            return previousAuthProvider ?? AuthProvider(userProvider);
+          },
         ),
         ChangeNotifierProvider(create: (context) => ContentProvider()),
         ChangeNotifierProvider(create: (context) => MediaProvider()),

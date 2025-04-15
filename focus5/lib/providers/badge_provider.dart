@@ -44,12 +44,38 @@ class BadgeProvider extends ChangeNotifier {
       
       if (userDoc.exists && userDoc.data() != null) {
         final userData = userDoc.data() as Map<String, dynamic>;
-        final earnedBadgeIds = userData['badges'] as List<dynamic>? ?? [];
         
-        _earnedBadges = _allBadges.where((badge) => 
-          earnedBadgeIds.contains(badge.id)).toList();
+        // Check for badgesgranted array with badge references
+        final badgesGranted = userData['badgesgranted'] as List<dynamic>? ?? [];
+        
+        if (badgesGranted.isNotEmpty) {
+          // Extract badge IDs from badgesgranted references
+          final earnedBadgeIds = badgesGranted
+              .map((badgeRef) => badgeRef is Map<String, dynamic> ? badgeRef['id'] : null)
+              .where((id) => id != null)
+              .toList();
+          
+          _earnedBadges = _allBadges.where((badge) => 
+            earnedBadgeIds.contains(badge.id)).toList();
+            
+          debugPrint('Loaded ${_earnedBadges.length} earned badges from badgesgranted');
+        } else {
+          // Fallback to legacy badges array if exists
+          final legacyBadgeIds = userData['badges'] as List<dynamic>? ?? [];
+          
+          if (legacyBadgeIds.isNotEmpty) {
+            _earnedBadges = _allBadges.where((badge) => 
+              legacyBadgeIds.contains(badge.id)).toList();
+              
+            debugPrint('Loaded ${_earnedBadges.length} earned badges from legacy badges array');
+          } else {
+            _earnedBadges = [];
+            debugPrint('No earned badges found for user');
+          }
+        }
       } else {
         _earnedBadges = [];
+        debugPrint('User document does not exist or has no data');
       }
       
       _isLoading = false;
