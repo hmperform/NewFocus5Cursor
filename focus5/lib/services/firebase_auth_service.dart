@@ -105,7 +105,6 @@ class FirebaseAuthService {
         'savedCourses': [],
         'streak': 0,
         'longestStreak': 0,
-        'lastLoginDate': FieldValue.serverTimestamp(),
         'lastActive': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
         'preferences': {

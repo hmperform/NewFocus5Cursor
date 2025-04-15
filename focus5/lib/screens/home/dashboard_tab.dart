@@ -257,9 +257,10 @@ class _DashboardTabState extends State<DashboardTab> {
       );
     }
     
-    // Use the streak value from user data
+    // Use the streak value from user data and the updated DailyStreakWidget
     return DailyStreakWidget(
       currentStreak: user.streak,
+      longestStreak: user.longestStreak,
     );
   }
 
@@ -592,7 +593,7 @@ class _DashboardTabState extends State<DashboardTab> {
     }
 
     final containerWidth = MediaQuery.of(context).size.width - 32;
-    final containerHeight = 150.0; // Fixed height for card
+    final containerHeight = 170.0; // Increased height for card
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

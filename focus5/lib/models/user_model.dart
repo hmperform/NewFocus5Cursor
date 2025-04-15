@@ -22,6 +22,7 @@ class User {
   final List<String> completedLessons;
   final List<String> completedArticles;
   final DateTime lastLoginDate;
+  final DateTime lastActive;
   final DateTime createdAt;
   final Map<String, dynamic>? preferences;
   final int loginStreak;
@@ -51,6 +52,7 @@ class User {
     this.completedLessons = const [],
     this.completedArticles = const [],
     DateTime? lastLoginDate,
+    DateTime? lastActive,
     DateTime? createdAt,
     this.preferences,
     this.loginStreak = 0,
@@ -59,6 +61,7 @@ class User {
     this.purchasedCourses = const [],
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
+    this.lastActive = lastActive ?? DateTime.now(),
     this.createdAt = createdAt ?? DateTime.now();
 
   factory User.fromFirestore(DocumentSnapshot doc) {
@@ -69,13 +72,28 @@ class User {
     if (data['badgesgranted'] != null && data['badgesgranted'] is List) {
        grantedBadgesList = List<Map<String, dynamic>>.from(
           (data['badgesgranted'] as List).map((item) {
+            // Handle DocumentReference objects from Firestore
+            if (item is DocumentReference) {
+              // Create reference in our standard format
+              return {
+                'id': item.id,
+                'path': item.path.split('/')[0] // Get the collection name
+              };
+            }
             // Ensure each item is a map before casting
-            if (item is Map) {
+            else if (item is Map) {
               return Map<String, dynamic>.from(item);
             }
             return {}; // Return empty map or handle error if item is not a map
           }).where((item) => item.isNotEmpty) // Filter out empty maps
        );
+    } else if (data['badgesgranted'] != null && data['badgesgranted'] is DocumentReference) {
+       // Handle single DocumentReference
+       final docRef = data['badgesgranted'] as DocumentReference;
+       grantedBadgesList.add({
+         'id': docRef.id,
+         'path': docRef.path.split('/')[0] // Get the collection name
+       });
     } else if (data['badgesgranted'] != null && data['badgesgranted'] is Map) {
       // Handle legacy case if it was ever a single map reference
       final badgeRef = data['badgesgranted'] as Map<String, dynamic>; 
@@ -109,6 +127,14 @@ class User {
     if (data['lastLoginDate'] != null) {
       final timestamp = data['lastLoginDate'] as Timestamp;
       lastLogin = DateTime.fromMillisecondsSinceEpoch(
+        timestamp.millisecondsSinceEpoch
+      );
+    }
+    
+    DateTime? lastActive;
+    if (data['lastActive'] != null) {
+      final timestamp = data['lastActive'] as Timestamp;
+      lastActive = DateTime.fromMillisecondsSinceEpoch(
         timestamp.millisecondsSinceEpoch
       );
     }
@@ -153,6 +179,7 @@ class User {
           ? List<String>.from(data['completedArticles']) 
           : [],
       lastLoginDate: lastLogin,
+      lastActive: lastActive,
       createdAt: created,
       preferences: data['preferences'] as Map<String, dynamic>?,
       loginStreak: data['loginStreak'] ?? 0,
@@ -184,6 +211,7 @@ class User {
       'completedLessons': completedLessons,
       'completedArticles': completedArticles,
       'lastLoginDate': Timestamp.fromDate(lastLoginDate),
+      'lastActive': Timestamp.fromDate(lastActive),
       'createdAt': Timestamp.fromDate(createdAt),
       if (preferences != null) 'preferences': preferences,
       'loginStreak': loginStreak,
@@ -214,6 +242,7 @@ class User {
     List<String>? completedLessons,
     List<String>? completedArticles,
     DateTime? lastLoginDate,
+    DateTime? lastActive,
     DateTime? createdAt,
     Map<String, dynamic>? preferences,
     int? loginStreak,
@@ -243,6 +272,7 @@ class User {
       completedLessons: completedLessons ?? this.completedLessons,
       completedArticles: completedArticles ?? this.completedArticles,
       lastLoginDate: lastLoginDate ?? this.lastLoginDate,
+      lastActive: lastActive ?? this.lastActive,
       createdAt: createdAt ?? this.createdAt,
       preferences: preferences ?? this.preferences,
       loginStreak: loginStreak ?? this.loginStreak,
@@ -258,6 +288,7 @@ class AppBadge {
   final String name;
   final String description;
   final String imageUrl;
+  final String? badgeImage;
   final DateTime? earnedAt;
   final int xpValue;
 
@@ -266,6 +297,7 @@ class AppBadge {
     required this.name,
     required this.description,
     required this.imageUrl,
+    this.badgeImage,
     required this.earnedAt,
     required this.xpValue,
   });
@@ -289,6 +321,7 @@ class AppBadge {
       name: json['name'] as String,
       description: json['description'] as String,
       imageUrl: json['imageUrl'] as String,
+      badgeImage: json['badgeImage'] as String?,
       earnedAt: earned,
       xpValue: json['xpValue'] as int,
     );
@@ -303,7 +336,8 @@ class AppBadge {
       name: data['name'] ?? 'Unknown Badge',
       description: data['description'] ?? 'No description available',
       imageUrl: data['imageUrl'] ?? '',
-      earnedAt: null, // Badge from Firestore hasn't been earned yet
+      badgeImage: data['badgeImage'] as String?,
+      earnedAt: null,
       xpValue: data['xpValue'] is int ? data['xpValue'] : 50,
     );
   }
@@ -314,6 +348,7 @@ class AppBadge {
       'name': name,
       'description': description,
       'imageUrl': imageUrl,
+      'badgeImage': badgeImage,
       'earnedAt': earnedAt?.toIso8601String(),
       'xpValue': xpValue,
     };

@@ -48,43 +48,10 @@ class _ProfileTabState extends State<ProfileTab> {
     streak: 5,
     longestStreak: 7,
     focusAreas: ['Confidence', 'Pressure Situations', 'Game Day Preparation'],
-    badges: [
-      AppBadge(
-        id: 'badge1',
-        name: 'Fast Learner',
-        description: 'Completed 5 lessons in a single day',
-        imageUrl: 'assets/images/badge_fast_learner.png',
-        earnedAt: DateTime.now().subtract(const Duration(days: 5)),
-        xpValue: 50,
-      ),
-      AppBadge(
-        id: 'badge2',
-        name: 'Mental Athlete',
-        description: 'Completed 10 mental training sessions',
-        imageUrl: 'assets/images/badge_mental_athlete.png',
-        earnedAt: DateTime.now().subtract(const Duration(days: 2)),
-        xpValue: 100,
-      ),
-      AppBadge(
-        id: 'badge3',
-        name: 'Consistency',
-        description: 'Maintained a 7-day streak',
-        imageUrl: 'assets/images/badge_consistency.png',
-        earnedAt: DateTime.now().subtract(const Duration(days: 1)),
-        xpValue: 100,
-      ),
-      AppBadge(
-        id: 'badge4',
-        name: 'Power User',
-        description: 'Used the app for 30 consecutive days',
-        imageUrl: 'assets/images/badge_power_user.png',
-        earnedAt: DateTime.now(),
-        xpValue: 150,
-      ),
-    ],
+    badges: [], // Badges should come from Firebase only
     completedCourses: ['course1'],
     completedAudios: ['audio1', 'audio2', 'audio3'],
-    lastLoginDate: DateTime.now(),
+    lastActive: DateTime.now(),
     createdAt: DateTime.now().subtract(const Duration(days: 30)),
   );
 
@@ -373,7 +340,7 @@ class _ProfileTabState extends State<ProfileTab> {
                             ),
                           ),
                           Text(
-                            "${user.xp + xpForNextLevel} XP",
+                            "${userProvider.level == 1 ? 500 : userProvider.level * 500} XP",
                             style: TextStyle(
                               fontSize: 14,
                               color: secondaryTextColor,
@@ -651,19 +618,28 @@ class _ProfileTabState extends State<ProfileTab> {
             ),
           ),
           child: ClipOval(
-            child: Image.asset(
-              badge.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Center(
-                  child: Icon(
-                    Icons.emoji_events,
-                    color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
-                    size: 36,
+            child: (badge.badgeImage != null && badge.badgeImage!.isNotEmpty)
+                ? Image.network(
+                    badge.badgeImage!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print('Error loading badge image: $error for ${badge.name}');
+                      return Center(
+                        child: Icon(
+                          Icons.emoji_events,
+                          color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
+                          size: 36,
+                        ),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Icon(
+                      Icons.emoji_events,
+                      color: themeProvider.isDarkMode ? Colors.white54 : Colors.black38,
+                      size: 36,
+                    ),
                   ),
-                );
-              },
-            ),
           ),
         ),
         const SizedBox(height: 8),

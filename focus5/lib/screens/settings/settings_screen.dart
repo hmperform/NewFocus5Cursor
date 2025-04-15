@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/user_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -95,7 +96,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Consumer<AuthProvider>(
             builder: (context, authProvider, _) {
               final user = authProvider.currentUser;
-              final email = user?.email ?? 'user@example.com';
+              
+              // Get the user's email from UserProvider instead of AuthProvider
+              final userProvider = Provider.of<UserProvider>(context, listen: false);
+              final email = userProvider.user?.email ?? user?.email ?? 'user@example.com';
               
               return ListTile(
                 title: const Text('Email Address'),

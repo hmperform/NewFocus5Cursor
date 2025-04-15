@@ -165,11 +165,18 @@ class UserProvider extends ChangeNotifier {
            print('UserProvider [_fetchBadgeDetails]: Fetching badge document: badges/$badgeId');
           final badgeDoc = await _firestore.collection('badges').doc(badgeId).get();
           print('UserProvider [_fetchBadgeDetails]: Badge document data: ${badgeDoc.data()}');
+          
+          // Log specifically for badgeImage field
+          if (badgeDoc.exists) {
+            final data = badgeDoc.data();
+            print('UserProvider [_fetchBadgeDetails]: Badge image URL: ${data?['badgeImage']}');
+          }
+          
           if (badgeDoc.exists) {
              print('UserProvider [_fetchBadgeDetails]: Badge document $badgeId found.');
             final badgeData = AppBadge.fromFirestore(badgeDoc);
             fetchedBadges.add(badgeData);
-             print('UserProvider [_fetchBadgeDetails]: Successfully created AppBadge for $badgeId.');
+             print('UserProvider [_fetchBadgeDetails]: Successfully created AppBadge for $badgeId with image ${badgeData.badgeImage}');
           } else {
              print('UserProvider [_fetchBadgeDetails]: Warning - Badge document not found for ID: $badgeId');
           }
@@ -234,8 +241,8 @@ class UserProvider extends ChangeNotifier {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final lastLogin = _user!.lastLoginDate;
-      final lastLoginDate = DateTime(lastLogin.year, lastLogin.month, lastLogin.day);
+      final lastActive = _user!.lastActive;
+      final lastActiveDate = DateTime(lastActive.year, lastActive.month, lastActive.day);
       int currentTotalDays = _user!.totalLoginDays;
       int currentStreak = _user!.streak;
       int currentLongestStreak = _user!.longestStreak;
@@ -244,7 +251,7 @@ class UserProvider extends ChangeNotifier {
       int newStreak = currentStreak;
       int newLongestStreak = currentLongestStreak;
       
-      print('UserProvider: Checking streak/days. Today: $today, Last Login: $lastLoginDate, Current Total Days: $currentTotalDays');
+      print('UserProvider: Checking streak/days. Today: $today, Last Active: $lastActiveDate, Current Total Days: $currentTotalDays');
 
       // --- Logic Adjustment for totalLoginDays --- 
       if (currentTotalDays == 0) {
@@ -254,7 +261,7 @@ class UserProvider extends ChangeNotifier {
         newStreak = 1; // Also reset streak to 1
         newLongestStreak = (newStreak > currentLongestStreak) ? newStreak : currentLongestStreak;
         needsUpdate = true;
-      } else if (today.isAfter(lastLoginDate)) {
+      } else if (today.isAfter(lastActiveDate)) {
         // It's a new day and user has logged in before
         print('UserProvider: New login day detected! Current Total Days: $currentTotalDays');
         newTotalLoginDays = currentTotalDays + 1;
@@ -262,7 +269,7 @@ class UserProvider extends ChangeNotifier {
         
         // Handle streak logic only on new days
         final yesterday = today.subtract(const Duration(days: 1));
-        if (lastLoginDate.isAtSameMomentAs(yesterday)) {
+        if (lastActiveDate.isAtSameMomentAs(yesterday)) {
           newStreak = currentStreak + 1;
            print('UserProvider: Streak continued. New streak: $newStreak');
         } else {
@@ -283,7 +290,7 @@ class UserProvider extends ChangeNotifier {
         
         await _firestore.collection('users').doc(userId).update({
           'streak': newStreak,
-          'lastLoginDate': FieldValue.serverTimestamp(), // Use server time
+          'lastActive': FieldValue.serverTimestamp(), // Use server time instead of lastLoginDate
           'longestStreak': newLongestStreak,
           'totalLoginDays': newTotalLoginDays,
         });
@@ -293,7 +300,7 @@ class UserProvider extends ChangeNotifier {
         // Update local user state
         _user = _user!.copyWith(
           streak: newStreak,
-          lastLoginDate: now, // Use local 'now' for immediate consistency
+          lastActive: now, // Use local 'now' for immediate consistency
           longestStreak: newLongestStreak,
           totalLoginDays: newTotalLoginDays,
         );

@@ -149,6 +149,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                 controller: _scrollController,
                 padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
                 children: [
+                  // Coaches section (moved to top)
+                  _buildCoachesSection(),
+                  
                   // Featured section
                   _buildFeaturedSection(),
                   
@@ -157,9 +160,6 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   
                   // Focus areas
                   _buildModulesSection(),
-                  
-                  // Coaches section
-                  _buildCoachesSection(),
                 ],
               ),
               
@@ -1094,6 +1094,16 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final userProvider = Provider.of<UserProvider>(context);
     final contentProvider = Provider.of<ContentProvider>(context);
     
+    // Skip rendering this section if there are no featured courses and it's still loading
+    if (contentProvider.isLoading && contentProvider.featuredCourses.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    // Skip rendering if there are no featured courses even after loading
+    if (!contentProvider.isLoading && contentProvider.featuredCourses.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1111,20 +1121,18 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         const SizedBox(height: 10),
         SizedBox(
           height: 220,
-          child: contentProvider.featuredCourses.isEmpty
-              ? Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: contentProvider.featuredCourses.length,
-                  itemBuilder: (context, index) {
-                    final course = contentProvider.featuredCourses[index];
-                    return FeaturedCourseCard(
-                      course: course,
-                      isPurchased: userProvider.hasPurchasedCourse(course.id),
-                    );
-                  },
-                ),
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            scrollDirection: Axis.horizontal,
+            itemCount: contentProvider.featuredCourses.length,
+            itemBuilder: (context, index) {
+              final course = contentProvider.featuredCourses[index];
+              return FeaturedCourseCard(
+                course: course,
+                isPurchased: userProvider.hasPurchasedCourse(course.id),
+              );
+            },
+          ),
         ),
       ],
     );

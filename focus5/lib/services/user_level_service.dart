@@ -52,10 +52,12 @@ class UserLevelService {
     
     // If at max level, return current XP (no next level)
     if (currentLevel >= 10) {
-      return currentXp;
+      return 0; // No XP needed for next level at max level
     }
     
-    return levelThresholds[currentLevel + 1]!;
+    // Calculate XP needed to reach next level by subtracting current XP from next level threshold
+    int nextLevelThreshold = levelThresholds[currentLevel + 1]!;
+    return nextLevelThreshold - currentXp;
   }
   
   // Get progress to next level (0.0 to 1.0)

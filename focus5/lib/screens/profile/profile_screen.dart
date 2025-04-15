@@ -11,7 +11,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../utils/level_utils.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/app_icons.dart';
-import '../../widgets/streak_widget.dart';
+import '../../widgets/daily_streak_widget.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -333,6 +334,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFB4FF00), width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFB4FF00).withOpacity(0.2),
+                        ),
+                        child: Center(
+                          child: AppIcons.getFocusPointIcon(
+                            width: 16, 
+                            height: 16,
+                            color: const Color(0xFFB4FF00),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${user.focusPoints}',
+                        style: const TextStyle(
+                          color: Color(0xFFB4FF00),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFB4FF00).withOpacity(0.2),
@@ -625,10 +663,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildBadgeImage(
-                    imageUrl: badge.imageUrl,
-                    radius: 35,
-                  ),
+                  _buildBadgeImage(badge: badge, radius: 35),
                   const SizedBox(height: 6),
                   Text(
                     badge.name,
@@ -647,7 +682,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
   
-  Widget _buildBadgeImage({required String? imageUrl, required double radius}) {
+  Widget _buildBadgeImage({required AppBadge? badge, required double radius}) {
+    // Only use badgeImage (the Firebase URL) instead of local assets
+    final String? imageUrl = badge?.badgeImage;
+    
+    print('Badge image URL for ${badge?.name}: $imageUrl');
+    
     return Container(
       width: radius * 2,
       height: radius * 2,
@@ -660,11 +700,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       child: ClipOval(
-        child: imageUrl != null && imageUrl.isNotEmpty
+        child: (imageUrl != null && imageUrl.isNotEmpty)
             ? Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / 
+                            loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
                 errorBuilder: (context, error, stackTrace) {
+                  print('Error loading badge network image: $error for URL: $imageUrl');
                   return Icon(
                     Icons.emoji_events,
                     color: Colors.white54,
@@ -699,7 +751,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
              children: [
-               _buildBadgeImage(imageUrl: badge.imageUrl, radius: 20),
+               _buildBadgeImage(badge: badge, radius: 20),
                SizedBox(width: 10),
                Expanded(
                   child: Text(badge.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -739,10 +791,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     });
     
-    return StreakWidget(
-      weekData: weekData,
+    return DailyStreakWidget(
       currentStreak: user.streak,
-      bestStreak: user.longestStreak,
     );
   }
 } 
