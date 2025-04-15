@@ -13,10 +13,14 @@ import '../../providers/theme_provider.dart';
 import '../../providers/audio_module_provider.dart';
 import '../../constants/theme.dart';
 import '../../models/content_models.dart';
+import '../../widgets/status_bar.dart'; // Import the StatusBar
+import '../../widgets/daily_streak_widget.dart';
 import 'course_detail_screen.dart';
 import 'audio_player_screen.dart';
 import 'media_player_screen.dart';
 import '../../utils/basic_video_helper.dart';
+import '../../utils/image_utils.dart';
+import '../../utils/app_icons.dart'; // Import the app icons utility
 // import '../../constants/dummy_data.dart'; // Commented out unused import
 // import '../../widgets/loaders/loading_indicator.dart'; // Commented out unused import
 // import '../../widgets/quick_action_card.dart'; // Commented out unused import
@@ -196,29 +200,32 @@ class _DashboardTabState extends State<DashboardTab> {
         },
         child: Stack(
           children: [
-            // Always show content, even if loading
-            SingleChildScrollView(
+            // Main content
+            ListView(
               controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 8),
-                    _buildDayStreak(),
-                    _buildStartYourDay(context),
-                    _buildRecentCourses(),
-                    _buildFeaturedCourses(context),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+              padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
+              children: [
+                const SizedBox(height: 8),
+                _buildDayStreak(),
+                _buildStartYourDay(context),
+                _buildRecentCourses(),
+                _buildFeaturedCourses(context),
+                const SizedBox(height: 24),
+              ],
+            ),
+            
+            // Add StatusBar at the top
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: StatusBar(),
             ),
             
             // Loading indicator overlay
             if (_isLoading)
               Container(
-                color: Colors.black54,
+                color: backgroundColor.withOpacity(0.6),
                 child: Center(
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(accentColor),
@@ -232,73 +239,27 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   Widget _buildDayStreak() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final accentColor = themeProvider.accentColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final userProvider = Provider.of<UserProvider>(context);
+    final user = userProvider.user;
     
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Daily Streak',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onBackground,
-              ),
+    // If user data isn't loaded yet, show a loading placeholder
+    if (user == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        height: 120,
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.primary,
             ),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: List.generate(7, (index) {
-                final bool isActive = index == 0;
-                final String day = index == 0 ? 'MO' : 
-                                index == 1 ? 'TU' : 
-                                index == 2 ? 'WE' : 
-                                index == 3 ? 'TH' : 
-                                index == 4 ? 'FR' :
-                                index == 5 ? 'SA' : 'SU';
-                
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isActive ? accentColor : surfaceColor,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            day,
-                            style: TextStyle(
-                              color: isActive ? themeProvider.accentTextColor : Colors.grey,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      isActive 
-                        ? Icon(Icons.check_circle, color: accentColor, size: 14)
-                        : const SizedBox(height: 14),
-                    ],
-                  ),
-                );
-              }),
-            ),
-          ),
-        ],
-      ),
+        ),
+      );
+    }
+    
+    // Use the streak value from user data
+    return DailyStreakWidget(
+      currentStreak: user.streak,
     );
   }
 
@@ -444,45 +405,29 @@ class _DashboardTabState extends State<DashboardTab> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 if (courses.isNotEmpty) CourseCard(
+                  courseId: courses[0].id,
                   title: courses[0].title,
-                  sport: courses[0].focusAreas.isNotEmpty ? courses[0].focusAreas.first : 'All Sports',
-                  level: courses[0].tags.isNotEmpty ? courses[0].tags.first : 'Intermediate',
-                  duration: '${courses[0].durationMinutes ~/ 60}h ${courses[0].durationMinutes % 60}m',
-                  progress: 0.3,
+                  description: courses[0].description,
                   imageUrl: courses[0].thumbnailUrl,
-                  onTap: () {
-                    // Navigate to course details
-                    Navigator.push(
-                      context, 
-                      MaterialPageRoute(
-                        builder: (context) => CourseDetailScreen(
-                          courseId: courses[0].id,
-                          course: courses[0],
-                        ),
-                      ),
-                    );
-                  },
+                  durationMinutes: courses[0].durationMinutes,
+                  lessonsCount: courses[0].lessonsList.length,
+                  creatorName: courses[0].creatorName,
+                  creatorImageUrl: courses[0].creatorImageUrl,
+                  premium: courses[0].premium,
+                  focusPointsCost: courses[0].focusPointsCost,
                 ),
                 const SizedBox(width: 16),
                 if (courses.length > 1) CourseCard(
+                  courseId: courses[1].id,
                   title: courses[1].title,
-                  sport: courses[1].focusAreas.isNotEmpty ? courses[1].focusAreas.first : 'Basketball',
-                  level: courses[1].tags.isNotEmpty ? courses[1].tags.first : 'Advanced',
-                  duration: '${courses[1].durationMinutes ~/ 60}h ${courses[1].durationMinutes % 60}m',
-                  progress: 0.6,
+                  description: courses[1].description,
                   imageUrl: courses[1].thumbnailUrl,
-                  onTap: () {
-                    // Navigate to course details
-                    Navigator.push(
-                      context, 
-                      MaterialPageRoute(
-                        builder: (context) => CourseDetailScreen(
-                          courseId: courses[1].id,
-                          course: courses[1],
-                        ),
-                      ),
-                    );
-                  },
+                  durationMinutes: courses[1].durationMinutes,
+                  lessonsCount: courses[1].lessonsList.length,
+                  creatorName: courses[1].creatorName,
+                  creatorImageUrl: courses[1].creatorImageUrl,
+                  premium: courses[1].premium,
+                  focusPointsCost: courses[1].focusPointsCost,
                 ),
               ],
             ),
@@ -647,14 +592,14 @@ class _DashboardTabState extends State<DashboardTab> {
     }
 
     final containerWidth = MediaQuery.of(context).size.width - 32;
-    final containerHeight = containerWidth * 0.7; // Increased height ratio
+    final containerHeight = 150.0; // Fixed height for card
     
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
             'Start Your Day',
             style: TextStyle(
               color: textColor,
@@ -662,140 +607,135 @@ class _DashboardTabState extends State<DashboardTab> {
               fontSize: 20,
             ),
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AudioPlayerScreen(
-                    audio: audioModule,
-                    currentDay: Provider.of<UserProvider>(context, listen: false).user?.totalLoginDays ?? 1,
-                  ),
+        ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AudioPlayerScreen(
+                  audio: audioModule,
+                  currentDay: Provider.of<UserProvider>(context, listen: false).user?.totalLoginDays ?? 1,
                 ),
-              );
-            },
-            child: Container(
-              height: containerHeight,
-              width: containerWidth,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                image: DecorationImage(
-                  image: NetworkImage(audioModule.imageUrl),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.black.withOpacity(0.3),
-                    BlendMode.darken,
-                  ),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            height: containerHeight,
+            width: containerWidth,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.black,
+                  const Color(0xFF2A6C00)
                 ],
               ),
-              child: Stack(
-                children: [
-                  // Gradient overlay
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: accentColor.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'DAILY AUDIO',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // DAILY AUDIO tag
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          audioModule.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
+                        child: const Text(
+                          'DAILY AUDIO',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          audioModule.description,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
+                      ),
+                      const SizedBox(height: 10),
+                      
+                      // Title
+                      Text(
+                        audioModule.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      
+                      const SizedBox(height: 6),
+                      
+                      // Description
+                      Text(
+                        audioModule.description,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      
+                      const Spacer(),
+                      
+                      // Duration and XP
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.play_circle_filled,
+                            color: Colors.white,
+                            size: 20,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.play_circle_filled,
+                          const SizedBox(width: 6),
+                          Text(
+                            '${audioModule.durationMinutes} min',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            Icons.star,
+                            color: accentColor,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${audioModule.xpReward} XP',
+                            style: TextStyle(
                               color: accentColor,
-                              size: 24,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${audioModule.durationMinutes} min',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const Spacer(),
-                            Icon(
-                              Icons.star,
-                              color: accentColor,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${audioModule.xpReward} XP',
-                              style: TextStyle(
-                                color: accentColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1060,23 +1000,16 @@ class _DashboardTabState extends State<DashboardTab> {
               return Padding(
                 padding: EdgeInsets.only(right: index < displayCourses.length - 1 ? 16 : 0),
                 child: CourseCard(
+                  courseId: course.id,
                   title: course.title,
-                  sport: course.focusAreas.isNotEmpty ? course.focusAreas.first : 'All Sports',
-                  level: course.tags.isNotEmpty ? course.tags.first : 'Beginner',
-                  duration: '${course.durationMinutes ~/ 60}h ${course.durationMinutes % 60}m',
-                  progress: 0.3, // Dummy progress for now
+                  description: course.description,
                   imageUrl: course.thumbnailUrl,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CourseDetailScreen(
-                          courseId: course.id,
-                          course: course,
-                        ),
-                      ),
-                    );
-                  },
+                  durationMinutes: course.durationMinutes,
+                  lessonsCount: course.lessonsList.length,
+                  creatorName: course.creatorName,
+                  creatorImageUrl: course.creatorImageUrl,
+                  premium: course.premium,
+                  focusPointsCost: course.focusPointsCost,
                 ),
               );
             },
@@ -1118,23 +1051,29 @@ class _DashboardTabState extends State<DashboardTab> {
 
 // Moved CourseCard class definition outside _DashboardTabState
 class CourseCard extends StatelessWidget {
+  final String courseId;
   final String title;
-  final String sport;
-  final String level;
-  final String duration;
-  final double progress;
+  final String description;
   final String imageUrl;
-  final VoidCallback onTap;
+  final int durationMinutes;
+  final int lessonsCount;
+  final String creatorName;
+  final String creatorImageUrl;
+  final bool premium;
+  final int focusPointsCost;
 
   const CourseCard({
     Key? key,
+    required this.courseId,
     required this.title,
-    required this.sport,
-    required this.level,
-    required this.duration,
-    required this.progress,
+    required this.description,
     required this.imageUrl,
-    required this.onTap,
+    required this.durationMinutes,
+    required this.lessonsCount,
+    required this.creatorName,
+    required this.creatorImageUrl,
+    required this.premium,
+    this.focusPointsCost = 0,
   }) : super(key: key);
 
   @override
@@ -1147,7 +1086,17 @@ class CourseCard extends StatelessWidget {
     final surfaceColor = Theme.of(context).colorScheme.surface;
     
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CourseDetailScreen(
+              courseId: courseId,
+              course: null,
+            ),
+          ),
+        );
+      },
       child: Container(
         width: 280,
         height: 220, // Reduced height to fix overflow
@@ -1206,7 +1155,7 @@ class CourseCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      level,
+                      'Intermediate',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -1215,6 +1164,37 @@ class CourseCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
+                // Focus Points badge
+                if (focusPointsCost > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          AppIcons.getFocusPointIcon(
+                            width: 14,
+                            height: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$focusPointsCost',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 // Duration badge
                 Positioned(
@@ -1227,7 +1207,7 @@ class CourseCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      duration,
+                      '${durationMinutes ~/ 60}h ${durationMinutes % 60}m',
                       style: TextStyle(
                         color: themeProvider.accentTextColor,
                         fontSize: 11,
@@ -1262,7 +1242,7 @@ class CourseCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          sport,
+                          'Basketball',
                           style: TextStyle(
                             color: secondaryTextColor,
                             fontSize: 13,

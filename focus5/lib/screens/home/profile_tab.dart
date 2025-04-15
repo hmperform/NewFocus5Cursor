@@ -10,6 +10,8 @@ import '../../utils/image_utils.dart';
 import '../../services/user_level_service.dart';
 import 'all_badges_screen.dart';
 import 'edit_profile_screen.dart';
+import '../../utils/app_icons.dart';
+import '../profile/profile_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -416,47 +418,47 @@ class _ProfileTabState extends State<ProfileTab> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: accentColor.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.diamond_outlined,
-                              color: accentColor,
-                              size: 24,
-                            ),
+                          AppIcons.getCustomFocusPointWidget(
+                            value: '${user.focusPoints}',
+                            backgroundColor: accentColor.withOpacity(0.2),
+                            textColor: accentColor,
+                            size: 48,
+                            showLabel: false,
                           ),
                           const SizedBox(width: 16),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Focus Points",
+                                'Focus Points',
                                 style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
                                   color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 4),
                               Text(
-                                "Use to unlock premium content",
+                                '${user.focusPoints} points available',
                                 style: TextStyle(
+                                  color: textColor.withOpacity(0.7),
                                   fontSize: 12,
-                                  color: secondaryTextColor,
                                 ),
                               ),
                             ],
                           ),
                           const Spacer(),
-                          Text(
-                            "${user.focusPoints}",
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: accentColor,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: accentColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              '+${user.focusPoints}',
+                              style: TextStyle(
+                                color: accentColor,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],

@@ -32,6 +32,10 @@ class ContentProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  // Added getters for explore tab
+  List<Course> get featuredCourses => _courses.where((course) => course.featured).toList();
+  List<Course> get allCourses => _courses;
+
   // For backward compatibility
   Lesson? get dailyModule => _dailyLesson;
   Map<String, dynamic>? get dailyModuleAssignment => _dailyLessonAssignment;

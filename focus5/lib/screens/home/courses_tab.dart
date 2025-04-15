@@ -7,6 +7,8 @@ import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
 import '../../models/content_models.dart';
 import 'course_detail_screen.dart';
+import '../../utils/image_utils.dart';
+import '../../utils/app_icons.dart';
 
 class CoursesTab extends StatefulWidget {
   const CoursesTab({Key? key}) : super(key: key);
@@ -357,6 +359,38 @@ class _CoursesTabState extends State<CoursesTab> {
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
                         ),
+                      ),
+                    ),
+                  ),
+                
+                // Focus Points Cost Badge
+                if (course.focusPointsCost > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: themeProvider.accentColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppIcons.getFocusPointIcon(
+                            width: 12,
+                            height: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${course.focusPointsCost}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

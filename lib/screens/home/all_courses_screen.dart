@@ -8,6 +8,7 @@ import 'package:focus5/services/firebase_content_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:focus5/screens/home/course_detail_screen.dart';
 import '../../providers/content_provider.dart';
+import '../../utils/app_icons.dart'; // Import the app icons utility
 
 // Define _buildCourseListItem outside the build method or make it part of the state
 Widget _buildCourseListItem(BuildContext context, Course course, Color textColor) {
@@ -18,12 +19,44 @@ class AllCoursesScreen extends StatelessWidget {
   const AllCoursesScreen({super.key});
 
   Widget _buildCourseItem(BuildContext context, Course course) {
-    // Replace CourseListItem with ListTile
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return ListTile(
       leading: course.imageUrl.isNotEmpty 
           ? Image.network(course.imageUrl, width: 50, height: 50, fit: BoxFit.cover) 
           : const Icon(Icons.school), // Placeholder icon
-      title: Text(course.title),
+      title: Row(
+        children: [
+          Expanded(child: Text(course.title)),
+          if (course.focusPointsCost > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: themeProvider.accentColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppIcons.getFocusPointIcon(
+                    width: 12,
+                    height: 12,
+                    // Don't provide color to keep original image colors
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${course.focusPointsCost}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
       subtitle: Text('${course.lessonsList.length} Lessons'),
       onTap: () {
         Navigator.push(

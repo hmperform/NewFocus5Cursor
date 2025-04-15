@@ -9,6 +9,7 @@ import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/basic_video_helper.dart';
+import '../../utils/app_icons.dart';
 import '../../services/media_completion_service.dart';
 import '../../services/firebase_content_service.dart';
 
@@ -37,6 +38,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // Refresh user data to ensure we have latest from Firestore
+    Provider.of<UserProvider>(context, listen: false).refreshUser();
     _loadCourse();
   }
   
@@ -143,28 +146,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       length: _tabs.length,
       child: Scaffold(
         backgroundColor: backgroundColor,
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            // Start the course
-            // Navigate to first module
-            if (_course.modules.isNotEmpty) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VideoPlayerScreen(
-                    lesson: _course.modules[0],
-                    courseId: widget.courseId,
-                    courseTitle: _course.title,
-                  ),
-                ),
-              );
-            }
-          },
-          backgroundColor: accentColor,
-          foregroundColor: themeProvider.accentTextColor,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Start Course'),
-        ),
+        floatingActionButton: _buildActionButton(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         body: NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
@@ -174,6 +157,49 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 expandedHeight: 400,
                 pinned: true,
                 stretch: true,
+                actions: [
+                  // Debug button for forcing course purchase
+                  if (_course.id == 'course-001')
+                    IconButton(
+                      icon: Icon(
+                        Icons.build,
+                        color: Colors.white,
+                      ),
+                      onPressed: () async {
+                        final userProvider = Provider.of<UserProvider>(context, listen: false);
+                        final result = await userProvider.forceAddConfidence101Course();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result 
+                              ? 'Force added Confidence 101 course!' 
+                              : 'Failed to force add course'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      tooltip: 'Force Add Course (Debug)',
+                    ),
+                  // Bookmark button
+                  Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                      onPressed: () {
+                        // TODO: Save course to bookmarks
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Course saved!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: Stack(
                     fit: StackFit.expand,
@@ -286,27 +312,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
-                actions: [
-                  Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.bookmark_border, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Save course to bookmarks
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Course saved!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
               ),
               
               // Course stats row
@@ -319,6 +324,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
                       _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
                       _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
+                      _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
                     ],
                   ),
                 ),
@@ -365,7 +371,68 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
+    final accentColor = themeProvider.accentColor;
     
+    // Special case for Focus Points - use custom widget with better visibility
+    if (icon == Icons.diamond) {
+      return Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              // Circle background with number
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor.withOpacity(0.15),
+                ),
+                child: Center(
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              // Focus Points Icon on top right
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withOpacity(0.8),
+                  ),
+                  child: Image.asset(
+                    'assets/icons/focuspointicon-removebg-preview.png',
+                    width: 12,
+                    height: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: accentColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      );
+    }
+    
+    // Original implementation for other icons
     return Column(
       children: [
         Icon(icon, color: secondaryTextColor),
@@ -973,6 +1040,456 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildActionButton() {
+    final userProvider = Provider.of<UserProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final userFocusPoints = userProvider.focusPoints;
+    final hasEnoughPoints = userFocusPoints >= _course.focusPointsCost;
+    final isPremium = _course.premium;
+    final hasLessons = _course.modules.isNotEmpty;
+    final alreadyPurchased = userProvider.isCoursePurchased(_course.id);
+    
+    // Debug information
+    debugPrint('CourseDetailScreen [_buildActionButton]: Current course ID: "${_course.id}"');
+    debugPrint('CourseDetailScreen [_buildActionButton]: Course title: "${_course.title}"');
+    debugPrint('CourseDetailScreen [_buildActionButton]: Already purchased: $alreadyPurchased');
+    debugPrint('CourseDetailScreen [_buildActionButton]: Is premium: $isPremium');
+    debugPrint('CourseDetailScreen [_buildActionButton]: Has enough points: $hasEnoughPoints ($userFocusPoints >= ${_course.focusPointsCost})');
+    
+    // If course is already purchased or premium, show Start Course button
+    if (alreadyPurchased || isPremium) {
+      debugPrint('CourseDetailScreen [_buildActionButton]: Showing START COURSE button');
+      return FloatingActionButton.extended(
+        onPressed: () {
+          if (hasLessons) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  lesson: _course.modules[0],
+                  courseId: widget.courseId,
+                  courseTitle: _course.title,
+                ),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This course has no lessons yet.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+        backgroundColor: accentColor,
+        foregroundColor: themeProvider.accentTextColor,
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('Start Course'),
+      );
+    }
+    
+    // If user has enough focus points, show Redeem button
+    if (hasEnoughPoints) {
+      debugPrint('CourseDetailScreen [_buildActionButton]: Showing REDEEM button');
+      return FloatingActionButton.extended(
+        onPressed: () {
+          _showRedeemConfirmationDialog();
+        },
+        backgroundColor: accentColor,
+        foregroundColor: themeProvider.accentTextColor,
+        icon: AppIcons.getFocusPointIcon(
+          width: 24,
+          height: 24,
+          // Don't provide color to preserve the original image colors
+        ),
+        label: Text('Redeem for ${_course.focusPointsCost} Points'),
+      );
+    }
+    
+    // If user doesn't have enough points, show "Get More Points" button
+    debugPrint('CourseDetailScreen [_buildActionButton]: Showing GET MORE POINTS button');
+    return FloatingActionButton.extended(
+      onPressed: () {
+        _showFocusPointsPaywall();
+      },
+      backgroundColor: Colors.amber,
+      foregroundColor: Colors.black,
+      icon: const Icon(Icons.shopping_cart),
+      label: Text('Get More Points (Need ${_course.focusPointsCost - userFocusPoints} more)'),
+    );
+  }
+
+  void _showRedeemConfirmationDialog() {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Redeem Course'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Are you sure you want to redeem this course for ${_course.focusPointsCost} Focus Points?'),
+            const SizedBox(height: 16),
+            Text('Your balance: ${userProvider.focusPoints} Points'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: themeProvider.accentColor,
+              foregroundColor: themeProvider.accentTextColor,
+            ),
+            onPressed: () async {
+              Navigator.of(context).pop();
+              
+              // Attempt to spend focus points
+              final success = await userProvider.spendFocusPoints(
+                userProvider.user!.id,
+                _course.focusPointsCost,
+                'Course redemption: ${_course.title}',
+                courseId: _course.id
+              );
+              
+              if (success) {
+                _showSuccessDialog();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to redeem course. Please try again.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Redeem Course'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 24),
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 72,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You Got It!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onBackground,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'You have successfully redeemed "${_course.title}"',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: 120,
+              width: 200,
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: DecorationImage(
+                  image: NetworkImage(_course.thumbnailUrl),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(200, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Start the course
+                if (_course.modules.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VideoPlayerScreen(
+                        lesson: _course.modules[0],
+                        courseId: widget.courseId,
+                        courseTitle: _course.title,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Start Course'),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showFocusPointsPaywall() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Get Focus Points',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onBackground,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use Focus Points to unlock premium courses',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Focus Points packages
+            _buildFocusPointPackage(
+              points: 5,
+              price: '\$30',
+              isPopular: false,
+              onTap: () => _handleFocusPointPurchase(5),
+            ),
+            const SizedBox(height: 12),
+            _buildFocusPointPackage(
+              points: 10,
+              price: '\$50',
+              isPopular: true,
+              onTap: () => _handleFocusPointPurchase(10),
+            ),
+            const SizedBox(height: 12),
+            _buildFocusPointPackage(
+              points: 20,
+              price: '\$75',
+              isPopular: false,
+              onTap: () => _handleFocusPointPurchase(20),
+            ),
+            
+            const SizedBox(height: 32),
+            Text(
+              'Current Balance: ${userProvider.focusPoints} Points',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onBackground,
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildFocusPointPackage({
+    required int points,
+    required String price,
+    required bool isPopular,
+    required VoidCallback onTap,
+  }) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final accentColor = themeProvider.accentColor;
+    
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isPopular 
+            ? accentColor 
+            : Theme.of(context).colorScheme.onBackground.withOpacity(0.1),
+          width: isPopular ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Focus Points Icon and count
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: isPopular 
+                      ? accentColor.withOpacity(0.15)
+                      : Theme.of(context).colorScheme.onBackground.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Points count
+                      Text(
+                        '$points',
+                        style: TextStyle(
+                          color: isPopular ? accentColor : Colors.blue,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      
+                      // Focus points icon (top right)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isPopular 
+                              ? Colors.black.withOpacity(0.7)
+                              : Colors.grey[800],
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: Image.asset(
+                            'assets/icons/focuspointicon-removebg-preview.png',
+                            width: 18,
+                            height: 18,
+                          ),
+                        ),
+                      ),
+                      
+                      if (isPopular)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'BEST',
+                              style: TextStyle(
+                                color: themeProvider.accentTextColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Points and Price Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        price,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isPopular ? accentColor : Theme.of(context).colorScheme.onBackground,
+                          fontWeight: isPopular ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Purchase Button
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isPopular ? accentColor : Colors.grey.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    'Purchase',
+                    style: TextStyle(
+                      color: isPopular ? themeProvider.accentTextColor : Theme.of(context).colorScheme.onBackground,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  void _handleFocusPointPurchase(int points) {
+    // Here you would implement the in-app purchase flow
+    // For now, just show a placeholder message
+    Navigator.of(context).pop(); // Close the bottom sheet
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Processing purchase of $points Focus Points...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    
+    // TODO: Implement actual in-app purchase flow
+    // This would connect to RevenueCat or the appropriate payment processor
   }
 }
 

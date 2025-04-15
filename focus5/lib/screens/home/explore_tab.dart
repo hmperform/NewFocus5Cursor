@@ -23,8 +23,12 @@ import 'articles_list_screen.dart';
 import '../../services/paywall_service.dart';
 import '../explore/focus_area_courses_screen.dart';
 import '../../widgets/article/article_card.dart';
+import '../../widgets/course/course_card.dart';
+import '../../widgets/course/featured_course_card.dart';
 import 'all_coaches_screen.dart';
 import '../../utils/image_utils.dart';
+import '../../utils/app_icons.dart'; // Import the app icons utility
+import '../../widgets/status_bar.dart'; // Import the StatusBar
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -35,6 +39,7 @@ class ExploreTab extends StatefulWidget {
 
 class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  late ScrollController _scrollController;
   bool _isSearching = false;
   String _searchQuery = '';
   bool _isLoading = false;
@@ -62,6 +67,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       setState(() {
@@ -113,6 +119,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   void dispose() {
     _searchController.dispose();
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -125,83 +132,43 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final accentColor = themeProvider.accentColor;
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final secondaryTextColor = themeProvider.isDarkMode 
-        ? Colors.grey 
-        : Colors.grey.shade700;
+    final isDarkMode = themeProvider.isDarkMode;
     
     return Scaffold(
-      backgroundColor: backgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          // App bar with search
-          SliverAppBar(
-            backgroundColor: backgroundColor,
-            expandedHeight: 120,
-            floating: true,
-            pinned: true,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 70, 16, 0),
-                child: Text(
-                  'Explore',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
+      body: Stack(
+        children: [
+          _isLoading 
+            ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    themeProvider.accentColor,
                   ),
                 ),
+              )
+            : ListView(
+                controller: _scrollController,
+                padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
+                children: [
+                  // Featured section
+                  _buildFeaturedSection(),
+                  
+                  // Courses grid
+                  _buildCoursesGrid(),
+                  
+                  // Focus areas
+                  _buildModulesSection(),
+                  
+                  // Coaches section
+                  _buildCoachesSection(),
+                ],
               ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: textColor),
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Search topics, coaches, modules...',
-                      hintStyle: TextStyle(color: secondaryTextColor),
-                      prefixIcon: Icon(Icons.search, color: secondaryTextColor),
-                      suffixIcon: _isSearching
-                          ? IconButton(
-                              icon: Icon(Icons.close, color: secondaryTextColor),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _isSearching = false;
-                                  _searchQuery = '';
-                                });
-                              },
-                            )
-                          : null,
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _isSearching = value.isNotEmpty;
-                        _handleSearch(value);
-                      });
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Main content
-          SliverList(
-            delegate: SliverChildListDelegate(_buildOrderedSections()),
+              
+          // Status Bar
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: StatusBar(),
           ),
         ],
       ),
@@ -858,6 +825,38 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                       ),
                     ),
                   ),
+                
+                // Focus Points Badge
+                if (course.focusPointsCost > 0 && !course.premium)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: themeProvider.accentColor,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppIcons.getFocusPointIcon(
+                            width: 14,
+                            height: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${course.focusPointsCost}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
             Padding(
@@ -1086,6 +1085,92 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             },
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildFeaturedSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context);
+    final contentProvider = Provider.of<ContentProvider>(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Text(
+            'Featured',
+            style: TextStyle(
+              color: themeProvider.textColor,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 220,
+          child: contentProvider.featuredCourses.isEmpty
+              ? Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: contentProvider.featuredCourses.length,
+                  itemBuilder: (context, index) {
+                    final course = contentProvider.featuredCourses[index];
+                    return FeaturedCourseCard(
+                      course: course,
+                      isPurchased: userProvider.hasPurchasedCourse(course.id),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCoursesGrid() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context);
+    final contentProvider = Provider.of<ContentProvider>(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Text(
+            'Explore Courses',
+            style: TextStyle(
+              color: themeProvider.textColor,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        contentProvider.allCourses.isEmpty
+            ? Center(child: CircularProgressIndicator())
+            : GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.8,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: contentProvider.allCourses.length,
+                itemBuilder: (context, index) {
+                  final course = contentProvider.allCourses[index];
+                  return CourseCard(
+                    course: course,
+                    isPurchased: userProvider.hasPurchasedCourse(course.id),
+                  );
+                },
+              ),
       ],
     );
   }

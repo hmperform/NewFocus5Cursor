@@ -24,7 +24,7 @@ class UserProvider extends ChangeNotifier {
   final BadgeService _badgeService = BadgeService();
   final AuthProvider? _authProvider = null;
   final MediaCompletionService _mediaCompletionService = MediaCompletionService();
-  StreamSubscription<User?>? _userSubscription; // To manage the listener
+  StreamSubscription<DocumentSnapshot>? _userSubscription; // To manage the listener
   
   User? _user;
   // List<JournalEntry> _journalEntries = []; // Commented out - Collection doesn't exist
@@ -53,6 +53,16 @@ class UserProvider extends ChangeNotifier {
   int get xpForNextLevel => UserLevelService.getXpForNextLevel(_user?.xp ?? 0);
   double get levelProgress => UserLevelService.getLevelProgress(_user?.xp ?? 0);
   Map<String, int> get lessonProgress => _lessonProgress;
+
+  // Refresh current user data from Firestore
+  Future<void> refreshUser() async {
+    if (_user != null) {
+      print('UserProvider [refreshUser]: Refreshing data for user ID: ${_user!.id}');
+      await loadUserData(_user!.id);
+    } else {
+      print('UserProvider [refreshUser]: Cannot refresh, no current user');
+    }
+  }
 
   void setUser(User user) {
     _user = user;
@@ -144,6 +154,7 @@ class UserProvider extends ChangeNotifier {
     Set<String> processedIds = {}; // Track processed badge IDs
 
     for (var badgeRef in badgeRefs) {
+      print('UserProvider [_fetchBadgeDetails]: Processing reference: $badgeRef');
       final badgeId = badgeRef['id'] as String?;
       //final badgePath = badgeRef['path'] as String?; // Currently unused path
 
@@ -153,6 +164,7 @@ class UserProvider extends ChangeNotifier {
         try {
            print('UserProvider [_fetchBadgeDetails]: Fetching badge document: badges/$badgeId');
           final badgeDoc = await _firestore.collection('badges').doc(badgeId).get();
+          print('UserProvider [_fetchBadgeDetails]: Badge document data: ${badgeDoc.data()}');
           if (badgeDoc.exists) {
              print('UserProvider [_fetchBadgeDetails]: Badge document $badgeId found.');
             final badgeData = AppBadge.fromFirestore(badgeDoc);
@@ -372,7 +384,7 @@ class UserProvider extends ChangeNotifier {
   }
   
   // Spend Focus Points
-  Future<bool> spendFocusPoints(String userId, int amount, String purpose) async {
+  Future<bool> spendFocusPoints(String userId, int amount, String purpose, {String? courseId}) async {
     if (_user == null || _user!.focusPoints < amount) return false;
     
     try {
@@ -389,6 +401,24 @@ class UserProvider extends ChangeNotifier {
         'isAddition': false,
         'timestamp': FieldValue.serverTimestamp(),
       });
+      
+      // If this is a course redemption, add the course to purchased courses
+      if (purpose.startsWith('Course redemption:') || courseId != null) {
+        // Extract courseId from purpose if not directly provided
+        String courseToPurchase = courseId ?? '';
+        
+        if (courseToPurchase.isEmpty && purpose.startsWith('Course redemption:')) {
+          // Try to extract courseId from purpose format "Course redemption: {courseTitle}"
+          // In the future, consider passing courseId directly instead
+          debugPrint('Extracting courseId from purpose: $purpose');
+        }
+        
+        // If we have a direct courseId, use that
+        if (courseId != null && courseId.isNotEmpty) {
+          await addPurchasedCourse(courseId);
+          debugPrint('Added course $courseId to purchased courses');
+        }
+      }
       
       // Update local user
       _user = _user!.copyWith(focusPoints: _user!.focusPoints - amount);
@@ -929,5 +959,134 @@ class UserProvider extends ChangeNotifier {
   Future<void> updateUserField(String field, dynamic value) async {
     if (_user == null) return;
     await _firestore.collection('users').doc(_user!.id).update({field: value});
+  }
+  
+  // Method to add a course to the user's purchased courses
+  Future<bool> addPurchasedCourse(String courseId) async {
+    if (_user == null) return false;
+    
+    try {
+      debugPrint('UserProvider [addPurchasedCourse]: Checking if course $courseId is already purchased');
+      // Check if already purchased to avoid duplicates
+      if (isCoursePurchased(courseId)) {
+        debugPrint('UserProvider [addPurchasedCourse]: Course $courseId is already purchased, skipping');
+        return true; // Already purchased
+      }
+      
+      // Create the course reference object
+      final courseRef = {
+        'id': courseId,
+        'path': 'courses'
+      };
+      debugPrint('UserProvider [addPurchasedCourse]: Adding course ref: $courseRef');
+      
+      // Create updated list
+      List<Map<String, dynamic>> updatedPurchasedCourses = [..._user!.purchasedCourses, courseRef];
+      
+      // Update in Firestore
+      await _firestore.collection('users').doc(_user!.id).update({
+        'purchasedCourses': updatedPurchasedCourses,
+      });
+      debugPrint('UserProvider [addPurchasedCourse]: Successfully updated Firestore');
+      
+      // Update local user state
+      _user = _user!.copyWith(purchasedCourses: updatedPurchasedCourses);
+      notifyListeners();
+      debugPrint('UserProvider [addPurchasedCourse]: Updated local state and notified listeners');
+      
+      return true;
+    } catch (e) {
+      debugPrint('UserProvider [addPurchasedCourse]: Error adding purchased course: $e');
+      return false;
+    }
+  }
+  
+  // Method to check if a course is already purchased
+  bool isCoursePurchased(String courseId) {
+    if (_user == null) {
+      debugPrint('UserProvider [isCoursePurchased]: No user found, returning false');
+      return false;
+    }
+    
+    debugPrint('UserProvider [isCoursePurchased]: Checking for course ID: "$courseId"');
+    debugPrint('UserProvider [isCoursePurchased]: User has ${_user!.purchasedCourses.length} purchased courses');
+    
+    // Debug - print all purchased course IDs
+    for (int i = 0; i < _user!.purchasedCourses.length; i++) {
+      final courseRef = _user!.purchasedCourses[i];
+      debugPrint('UserProvider [isCoursePurchased]: Purchased course #$i: id="${courseRef['id']}", path="${courseRef['path'] ?? 'null'}"');
+    }
+    
+    // Check if any reference in purchasedCourses has the matching courseId
+    final isPurchased = _user!.purchasedCourses.any((courseRef) => 
+      courseRef['id'] == courseId
+    );
+    
+    debugPrint('UserProvider [isCoursePurchased]: Check for "$courseId", result: $isPurchased');
+    return isPurchased;
+  }
+  
+  // Method to check if a course is purchased (alias for isCoursePurchased)
+  bool hasPurchasedCourse(String courseId) {
+    return isCoursePurchased(courseId);
+  }
+  
+  // Method to force purchase the Confidence 101 course (for testing)
+  Future<bool> forceAddConfidence101Course() async {
+    if (_user == null) return false;
+    
+    try {
+      const courseId = "course-001"; // Confidence 101 course ID
+      debugPrint('UserProvider [forceAddConfidence101Course]: Adding course-001 to purchased courses');
+      
+      // Create the course reference object
+      final courseRef = {
+        'id': courseId,
+        'path': 'courses'
+      };
+      
+      // Check if already purchased first
+      if (isCoursePurchased(courseId)) {
+        debugPrint('UserProvider [forceAddConfidence101Course]: Course already in purchased courses! Removing it first.');
+        
+        // Remove the course first (for testing)
+        List<Map<String, dynamic>> filteredCourses = _user!.purchasedCourses
+            .where((course) => course['id'] != courseId)
+            .toList();
+            
+        // Update in Firestore
+        await _firestore.collection('users').doc(_user!.id).update({
+          'purchasedCourses': filteredCourses,
+        });
+        
+        debugPrint('UserProvider [forceAddConfidence101Course]: Removed course from Firestore');
+        
+        // Update local state
+        _user = _user!.copyWith(purchasedCourses: filteredCourses);
+        notifyListeners();
+        
+        // Wait a moment
+        await Future.delayed(Duration(milliseconds: 500));
+      }
+      
+      // Now add it
+      List<Map<String, dynamic>> updatedPurchasedCourses = [..._user!.purchasedCourses, courseRef];
+      
+      // Update in Firestore
+      await _firestore.collection('users').doc(_user!.id).update({
+        'purchasedCourses': updatedPurchasedCourses,
+      });
+      debugPrint('UserProvider [forceAddConfidence101Course]: Successfully updated Firestore');
+      
+      // Update local user state
+      _user = _user!.copyWith(purchasedCourses: updatedPurchasedCourses);
+      notifyListeners();
+      debugPrint('UserProvider [forceAddConfidence101Course]: Updated local state and notified listeners');
+      
+      return true;
+    } catch (e) {
+      debugPrint('UserProvider [forceAddConfidence101Course]: Error: $e');
+      return false;
+    }
   }
 } 

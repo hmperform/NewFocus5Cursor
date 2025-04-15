@@ -27,6 +27,7 @@ class User {
   final int loginStreak;
   final int totalLoginDays;
   final List<Map<String, dynamic>> badgesgranted;
+  final List<Map<String, dynamic>> purchasedCourses;
 
   User({
     required this.id,
@@ -55,6 +56,7 @@ class User {
     this.loginStreak = 0,
     this.totalLoginDays = 0,
     this.badgesgranted = const [],
+    this.purchasedCourses = const [],
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.createdAt = createdAt ?? DateTime.now();
@@ -79,6 +81,26 @@ class User {
       final badgeRef = data['badgesgranted'] as Map<String, dynamic>; 
       if (badgeRef.containsKey('id') && badgeRef.containsKey('path')) {
          grantedBadgesList.add(Map<String, dynamic>.from(badgeRef));
+      }
+    }
+    
+    // Parse purchasedCourses references
+    List<Map<String, dynamic>> purchasedCoursesList = [];
+    if (data['purchasedCourses'] != null && data['purchasedCourses'] is List) {
+       purchasedCoursesList = List<Map<String, dynamic>>.from(
+          (data['purchasedCourses'] as List).map((item) {
+            // Ensure each item is a map before casting
+            if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            }
+            return {}; // Return empty map or handle error if item is not a map
+          }).where((item) => item.isNotEmpty) // Filter out empty maps
+       );
+    } else if (data['purchasedCourses'] != null && data['purchasedCourses'] is Map) {
+      // Handle legacy case if it was ever a single map reference
+      final courseRef = data['purchasedCourses'] as Map<String, dynamic>; 
+      if (courseRef.containsKey('id') && courseRef.containsKey('path')) {
+         purchasedCoursesList.add(Map<String, dynamic>.from(courseRef));
       }
     }
 
@@ -136,6 +158,7 @@ class User {
       loginStreak: data['loginStreak'] ?? 0,
       totalLoginDays: data['totalLoginDays'] ?? 0,
       badgesgranted: grantedBadgesList,
+      purchasedCourses: purchasedCoursesList,
     );
   }
 
@@ -165,6 +188,7 @@ class User {
       if (preferences != null) 'preferences': preferences,
       'loginStreak': loginStreak,
       'totalLoginDays': totalLoginDays,
+      'purchasedCourses': purchasedCourses,
     };
   }
 
@@ -195,6 +219,7 @@ class User {
     int? loginStreak,
     int? totalLoginDays,
     List<Map<String, dynamic>>? badgesgranted,
+    List<Map<String, dynamic>>? purchasedCourses,
   }) {
     return User(
       id: id ?? this.id,
@@ -223,6 +248,7 @@ class User {
       loginStreak: loginStreak ?? this.loginStreak,
       totalLoginDays: totalLoginDays ?? this.totalLoginDays,
       badgesgranted: badgesgranted ?? this.badgesgranted,
+      purchasedCourses: purchasedCourses ?? this.purchasedCourses,
     );
   }
 }
@@ -265,6 +291,20 @@ class AppBadge {
       imageUrl: json['imageUrl'] as String,
       earnedAt: earned,
       xpValue: json['xpValue'] as int,
+    );
+  }
+
+  factory AppBadge.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    print('AppBadge.fromFirestore called with doc ID: ${doc.id}, data: $data');
+    
+    return AppBadge(
+      id: doc.id,
+      name: data['name'] ?? 'Unknown Badge',
+      description: data['description'] ?? 'No description available',
+      imageUrl: data['imageUrl'] ?? '',
+      earnedAt: null, // Badge from Firestore hasn't been earned yet
+      xpValue: data['xpValue'] is int ? data['xpValue'] : 50,
     );
   }
 

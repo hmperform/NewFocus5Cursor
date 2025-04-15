@@ -19,6 +19,7 @@ class Course {
   final List<String>? universityAccess;
   final List<dynamic>? lessons;
   final List<String> learningPoints;
+  final int focusPointsCost;
 
   Course({
     required this.id,
@@ -39,6 +40,7 @@ class Course {
     this.universityAccess,
     this.lessons,
     this.learningPoints = const [],
+    this.focusPointsCost = 0,
   });
 
   factory Course.fromJson(Map<String, dynamic> json) {
@@ -63,6 +65,7 @@ class Course {
           : null,
       lessons: json['lessons'],
       learningPoints: List<String>.from(json['learningPoints'] ?? []),
+      focusPointsCost: json['focusPointsCost'] ?? json['focusPointCost'] ?? 0,
     );
   }
 
@@ -86,6 +89,7 @@ class Course {
       'universityAccess': universityAccess,
       'lessons': lessons,
       'learningPoints': learningPoints,
+      'focusPointsCost': focusPointsCost,
     };
   }
 
@@ -107,6 +111,7 @@ class Course {
       createdAt: DateTime.now(),
       universityExclusive: false,
       learningPoints: [],
+      focusPointsCost: 0,
     );
   }
 
@@ -141,6 +146,7 @@ class Course {
       universityExclusive: data['universityExclusive'] ?? false,
       universityAccess: data['universityAccess'],
       learningPoints: List<String>.from(data['learningPoints'] ?? []),
+      focusPointsCost: data['focusPointsCost'] ?? data['focusPointCost'] ?? 0,
     );
   }
 } 

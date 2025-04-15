@@ -17,6 +17,7 @@ class Course {
   final List<Lesson> _lessons;
   final List<String> learningPoints;
   final List<String> universityCodes;
+  final int focusPointsCost;
 
   String get creatorName => coachName;
   String get creatorId => coachId;
@@ -41,6 +42,7 @@ class Course {
     List<Lesson>? lessons,
     this.learningPoints = const [],
     this.universityCodes = const [],
+    this.focusPointsCost = 0,
   }) : _lessons = lessons ?? [];
 
   List<Lesson> get lessons => _lessons;
@@ -65,6 +67,7 @@ class Course {
     List<Lesson>? lessonsList,
     List<String>? learningPoints,
     List<String>? universityCodes,
+    int? focusPointsCost,
   }) {
     return Course(
       id: id ?? this.id,
@@ -85,6 +88,7 @@ class Course {
       lessons: lessonsList ?? this._lessons,
       learningPoints: learningPoints ?? this.learningPoints,
       universityCodes: universityCodes ?? this.universityCodes,
+      focusPointsCost: focusPointsCost ?? this.focusPointsCost,
     );
   }
 
@@ -107,6 +111,7 @@ class Course {
     lessons: [],
     learningPoints: [],
     universityCodes: [],
+    focusPointsCost: 0,
   );
 
   // ... rest of the class stays the same ...

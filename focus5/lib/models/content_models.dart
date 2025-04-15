@@ -146,6 +146,7 @@ class Course {
   final bool featured;
   final bool premium;
   final List<String> learningPoints;
+  final int focusPointsCost;
 
   // Getter for modules to maintain backward compatibility
   List<Lesson> get modules => lessonsList;
@@ -171,6 +172,7 @@ class Course {
     this.featured = false,
     this.premium = false,
     this.learningPoints = const [],
+    required this.focusPointsCost,
   });
 
   // Empty constructor for Course
@@ -194,7 +196,8 @@ class Course {
     universityAccess = null,
     featured = false,
     premium = false,
-    learningPoints = [];
+    learningPoints = [],
+    focusPointsCost = 0;
 
   factory Course.fromJson(Map<String, dynamic> json) {
     // This list will hold the parsed Lesson objects
@@ -291,6 +294,7 @@ class Course {
       featured: json['featured'] as bool? ?? false,
       premium: json['premium'] as bool? ?? false,
       learningPoints: (json['learningPoints'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+      focusPointsCost: (json['focusPointsCost'] as num?)?.toInt() ?? (json['focusPointCost'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -317,6 +321,7 @@ class Course {
       'featured': featured,
       'premium': premium,
       'learningPoints': learningPoints,
+      'focusPointsCost': focusPointsCost,
     };
   }
 }
