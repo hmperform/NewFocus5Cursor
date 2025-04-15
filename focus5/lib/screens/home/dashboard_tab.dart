@@ -261,6 +261,8 @@ class _DashboardTabState extends State<DashboardTab> {
     return DailyStreakWidget(
       currentStreak: user.streak,
       longestStreak: user.longestStreak,
+      lastLoginDate: user.lastLoginDate,
+      lastActive: user.lastActive,
     );
   }
 
