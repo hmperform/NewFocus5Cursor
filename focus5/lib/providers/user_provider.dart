@@ -211,6 +211,8 @@ class UserProvider extends ChangeNotifier {
     if (_user != null && badgeRefIds.length == currentBadgeIds.length && 
         badgeRefIds.every((id) => currentBadgeIds.contains(id))) {
       print('UserProvider [_fetchBadgeDetails]: Badge IDs unchanged, skipping fetch');
+      _isLoading = false;  // Reset loading state
+      notifyListeners();   // Notify UI to update
       return;
     }
 
