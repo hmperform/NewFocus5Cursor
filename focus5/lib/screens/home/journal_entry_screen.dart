@@ -6,6 +6,7 @@ import '../../models/journal_model.dart';
 import '../../providers/journal_provider.dart';
 import '../../widgets/journal/journal_tag_selector.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/auth_provider.dart';
 
 class JournalEntryScreen extends StatefulWidget {
   final JournalEntry? existingEntry;
@@ -29,6 +30,7 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   String _prompt = '';
   bool _isEditing = false;
   bool _isSaving = false;
+  bool _isLoadingPrompt = false;
   
   @override
   void initState() {
@@ -47,11 +49,47 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
       _selectedDate = DateTime.now();
       
       // Get a random prompt for a new entry
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final journalProvider = Provider.of<JournalProvider>(context, listen: false);
-        setState(() {
-          _prompt = journalProvider.getRandomPrompt();
-        });
+      _fetchRandomPrompt();
+    }
+  }
+  
+  Future<void> _fetchRandomPrompt() async {
+    setState(() {
+      _isLoadingPrompt = true;
+    });
+    
+    try {
+      final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+      final newPrompt = await journalProvider.getRandomPrompt();
+      
+      setState(() {
+        _prompt = newPrompt;
+        _isLoadingPrompt = false;
+      });
+    } catch (e) {
+      setState(() {
+        _prompt = "What's on your mind today?";
+        _isLoadingPrompt = false;
+      });
+    }
+  }
+
+  Future<void> _fetchPromptForCategory(String category) async {
+    setState(() {
+      _isLoadingPrompt = true;
+    });
+    
+    try {
+      final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+      final newPrompt = await journalProvider.getPromptByCategory(category);
+      
+      setState(() {
+        _prompt = newPrompt;
+        _isLoadingPrompt = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingPrompt = false;
       });
     }
   }
@@ -268,68 +306,69 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onBackground;
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Prompt',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: accentColor.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline,
+                color: accentColor,
+                size: 20,
               ),
-            ),
-            if (!_isEditing)
-              TextButton(
-                onPressed: _getNewPrompt,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.refresh,
-                      color: accentColor,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'New Prompt',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Text(
+                'Prompt',
+                style: TextStyle(
+                  color: accentColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: BorderRadius.circular(12),
+              const Spacer(),
+              if (!_isEditing) 
+                IconButton(
+                  icon: Icon(
+                    Icons.refresh,
+                    color: accentColor,
+                    size: 20,
+                  ),
+                  onPressed: _isLoadingPrompt ? null : _fetchRandomPrompt,
+                ),
+            ],
           ),
-          child: Text(
-            _prompt,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          _isLoadingPrompt
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              : Text(
+                  _prompt,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+        ],
+      ),
     );
-  }
-  
-  void _getNewPrompt() {
-    final journalProvider = Provider.of<JournalProvider>(context, listen: false);
-    setState(() {
-      _prompt = journalProvider.getRandomPrompt();
-    });
   }
   
   Widget _buildContentEditor() {
@@ -383,6 +422,14 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         setState(() {
           _selectedTags = tags;
         });
+        
+        // If mood tags are selected, possibly update prompt
+        if (tags.isNotEmpty && !_isEditing) {
+          final lastAddedTag = tags.last;
+          if (lastAddedTag.startsWith('#')) {
+            _fetchPromptForCategory(lastAddedTag);
+          }
+        }
       },
     );
   }
@@ -488,64 +535,78 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
   
   Future<void> _saveEntry() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_contentController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please write something in your journal entry'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
+    // Get auth status to ensure we have a real user
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.currentUser?.id ?? 'default_user';
     
     setState(() {
       _isSaving = true;
     });
     
     final journalProvider = Provider.of<JournalProvider>(context, listen: false);
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final content = _contentController.text.trim();
     
-    bool success = false;
-    
-    if (_isEditing && widget.existingEntry != null) {
-      // Update existing entry
-      final updatedEntry = widget.existingEntry!.copyWith(
-        prompt: _prompt,
-        content: content,
-        date: _selectedDate,
-        mood: _selectedMood,
-        tags: _selectedTags,
-      );
-      
-      success = await journalProvider.updateEntry(updatedEntry);
-    } else {
-      // Create new entry
-      final newEntry = await journalProvider.addEntry(
-        prompt: _prompt,
-        content: content,
-        date: _selectedDate,
-        mood: _selectedMood,
-        tags: _selectedTags,
-      );
-      
-      success = newEntry != null;
-    }
-    
-    if (mounted) {
-      if (success) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Journal entry saved'),
-            backgroundColor: surfaceColor,
-          ),
+    try {
+      if (_isEditing) {
+        // Update existing entry
+        final updatedEntry = widget.existingEntry!.copyWith(
+          prompt: _prompt,
+          content: _contentController.text.trim(),
+          date: _selectedDate,
+          mood: _selectedMood,
+          tags: _selectedTags,
         );
+        
+        final success = await journalProvider.updateEntry(updatedEntry);
+        
+        if (success) {
+          Navigator.pop(context);
+        } else {
+          _showErrorMessage('Failed to update journal entry');
+        }
       } else {
+        // Add new entry
+        final newEntry = await journalProvider.addEntry(
+          prompt: _prompt,
+          content: _contentController.text.trim(),
+          date: _selectedDate,
+          mood: _selectedMood,
+          tags: _selectedTags,
+        );
+        
+        if (newEntry != null) {
+          Navigator.pop(context);
+        } else {
+          _showErrorMessage('Failed to save journal entry');
+        }
+      }
+    } catch (e) {
+      _showErrorMessage('An error occurred: ${e.toString()}');
+    } finally {
+      if (mounted) {
         setState(() {
           _isSaving = false;
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(journalProvider.error ?? 'Failed to save entry'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
       }
     }
+  }
+  
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 } 

@@ -77,7 +77,18 @@ void main() async {
         ChangeNotifierProvider(create: (context) => ContentProvider()),
         ChangeNotifierProvider(create: (context) => MediaProvider()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
-        ChangeNotifierProvider(create: (context) => JournalProvider('default_user')),
+        ChangeNotifierProxyProvider<AuthProvider, JournalProvider>(
+          // Create a new JournalProvider with the default user
+          create: (context) => JournalProvider('default_user'),
+          // Update when auth state changes
+          update: (context, authProvider, previousJournalProvider) {
+            // Get current user ID or use default
+            final userId = authProvider.currentUser?.id ?? 'default_user';
+            
+            // Always create a new provider when auth changes
+            return JournalProvider(userId);
+          },
+        ),
         ChangeNotifierProvider(create: (context) => BasicVideoService()),
         ChangeNotifierProvider(create: (context) => CoachProvider()),
         ChangeNotifierProvider(create: (context) => BadgeProvider()),

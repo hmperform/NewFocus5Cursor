@@ -40,6 +40,11 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadEntry();
       });
+    } else {
+      // Fetch a random prompt for new entries
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchRandomPrompt();
+      });
     }
   }
   
@@ -50,10 +55,27 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
     if (entry != null) {
       _initialEntry = entry;
       _contentController.text = entry.content;
+      _promptController.text = entry.prompt;
       _selectedMood = entry.mood;
       _tags.addAll(entry.tags);
       _isFavorite = entry.isFavorite;
       setState(() {});
+    }
+  }
+  
+  Future<void> _fetchRandomPrompt() async {
+    try {
+      final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+      final prompt = await journalProvider.getRandomPrompt();
+      
+      setState(() {
+        _promptController.text = prompt;
+      });
+    } catch (e) {
+      // If there's an error, use a default prompt
+      setState(() {
+        _promptController.text = "What's on your mind today?";
+      });
     }
   }
 
@@ -102,6 +124,8 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
             const SizedBox(height: 16),
             _buildMoodSelector(),
             const SizedBox(height: 24),
+            _buildPromptField(),
+            const SizedBox(height: 16),
             _buildContentField(),
             const SizedBox(height: 24),
             _buildTagsSection(),
@@ -210,6 +234,53 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
     );
   }
 
+  Widget _buildPromptField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Prompt',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const Spacer(),
+            if (!_isEditing)
+              IconButton(
+                icon: Icon(
+                  Icons.refresh,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                onPressed: _fetchRandomPrompt,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextFormField(
+            controller: _promptController,
+            style: Theme.of(context).textTheme.bodyMedium,
+            decoration: const InputDecoration(
+              hintText: 'What are you thinking about?',
+              border: InputBorder.none,
+            ),
+            maxLines: 2,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildContentField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,33 +379,74 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   }
 
   void _saveEntry() {
-    if (_formKey.currentState!.validate()) {
-      final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+    if (_formKey.currentState == null || !_formKey.currentState!.validate()) {
+      return;
+    }
+    
+    final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+    final content = _contentController.text.trim();
+    
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please write something before saving')),
+      );
+      return;
+    }
+    
+    // Save to Firestore
+    if (_isEditing && _initialEntry != null) {
+      // Update existing entry
+      final updatedEntry = _initialEntry!.copyWith(
+        content: content,
+        mood: _selectedMood,
+        tags: _tags,
+        isFavorite: _isFavorite,
+        updatedAt: DateTime.now(),
+      );
       
-      if (_isEditing && _initialEntry != null) {
-        final updatedEntry = _initialEntry!.copyWith(
-          content: _contentController.text.trim(),
-          mood: _selectedMood,
-          tags: _tags,
-          isFavorite: _isFavorite,
-        );
-        
-        journalProvider.updateEntry(updatedEntry);
-      } else {
-        journalProvider.addEntry(
-          prompt: _promptController.text.trim(),
-          content: _contentController.text.trim(),
-          date: DateTime.now(),
-          mood: _selectedMood,
-          tags: _tags,
-        );
-      }
-      
-      Navigator.of(context).pop();
+      journalProvider.updateEntry(updatedEntry).then((success) {
+        if (success) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Journal entry updated')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(journalProvider.error ?? 'Failed to update entry')),
+          );
+        }
+      });
+    } else {
+      // Create new entry
+      final now = DateTime.now();
+      final prompt = _promptController.text.trim().isNotEmpty 
+          ? _promptController.text.trim() 
+          : 'Journal Entry';
+          
+      journalProvider.addEntry(
+        prompt: prompt,
+        content: content,
+        date: now,
+        mood: _selectedMood,
+        tags: _tags,
+      ).then((entry) {
+        if (entry != null) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Journal entry saved')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(journalProvider.error ?? 'Failed to save entry')),
+          );
+        }
+      });
     }
   }
-
+  
   void _confirmDelete() {
+    if (_initialEntry == null) return;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -342,23 +454,41 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         content: const Text('Are you sure you want to delete this journal entry?'),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              final journalProvider = Provider.of<JournalProvider>(context, listen: false);
-              journalProvider.deleteEntry(widget.entryId!);
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(); // Return to journal screen
+              Navigator.pop(context); // Close dialog
+              _deleteEntry();
             },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
+  }
+  
+  void _deleteEntry() {
+    if (_initialEntry == null) return;
+    
+    final journalProvider = Provider.of<JournalProvider>(context, listen: false);
+    
+    journalProvider.deleteEntry(_initialEntry!.id).then((success) {
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Journal entry deleted')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(journalProvider.error ?? 'Failed to delete entry')),
+        );
+      }
+    });
   }
 
   String _formatDate(DateTime date) {

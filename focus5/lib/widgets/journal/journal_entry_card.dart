@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/journal_model.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/journal_provider.dart';
 import '../../constants/theme.dart';
 
 class JournalEntryCard extends StatelessWidget {
@@ -70,103 +71,114 @@ class JournalEntryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       color: surfaceColor,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Date circle
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: themeProvider.isDarkMode 
-                          ? const Color(0xFF2A2A2A) 
-                          : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          DateFormat('d').format(entry.date),
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Date circle
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: themeProvider.isDarkMode 
+                              ? const Color(0xFF2A2A2A) 
+                              : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        Text(
-                          DateFormat('MMM').format(entry.date),
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Entry content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              DateFormat('EEEE').format(entry.date),
+                              DateFormat('d').format(entry.date),
                               style: TextStyle(
-                                color: textColor,
+                                color: accentColor,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 16,
                               ),
                             ),
-                            const Spacer(),
                             Text(
-                              entry.mood.emoji,
-                              style: const TextStyle(
-                                fontSize: 16,
+                              DateFormat('MMM').format(entry.date),
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 12,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          entry.prompt,
-                          style: TextStyle(
-                            color: accentColor,
-                            fontSize: 14,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 12),
+                      // Entry content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  DateFormat('EEEE').format(entry.date),
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  entry.mood.emoji,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              entry.prompt,
+                              style: TextStyle(
+                                color: accentColor,
+                                fontSize: 14,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            contentWidget,
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        contentWidget,
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                  if (entry.tags.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: entry.tags.map((tag) => _buildTagChip(tag, context)).toList(),
+                      ),
+                    ),
                 ],
               ),
-              if (entry.tags.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: entry.tags.map((tag) => _buildTagChip(tag, context)).toList(),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
+          // Favorite button
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildFavoriteButton(context),
+          ),
+        ],
       ),
     );
   }
@@ -256,6 +268,27 @@ class JournalEntryCard extends StatelessWidget {
       ),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildFavoriteButton(BuildContext context) {
+    return Consumer<JournalProvider>(
+      builder: (context, journalProvider, _) {
+        return InkWell(
+          onTap: () {
+            journalProvider.toggleFavorite(entry.id);
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Icon(
+              entry.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: entry.isFavorite ? Colors.red : Colors.grey,
+              size: 20,
+            ),
+          ),
+        );
+      },
     );
   }
 } 

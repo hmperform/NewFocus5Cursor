@@ -28,10 +28,15 @@ class _JournalTabState extends State<JournalTab> {
   @override
   void initState() {
     super.initState();
-    // Add a post-frame callback to add sample entries after the first build
+    // Add a post-frame callback to fetch entries after the first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final journalProvider = Provider.of<JournalProvider>(context, listen: false);
-      journalProvider.addSampleEntries(); // Add sample entries for demonstration
+      
+      // Refresh entries from Firestore
+      journalProvider.refreshEntries();
+      
+      // Add sample entries if needed (for demo)
+      journalProvider.addSampleEntries();
     });
   }
 
