@@ -12,6 +12,7 @@ import '../../utils/basic_video_helper.dart';
 import '../../utils/app_icons.dart';
 import '../../services/media_completion_service.dart';
 import '../../services/firebase_content_service.dart';
+import '../lessons/lesson_audio_player_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -86,6 +87,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final accentColor = themeProvider.accentColor;
+    final userProvider = Provider.of<UserProvider>(context, listen: true);
 
     if (_isLoading) {
       return Scaffold(
@@ -496,16 +498,44 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => VideoPlayerScreen(
-                        lesson: lesson,
-                        courseId: widget.courseId,
-                        courseTitle: _course.title,
-                      ),
-                    ),
-                  );
+                  if (lesson.type == LessonType.video) {
+                    if (lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty) {
+                       Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VideoPlayerScreen(
+                            lesson: lesson,
+                            courseId: widget.courseId,
+                            courseTitle: _course.title,
+                          ),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Video not available for this lesson.')),
+                      );
+                    }
+                  } else if (lesson.type == LessonType.audio) {
+                    if (lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LessonAudioPlayerScreen(
+                            lesson: lesson,
+                            courseTitle: _course.title,
+                          ),
+                        ),
+                      );
+                    } else {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Audio not available for this lesson.')),
+                      );
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('This lesson type (${lesson.type.name}) cannot be played directly.')),
+                    );
+                  }
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -520,8 +550,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           color: isCompleted ? Colors.green : accentColor,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: isCompleted 
-                          ? const Icon(Icons.check, color: Colors.white) 
+                        child: isCompleted
+                          ? const Icon(Icons.check, color: Colors.white)
                           : Text(
                               '${index + 1}',
                               style: TextStyle(
@@ -602,10 +632,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             if (isCompleted) {
                               // Lesson is already completed, do nothing
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('This lesson is already completed!'),
+                                const SnackBar(
+                                  content: Text('This lesson is already completed!'),
                                   backgroundColor: Colors.green,
-                                  duration: const Duration(seconds: 2),
+                                  duration: Duration(seconds: 2),
                                 ),
                               );
                             } else {
@@ -614,10 +644,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                               // Only show success message if toggle was successful
                               if (success && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Lesson marked as completed!'),
+                                  const SnackBar(
+                                    content: Text('Lesson marked as completed!'),
                                     backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 2),
+                                    duration: Duration(seconds: 2),
                                   ),
                                 );
                               }

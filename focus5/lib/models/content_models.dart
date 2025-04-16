@@ -25,6 +25,7 @@ class Lesson {
   final List<String> categories;
   final bool premium;
   final Map<String, dynamic>? courseId;
+  final List<String>? slideshowImages;
   // Add a convenience getter to access the course ID string
   String get courseIdString => courseId != null && courseId!.containsKey('id') ? courseId!['id'] as String : '';
   // Add a getter to create a DocumentReference from the courseId map
@@ -48,6 +49,7 @@ class Lesson {
     this.categories = const [],
     this.premium = false,
     required this.courseId,
+    this.slideshowImages,
   });
 
   factory Lesson.fromJson(Map<String, dynamic> json) {
@@ -101,6 +103,7 @@ class Lesson {
       categories: (json['categories'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       premium: json['premium'] as bool? ?? false,
       courseId: parsedCourseId,
+      slideshowImages: (json['slideshowImages'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
   }
 
@@ -121,6 +124,7 @@ class Lesson {
       'categories': categories,
       'premium': premium,
       'courseId': courseId,
+      'slideshowImages': slideshowImages,
     };
   }
 }
@@ -441,8 +445,13 @@ class DailyAudio {
   }
 }
 
-// New class to handle both audio and video content
-enum MediaType { audio, video }
+// Enum for Media Type (can be expanded)
+enum MediaType {
+  video,
+  audio,
+  article,
+  quiz // Add other types as needed
+}
 
 class MediaItem {
   final String id;
