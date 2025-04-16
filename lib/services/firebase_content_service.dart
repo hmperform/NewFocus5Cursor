@@ -459,6 +459,7 @@ List _sanitizeList(List list) {
 class FirebaseContentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Fix Article creation
   Future<List<Article>> getArticles({String? universityCode}) async {
@@ -488,5 +489,131 @@ class FirebaseContentService {
       debugPrint('Error getting articles: $e');
       return [];
     }
+  }
+
+  // Get all courses (filtered by university access if applicable)
+  Future<List<Course>> getCourses({String? universityCode}) async {
+    // ... existing implementation ...
+  }
+
+  // Get a specific course by ID
+  Future<Course?> getCourseById(String courseId) async {
+    try {
+      debugPrint('Loading course $courseId from Firebase...');
+      final doc = await _firestore.collection('courses').doc(courseId).get();
+      
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        data = _sanitizeDocumentData(data); // Sanitize data
+        
+        // Fetch lessons (consider reusing logic from getCourses)
+        List<Lesson> lessons = await _fetchLessonsForCourse(doc.id);
+        
+        return Course.fromJson({...data, 'lessonsList': lessons}); // Ensure Course.fromJson handles lessonsList
+      } else {
+        debugPrint('Course $courseId not found in Firebase.');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Error getting course $courseId: $e');
+      return null;
+    }
+  }
+
+  // <<< ADDED: Method to get multiple courses by their IDs >>>
+  Future<List<Course>> getCoursesByIds(List<String> courseIds) async {
+    if (courseIds.isEmpty) {
+      return [];
+    }
+    
+    // Firestore 'whereIn' queries are limited to 30 elements per query.
+    // Split the list into chunks of 30.
+    List<Course> fetchedCourses = [];
+    List<List<String>> chunks = [];
+    for (var i = 0; i < courseIds.length; i += 30) {
+       chunks.add(
+           courseIds.sublist(i, i + 30 > courseIds.length ? courseIds.length : i + 30)
+       );
+    }
+
+    try {
+      for (var chunk in chunks) {
+          debugPrint('FirebaseContentService: Fetching courses chunk: $chunk');
+          final querySnapshot = await _firestore
+              .collection('courses')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
+
+          debugPrint('Fetched ${querySnapshot.docs.length} courses for chunk.');
+
+          for (var doc in querySnapshot.docs) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            data = _sanitizeDocumentData(data); // Sanitize
+            List<Lesson> lessons = await _fetchLessonsForCourse(doc.id); // Fetch lessons
+            fetchedCourses.add(Course.fromJson({...data, 'lessonsList': lessons})); // Combine
+          }
+      }
+      return fetchedCourses;
+    } catch (e) {
+      debugPrint('Error getting courses by IDs: $e');
+      return []; // Return empty list on error
+    }
+  }
+
+  // <<< ADDED: Helper to fetch lessons (extracted from getCourses) >>>
+  Future<List<Lesson>> _fetchLessonsForCourse(String courseId) async {
+     List<Lesson> lessons = [];
+     try {
+        // Try new 'lessons' subcollection first
+        QuerySnapshot lessonsSnapshot = await _firestore
+            .collection('courses')
+            .doc(courseId)
+            .collection('lessons')
+            .orderBy('sortOrder') 
+            .get();
+            
+        if (lessonsSnapshot.docs.isNotEmpty) {
+            lessons = lessonsSnapshot.docs.map((lessonDoc) {
+              Map<String, dynamic> lessonData = lessonDoc.data() as Map<String, dynamic>;
+              lessonData = _sanitizeDocumentData(lessonData);
+              return Lesson.fromJson(lessonData);
+            }).toList();
+        } else {
+           // Fallback to old 'modules' subcollection
+           debugPrint('No lessons in \'lessons\' subcollection for $courseId, trying \'modules\'');
+           QuerySnapshot moduleSnapshot = await _firestore
+              .collection('courses')
+              .doc(courseId)
+              .collection('modules') 
+              .orderBy('sortOrder') 
+              .get();
+           if (moduleSnapshot.docs.isNotEmpty) {
+              lessons = moduleSnapshot.docs.map((moduleDoc) {
+                 Map<String, dynamic> moduleData = moduleDoc.data() as Map<String, dynamic>;
+                 moduleData = _sanitizeDocumentData(moduleData);
+                 if (!moduleData.containsKey('courseId')) {
+                   moduleData['courseId'] = courseId;
+                 }
+                 return Lesson.fromJson(moduleData);
+              }).toList();
+           }
+        }
+      } catch (lessonsError) {
+         debugPrint('Error loading lessons/modules for course $courseId: $lessonsError');
+      }
+      return lessons;
+  }
+
+  // Helper function to sanitize document data (handle DocumentReference, etc.)
+  Map<String, dynamic> _sanitizeDocumentData(Map<String, dynamic> data) {
+    // ... (Keep your existing implementation or add one if needed)
+    // Example: Convert DocumentReference to String ID
+    data.forEach((key, value) {
+      if (value is DocumentReference) {
+        data[key] = value.id; // Or handle differently if needed
+      }
+      // Add more type checks/conversions as necessary
+    });
+    return data;
   }
 } 

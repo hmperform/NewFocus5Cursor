@@ -407,4 +407,38 @@ class ContentProvider with ChangeNotifier {
       return []; // Return empty list on error
     }
   }
+
+  // Method to get multiple courses by their IDs
+  Future<List<Course>> getCoursesByIds(List<String> courseIds) async {
+    if (courseIds.isEmpty) {
+      return []; // Return empty list if no IDs are provided
+    }
+    try {
+      // First, check local cache
+      final localCourses = _courses.where((c) => courseIds.contains(c.id)).toList();
+      final foundIds = localCourses.map((c) => c.id).toSet();
+      final missingIds = courseIds.where((id) => !foundIds.contains(id)).toList();
+
+      List<Course> fetchedCourses = [];
+      if (missingIds.isNotEmpty) {
+        // Fetch missing courses from Firebase
+        debugPrint('ContentProvider: Fetching missing courses from Firebase: $missingIds');
+        fetchedCourses = await _contentService.getCoursesByIds(missingIds);
+        // Optionally, add fetched courses to local cache (_courses) if desired
+        // _courses.addAll(fetchedCourses);
+        // notifyListeners(); // If adding to cache
+      } else {
+        debugPrint('ContentProvider: All courses found in local cache.');
+      }
+
+      // Combine local and fetched courses
+      return [...localCourses, ...fetchedCourses];
+
+    } catch (e) {
+      _errorMessage = 'Failed to get courses by IDs: ${e.toString()}';
+      debugPrint('Error in getCoursesByIds: $e');
+      notifyListeners(); // Notify about the error
+      return []; // Return empty list on error
+    }
+  }
 } 
