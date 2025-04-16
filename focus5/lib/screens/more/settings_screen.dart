@@ -7,6 +7,7 @@ import '../settings/firebase_setup_screen.dart';
 import '../settings/data_migration_screen.dart';
 import '../settings/admin_management_screen.dart';
 import '../../utils/migrate_modules_to_lessons.dart';
+import '../../providers/user_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -214,6 +215,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       Navigator.pushNamed(context, '/firebase_setup');
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _buildSettingCard(
+                    context: context,
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    icon: Icons.local_fire_department,
+                    title: 'Set Streak Date to Yesterday',
+                    subtitle: 'For testing streak functionality',
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () {
+                      final userProvider = Provider.of<UserProvider>(context, listen: false);
+                      if (userProvider.user != null) {
+                        userProvider.setLastCompletionToYesterday(userProvider.user!.id)
+                          .then((_) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Last completion date set to yesterday'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          })
+                          .catchError((e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          });
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No user logged in'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      }
                     },
                   ),
                   

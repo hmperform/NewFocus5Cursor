@@ -55,6 +55,7 @@ class _ProfileTabState extends State<ProfileTab> {
     completedAudios: ['audio1', 'audio2', 'audio3'],
     lastActive: DateTime.now(),
     createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    lastCompletionDate: DateTime.now(),
   );
 
   Future<void> _launchCalendly(String url) async {

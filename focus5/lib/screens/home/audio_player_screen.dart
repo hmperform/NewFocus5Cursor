@@ -4,10 +4,14 @@ import 'package:just_audio/just_audio.dart' hide AudioSource;
 import 'package:transparent_image/transparent_image.dart';
 import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/user_provider.dart';
-import 'package:focus5/services/media_completion_service.dart';
 import 'dart:math' as math;
 import 'package:focus5/providers/audio_provider.dart';
 import '../post_completion_screen.dart';
+import 'package:focus5/providers/auth_provider.dart';
+import '../../widgets/streak_celebration_popup.dart';
+import 'package:focus5/utils/level_utils.dart';
+import '../level_up_screen.dart';
+import '../../services/user_level_service.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final DailyAudio audio;
@@ -29,6 +33,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   int _skipCount = 0;
   bool _isCompleted = false;
   double _waveformProgress = 0.0;
+  bool _isTrackingCompletion = false;
 
   final List<String> _slideshowImages = [];
 
@@ -106,11 +111,117 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
     });
   }
 
-  void _markAsCompleted() {
-    final userId = Provider.of<UserProvider>(context, listen: false).user?.id;
-    if (userId != null) {
-      final mediaCompletionService = MediaCompletionService();
-      mediaCompletionService.markMediaCompleted(userId, widget.audio.id, MediaType.audio);
+  Future<void> _markAsCompleted() async {
+    if (_isTrackingCompletion) return;
+    _isTrackingCompletion = true;
+    
+    debugPrint('[AudioPlayerScreen] Attempting to mark audio as completed: ${widget.audio.id}');
+
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.currentUser?.id ?? '';
+      
+      debugPrint('[AudioPlayerScreen] Retrieved userId: $userId');
+      
+      if (userId.isEmpty) {
+        debugPrint('[AudioPlayerScreen] Cannot mark as completed - user ID is empty.');
+        _isTrackingCompletion = false; // Ensure flag is reset
+        return;
+      }
+      
+      // --- Capture state BEFORE completion ---
+      final userBeforeCompletion = userProvider.user;
+      final initialStreak = userBeforeCompletion?.streak ?? 0;
+      final initialLevel = UserLevelService.getUserLevel(userBeforeCompletion?.xp ?? 0);
+      final lastCompletionDate = userBeforeCompletion?.lastCompletionDate;
+
+      // --- Track completion ---
+      debugPrint('[AudioPlayerScreen] Calling userProvider.trackAudioCompletion...');
+      await userProvider.trackAudioCompletion(userId, widget.audio.id);
+      debugPrint('[AudioPlayerScreen] userProvider.trackAudioCompletion finished.');
+
+      // --- Check for level up AFTER completion ---
+      final userAfterCompletion = userProvider.user; // Get potentially updated user data
+      if (userAfterCompletion != null) {
+        final currentLevel = UserLevelService.getUserLevel(userAfterCompletion.xp);
+        debugPrint('[AudioPlayerScreen] Level Check: Initial=$initialLevel, Current=$currentLevel');
+        if (currentLevel > initialLevel) {
+          debugPrint('[AudioPlayerScreen] Level Up detected! Showing LevelUpScreen.');
+          // Use a Future.delayed to avoid navigation during build/state update
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted && context.mounted) {
+               Navigator.of(context).pushReplacement( // Use pushReplacement to avoid back button issues
+                MaterialPageRoute(
+                  builder: (context) => LevelUpScreen(newLevel: currentLevel),
+                ),
+              );
+              // Return here to prevent showing streak popup if level up happened
+              _isTrackingCompletion = false; 
+              return; 
+            }
+          });
+           // If we're navigating to level up, don't show streak immediately
+           _isTrackingCompletion = false;
+           return;
+        }
+      } else {
+         debugPrint('[AudioPlayerScreen] Warning: Could not get user data after completion for level check.');
+      }
+
+      // --- Check for streak celebration AFTER completion (only if no level up) ---
+      final currentStreak = userAfterCompletion?.streak ?? 0;
+      debugPrint('[AudioPlayerScreen] Streak Check: Initial=$initialStreak, Current=$currentStreak');
+      
+      bool shouldShowStreakPopup = false;
+      if (currentStreak > initialStreak) {
+        // Streak increased, now check if it's the first completion today
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        
+        if (lastCompletionDate == null) {
+          shouldShowStreakPopup = true; // First completion ever
+          debugPrint('[AudioPlayerScreen] Streak increased, first completion ever. Should show popup.');
+        } else {
+          final lastCompletionDay = DateTime(lastCompletionDate.year, lastCompletionDate.month, lastCompletionDate.day);
+           if (lastCompletionDay.isBefore(today)) {
+             shouldShowStreakPopup = true; // First completion for today
+             debugPrint('[AudioPlayerScreen] Streak increased, first completion today. Should show popup.');
+           } else {
+             debugPrint('[AudioPlayerScreen] Streak increased, but already completed today. Not showing popup.');
+           }
+        }
+      } else {
+         debugPrint('[AudioPlayerScreen] Streak did not increase ($initialStreak -> $currentStreak). Not showing popup.');
+      }
+
+      // Show streak celebration if conditions met AND no post-completion screens
+      if (shouldShowStreakPopup &&
+          (widget.audio.postCompletionScreens == null ||
+           widget.audio.postCompletionScreens!['screenschosen'] == null ||
+           (widget.audio.postCompletionScreens!['screenschosen'] as List).isEmpty)) {
+        
+        debugPrint('[AudioPlayerScreen] Checking conditions for streak celebration: currentStreak=$currentStreak, mounted=$mounted');
+
+        if (mounted && context.mounted) {
+          debugPrint('[AudioPlayerScreen] Conditions met. Scheduling streak celebration popup.');
+          // Show streak celebration with slight delay
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && context.mounted) {
+              debugPrint('[AudioPlayerScreen] Showing streak celebration popup with count: $currentStreak');
+              context.showStreakCelebration(streakCount: currentStreak);
+            }
+          });
+        }
+      }
+      
+      debugPrint('[AudioPlayerScreen] Successfully marked as completed.');
+    } catch (e, stackTrace) {
+      debugPrint('[AudioPlayerScreen] CATCH BLOCK: Error marking as completed: $e');
+      debugPrint('[AudioPlayerScreen] StackTrace: $stackTrace');
+    } finally {
+      _isTrackingCompletion = false;
+      debugPrint('[AudioPlayerScreen] Exiting _markAsCompleted method.');
     }
   }
 

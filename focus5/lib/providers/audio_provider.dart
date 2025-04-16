@@ -153,6 +153,10 @@ class AudioProvider extends ChangeNotifier {
     AudioSource sourceType;
     Audio audioForProvider;
 
+    // <<< Logging Start >>>
+    debugPrint('[AudioProvider] startAudioPlayback invoked with object type: ${originalMediaObject.runtimeType}');
+    // <<< Logging End >>>
+
     // Determine type and create the generic Audio object for the provider state
     if (originalMediaObject is Lesson) {
       debugPrint('[AudioProvider] Starting playback for Lesson: ${originalMediaObject.title}');
@@ -194,14 +198,39 @@ class AudioProvider extends ChangeNotifier {
         courseTitle: null, // No course title for daily
         sequence: 0, // Daily audio likely doesn't have sequence
       );
+    } else if (originalMediaObject is Audio) {
+      // Direct Audio object handling - use it directly
+      debugPrint('[AudioProvider] Starting playback for Audio object: ${originalMediaObject.title}');
+      audioForProvider = originalMediaObject;
+      mediaId = originalMediaObject.id;
+      sourceType = originalMediaObject.sourceType;
+      
+      // Set appropriate original object reference based on the source type
+      if (sourceType == AudioSource.daily) {
+        _originalDailyAudio = null; // We don't have the original object
+        _originalLesson = null;
+      } else if (sourceType == AudioSource.lesson) {
+        _originalLesson = null; // We don't have the original object
+        _originalDailyAudio = null;
+      } else {
+        _originalLesson = null;
+        _originalDailyAudio = null;
+      }
     } else {
       debugPrint('[AudioProvider] Error: startAudioPlayback called with unknown type: ${originalMediaObject.runtimeType}');
       return; // Or throw error
     }
 
+    // <<< Logging Start >>>
+    debugPrint('[AudioProvider] Determined mediaId: $mediaId, sourceType: $sourceType');
+    debugPrint('[AudioProvider] Audio URL from object: ${audioForProvider.audioUrl}');
+    // <<< Logging End >>>
+
     // Check if it's the same audio already
     if (_currentAudio?.id == mediaId) {
-      debugPrint('[AudioProvider] Same audio already playing, ensuring mini player is shown');
+      // <<< Logging Start >>>
+      debugPrint('[AudioProvider] Same audio (ID: $mediaId) already loaded/playing. Ensuring mini player is shown.');
+      // <<< Logging End >>>
       _showMiniPlayer = true;
       notifyListeners();
       return;
@@ -209,13 +238,19 @@ class AudioProvider extends ChangeNotifier {
 
     // Validate Audio URL before proceeding
     if (audioForProvider.audioUrl.isEmpty) {
-       debugPrint('[AudioProvider] Error: Audio URL is empty for media ID: $mediaId');
+       // <<< Logging Start >>>
+       debugPrint('[AudioProvider] CRITICAL ERROR: Audio URL is empty for media ID: $mediaId. Aborting playback.');
+       // <<< Logging End >>>
        // Maybe reset state or throw?
+       stop(); // Stop to clear potentially invalid state
        return;
     }
 
     // --- Proceed with playback setup --- 
     try {
+      // <<< Logging Start >>>
+      debugPrint('[AudioProvider] Setting up new audio (ID: $mediaId)');
+      // <<< Logging End >>>
       _currentAudio = audioForProvider; // Store the generic Audio object
       _title = _currentAudio!.title;
       _subtitle = _currentAudio!.subtitle;
@@ -225,9 +260,105 @@ class AudioProvider extends ChangeNotifier {
       _courseTitleForCache = _currentAudio!.courseTitle; // Use courseTitle from generic Audio
       
       _currentPosition = 0.0;
-      await _player.setUrl(_audioUrl!);
-      await _player.seek(Duration.zero);
-      await _player.play();
+      
+      // Log the exact URL being used to diagnose issues
+      // <<< Logging Start >>>
+      debugPrint('[AudioProvider] Preparing to set URL in player: $_audioUrl');
+      // <<< Logging End >>>
+      
+      try {
+        // Try to prevalidate the URL before passing to the player
+        if (_audioUrl!.startsWith('http')) {
+          // <<< Logging Start >>>
+          debugPrint('[AudioProvider] Attempting to play remote URL: $_audioUrl');
+          // <<< Logging End >>>
+          // Try with explicit content-type and cache control headers
+          await _player.setUrl(
+            _audioUrl!,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Cache-Control': 'no-cache',
+              'Access-Control-Allow-Origin': '*',
+            },
+          );
+        } else {
+          // <<< Logging Start >>>
+          debugPrint('[AudioProvider] Attempting to play local/asset URL: $_audioUrl');
+          // <<< Logging End >>>
+          // For non-http URLs (like asset:// or file://)
+          await _player.setUrl(_audioUrl!);
+        }
+        
+        // <<< Logging Start >>>
+        debugPrint('[AudioProvider] Successfully set URL in player. Preparing to play.');
+        // <<< Logging End >>>
+        await _player.seek(Duration.zero);
+        await _player.play();
+      } catch (urlError) {
+        // <<< Logging Start >>>
+        debugPrint('[AudioProvider] CRITICAL ERROR setting URL or starting playback: $urlError');
+        // <<< Logging End >>>
+        // More detailed error handling for URL loading failures
+        debugPrint('[AudioProvider] Failed to load URL: $urlError');
+        
+        if (urlError.toString().contains('404') || urlError.toString().contains('not found')) {
+          debugPrint('[AudioProvider] Audio file not found. Check if the file exists at: $_audioUrl');
+        } else if (urlError.toString().contains('permission') || urlError.toString().contains('denied')) {
+          debugPrint('[AudioProvider] Permission denied accessing audio file. Check Firebase Storage rules.');
+        } else if (urlError.toString().contains('network') || urlError.toString().contains('connection')) {
+          debugPrint('[AudioProvider] Network error. Check your internet connection.');
+        } else if (urlError.toString().contains('CORS') || urlError.toString().contains('cross-origin')) {
+          debugPrint('[AudioProvider] CORS error. Firebase Storage CORS settings may need to be configured.');
+        }
+        
+        // Try alternative URL format if it's a Firebase Storage URL
+        if (_audioUrl!.contains('firebasestorage.googleapis.com')) {
+          debugPrint('[AudioProvider] Attempting alternative Firebase Storage URL format');
+          
+          // Try to simplify the URL by removing query parameters
+          String cleanUrl = _audioUrl!;
+          if (cleanUrl.contains('?')) {
+            cleanUrl = cleanUrl.substring(0, cleanUrl.indexOf('?'));
+            debugPrint('[AudioProvider] Trying with simplified URL: $cleanUrl');
+            
+            try {
+              await _player.setUrl(cleanUrl);
+              await _player.seek(Duration.zero);
+              await _player.play();
+              // Success with clean URL, update the stored URL
+              _audioUrl = cleanUrl;
+              debugPrint('[AudioProvider] Success with simplified URL');
+            } catch (e) {
+              debugPrint('[AudioProvider] Also failed with simplified URL: $e');
+              
+              // Final attempt - try with a direct download URL format
+              if (cleanUrl.contains('/o/')) {
+                // Try to convert to a download URL format
+                final String directUrl = cleanUrl.replaceFirst('/o/', '/v0/b/') + '?alt=media';
+                debugPrint('[AudioProvider] Trying with direct download URL: $directUrl');
+                
+                try {
+                  await _player.setUrl(directUrl);
+                  await _player.seek(Duration.zero);
+                  await _player.play();
+                  // Success with direct URL, update the stored URL
+                  _audioUrl = directUrl;
+                  debugPrint('[AudioProvider] Success with direct download URL');
+                } catch (finalError) {
+                  debugPrint('[AudioProvider] All URL attempts failed: $finalError');
+                  rethrow; // Rethrow the final error after all attempts
+                }
+              } else {
+                rethrow; // Rethrow if not a standard Firebase path
+              }
+            }
+          } else {
+            rethrow; // Rethrow if no query parameters to strip
+          }
+        } else {
+          rethrow; // Rethrow if not a Firebase Storage URL
+        }
+      }
 
       _isPlaying = true;
       _showMiniPlayer = true;
@@ -235,10 +366,15 @@ class AudioProvider extends ChangeNotifier {
       
       _cacheAudioData(); // Cache uses the generic _currentAudio fields
       
-      debugPrint('[AudioProvider] Audio started successfully: $mediaId');
+      // <<< Logging Start >>>
+      debugPrint('[AudioProvider] Playback setup successful for $mediaId. isPlaying=$_isPlaying, showMiniPlayer=$_showMiniPlayer');
+      // <<< Logging End >>>
       notifyListeners();
     } catch (e) {
-      debugPrint('[AudioProvider] Error starting audio $mediaId: $e');
+      // <<< Logging Start >>>
+      debugPrint('[AudioProvider] CATCH BLOCK: Unhandled error during startAudioPlayback for $mediaId: $e');
+      debugPrint('[AudioProvider] Resetting audio provider state due to error.');
+      // <<< Logging End >>>
       _currentAudio = null;
       _originalLesson = null;
       _originalDailyAudio = null;
@@ -250,9 +386,9 @@ class AudioProvider extends ChangeNotifier {
       _courseTitleForCache = null;
       _isPlaying = false;
       _showMiniPlayer = false;
-      _isInitialized = false;
+      _isInitialized = false; // Consider if this should be true or false on error
       notifyListeners();
-      rethrow;
+      rethrow; // Rethrow the error to signal failure
     }
   }
 
@@ -427,7 +563,9 @@ class AudioProvider extends ChangeNotifier {
   
   @override
   void dispose() {
-    debugPrint('[AudioProvider] Disposing');
+    // <<< Logging Start >>>
+    debugPrint('[AudioProvider] dispose() called. Cancelling timers and disposing player.');
+    // <<< Logging End >>>
     _disposed = true;
     _playbackTimer?.cancel();
     _player.dispose();
@@ -442,28 +580,36 @@ class AudioProvider extends ChangeNotifier {
 
   void setFullScreenPlayerOpen(bool isOpen) {
     // <<< LOGGING START >>>
-    debugPrint('[AudioProvider] setFullScreenPlayerOpen called with: $isOpen. Current source: $_audioSource');
+    debugPrint('[AudioProvider] setFullScreenPlayerOpen called with: $isOpen. Current source: $_audioSource, Current audio ID: ${_currentAudio?.id}');
     // <<< LOGGING END >>>
     
+    bool needsNotify = _isFullScreenPlayerOpen != isOpen; // Only notify if value changes
     _isFullScreenPlayerOpen = isOpen;
     
     // <<< ADDED: Logic to handle mini-player visibility based on source >>>
     if (!isOpen) {
+      // Closing full screen
       if (_audioSource == AudioSource.lesson) {
         // For lessons, closing full screen stops audio and hides mini-player
         debugPrint('[AudioProvider] Full screen closed for LESSON. Stopping audio and hiding mini-player.');
         stop(); // Stop also resets state and hides mini-player
+        needsNotify = false; // Stop() already notifies
       } else {
         // For other types (daily), just update flag, mini-player remains if conditions met
         debugPrint('[AudioProvider] Full screen closed for NON-LESSON. Mini-player visibility determined by showMiniPlayer getter.');
-        _showMiniPlayer = true; // Ensure flag allows mini-player if audio is still valid
+        _showMiniPlayer = _currentAudio != null; // Show mini player if audio is still active
+        needsNotify = true; // Ensure notification if mini-player state changes
       }
     } else {
       // When opening full screen, hide the mini player immediately
+      debugPrint('[AudioProvider] Full screen opened. Hiding mini-player.');
       _showMiniPlayer = false;
+      needsNotify = true;
     }
     
-    notifyListeners();
+    if (needsNotify) {
+      notifyListeners();
+    }
   }
 
   void setCurrentAudio(Audio audio) {

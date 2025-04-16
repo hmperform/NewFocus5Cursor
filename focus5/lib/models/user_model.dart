@@ -29,6 +29,8 @@ class User {
   final int totalLoginDays;
   final List<Map<String, dynamic>> badgesgranted;
   final List<Map<String, dynamic>> purchasedCourses;
+  final DateTime lastCompletionDate;
+  final List<String> savedCourses;
 
   User({
     required this.id,
@@ -59,6 +61,8 @@ class User {
     this.totalLoginDays = 0,
     this.badgesgranted = const [],
     this.purchasedCourses = const [],
+    required this.lastCompletionDate,
+    this.savedCourses = const [],
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.lastActive = lastActive ?? DateTime.now(),
@@ -190,6 +194,12 @@ class User {
       totalLoginDays: data['totalLoginDays'] ?? 0,
       badgesgranted: grantedBadgesList,
       purchasedCourses: purchasedCoursesList,
+      lastCompletionDate: data['lastCompletionDate'] != null 
+          ? (data['lastCompletionDate'] as Timestamp).toDate() 
+          : DateTime.now(),
+      savedCourses: data['savedCourses'] != null 
+          ? List<String>.from(data['savedCourses']) 
+          : [],
     );
   }
 
@@ -221,6 +231,8 @@ class User {
       'loginStreak': loginStreak,
       'totalLoginDays': totalLoginDays,
       'purchasedCourses': purchasedCourses,
+      'lastCompletionDate': Timestamp.fromDate(lastCompletionDate),
+      'savedCourses': savedCourses,
     };
   }
 
@@ -253,6 +265,8 @@ class User {
     int? totalLoginDays,
     List<Map<String, dynamic>>? badgesgranted,
     List<Map<String, dynamic>>? purchasedCourses,
+    DateTime? lastCompletionDate,
+    List<String>? savedCourses,
   }) {
     return User(
       id: id ?? this.id,
@@ -283,6 +297,8 @@ class User {
       totalLoginDays: totalLoginDays ?? this.totalLoginDays,
       badgesgranted: badgesgranted ?? this.badgesgranted,
       purchasedCourses: purchasedCourses ?? this.purchasedCourses,
+      lastCompletionDate: lastCompletionDate ?? this.lastCompletionDate,
+      savedCourses: savedCourses ?? this.savedCourses,
     );
   }
 }

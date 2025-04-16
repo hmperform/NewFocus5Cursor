@@ -258,12 +258,7 @@ class _DashboardTabState extends State<DashboardTab> {
     }
     
     // Use the streak value from user data and the updated DailyStreakWidget
-    return DailyStreakWidget(
-      currentStreak: user.streak,
-      longestStreak: user.longestStreak,
-      lastLoginDate: user.lastLoginDate,
-      lastActive: user.lastActive,
-    );
+    return DailyStreakWidget();
   }
 
   Widget _buildRecentCourses() {

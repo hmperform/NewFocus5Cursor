@@ -104,10 +104,45 @@ void main() async {
   );
 }
 
-class Focus5App extends StatelessWidget {
+class Focus5App extends StatefulWidget {
   final bool isFirstLaunch;
   
   const Focus5App({Key? key, required this.isFirstLaunch}) : super(key: key);
+
+  @override
+  State<Focus5App> createState() => _Focus5AppState();
+}
+
+class _Focus5AppState extends State<Focus5App> {
+  @override
+  void initState() {
+    super.initState();
+    _setupStreakTracking();
+  }
+  
+  // Setup streak tracking to run on each app launch
+  void _setupStreakTracking() {
+    // Delay slightly to allow providers to initialize
+    Future.delayed(const Duration(milliseconds: 500), () {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // Listen for user changes to check streak status
+      authProvider.addListener(() {
+        final userId = authProvider.currentUser?.id;
+        if (userId != null && userProvider.user != null) {
+          // Check streak status when user logs in
+          userProvider.checkAndUpdateStreakStatus(userId);
+        }
+      });
+      
+      // Also check on initial launch if user is already logged in
+      final userId = authProvider.currentUser?.id;
+      if (userId != null && userProvider.user != null) {
+        userProvider.checkAndUpdateStreakStatus(userId);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +236,7 @@ class Focus5App extends StatelessWidget {
       },
       initialRoute: '/',
       routes: {
-        '/': (context) => SplashScreen(isFirstLaunch: isFirstLaunch),
+        '/': (context) => SplashScreen(isFirstLaunch: widget.isFirstLaunch),
         '/onboarding': (context) => const OnboardingScreen(),
         '/login': (context) => LoginScreen(),
         '/signup': (context) => const SignupScreen(),

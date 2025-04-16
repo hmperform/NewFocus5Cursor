@@ -17,6 +17,8 @@ import 'package:provider/provider.dart';
 import '../main.dart'; // Import to access navigatorKey
 import '../services/media_completion_service.dart';
 import 'dart:async'; // Import async
+import '../widgets/streak_celebration_popup.dart'; // <-- Import added
+import '../screens/level_up_screen.dart'; // <-- Import LevelUpScreen
 
 class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -320,50 +322,31 @@ class UserProvider extends ChangeNotifier {
       int currentLongestStreak = _user!.longestStreak;
       bool needsUpdate = false;
       int newTotalLoginDays = currentTotalDays;
-      int newStreak = currentStreak;
-      int newLongestStreak = currentLongestStreak;
       
       print('UserProvider: Checking streak/days. Today: $today, Last Active: $lastActiveDate, Current Total Days: $currentTotalDays');
 
-      // --- Logic Adjustment for totalLoginDays --- 
+      // --- Logic for totalLoginDays --- 
       if (currentTotalDays == 0) {
         // If user has 0 total days, set it to 1 on this first check
         print('UserProvider: First login check with 0 days. Setting totalLoginDays to 1.');
         newTotalLoginDays = 1;
-        newStreak = 1; // Also reset streak to 1
-        newLongestStreak = (newStreak > currentLongestStreak) ? newStreak : currentLongestStreak;
         needsUpdate = true;
       } else if (today.isAfter(lastActiveDate)) {
         // It's a new day and user has logged in before
         print('UserProvider: New login day detected! Current Total Days: $currentTotalDays');
         newTotalLoginDays = currentTotalDays + 1;
         needsUpdate = true; // Need to update Firestore
-        
-        // Handle streak logic only on new days
-        final yesterday = today.subtract(const Duration(days: 1));
-        if (lastActiveDate.isAtSameMomentAs(yesterday)) {
-          newStreak = currentStreak + 1;
-           print('UserProvider: Streak continued. New streak: $newStreak');
-        } else {
-          // More than one day passed, or first login after signup (if signup doesn't set streak)
-          newStreak = 1; // Reset streak
-          print('UserProvider: Streak broken or first real login day. Resetting streak to 1.');
-        }
-        newLongestStreak = (newStreak > currentLongestStreak) ? newStreak : currentLongestStreak;
       } else {
-        // Same day login, no changes needed for streak or total days
-        print('UserProvider: Not a new login day. No streak/total days update needed.');
+        // Same day login, no changes needed for total days
+        print('UserProvider: Not a new login day. No totalLoginDays update needed.');
       }
-      // --- End Logic Adjustment ---
       
       // Only update Firestore and local state if changes were made
       if (needsUpdate) {
-        print('UserProvider: Preparing to update Firestore. New Total Days: $newTotalLoginDays, New Streak: $newStreak, New Longest: $newLongestStreak');
+        print('UserProvider: Preparing to update Firestore. New Total Days: $newTotalLoginDays');
         
         await _firestore.collection('users').doc(userId).update({
-          'streak': newStreak,
           'lastActive': FieldValue.serverTimestamp(), // Use server time instead of lastLoginDate
-          'longestStreak': newLongestStreak,
           'totalLoginDays': newTotalLoginDays,
         });
         
@@ -371,9 +354,7 @@ class UserProvider extends ChangeNotifier {
         
         // Update local user state
         _user = _user!.copyWith(
-          streak: newStreak,
           lastActive: now, // Use local 'now' for immediate consistency
-          longestStreak: newLongestStreak,
           totalLoginDays: newTotalLoginDays,
         );
         
@@ -382,7 +363,7 @@ class UserProvider extends ChangeNotifier {
         print('UserProvider: Update complete. Notified listeners.');
       }
     } catch (e, stackTrace) {
-      print('UserProvider: Error updating streak/login days: $e');
+      print('UserProvider: Error updating login days: $e');
       print('UserProvider: Stack trace: $stackTrace');
     }
   }
@@ -643,9 +624,13 @@ class UserProvider extends ChangeNotifier {
       // Add to completed audios
       List<String> updatedAudios = [..._user!.completedAudios, audioId];
       
-      // Update user document
+      // Get current date for lastCompletionDate
+      final now = DateTime.now();
+      
+      // Update user document with completion and update lastCompletionDate
       await _firestore.collection('users').doc(userId).update({
         'completedAudios': updatedAudios,
+        'lastCompletionDate': now,
       });
       
       // Log completion
@@ -662,14 +647,129 @@ class UserProvider extends ChangeNotifier {
       await addFocusPoints(userId, 10, 'Audio completion');
       
       // Update local user
-      _user = _user!.copyWith(completedAudios: updatedAudios);
+      _user = _user!.copyWith(
+        completedAudios: updatedAudios,
+        lastCompletionDate: now,
+      );
       
       // Check for badges
       await _badgeService.checkForNewBadges(userId, _user!);
       
+      // Check and update streak for daily audio completion
+      if (audioId.startsWith('audio-') || audioId.startsWith('daily-')) {
+        await updateStreak(userId, true);
+      }
+      
       notifyListeners();
     } catch (e) {
       debugPrint('Error tracking audio completion: $e');
+    }
+  }
+
+  // New method to update streak (for audio, lesson, game completions)
+  Future<bool> updateStreak(String userId, bool incrementStreak) async {
+    if (_user == null) {
+      debugPrint('[UserProvider UpdateStreak] User is null, cannot update streak.');
+      return false;
+    }
+    
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final lastCompletionDate = _user!.lastCompletionDate;
+      
+      // Handle null lastCompletionDate (first ever completion)
+      if (lastCompletionDate == null) {
+        debugPrint('[UserProvider UpdateStreak] First completion ever. Setting streak to 1.');
+        int newStreak = 1;
+        int newLongestStreak = (_user!.longestStreak < 1) ? 1 : _user!.longestStreak;
+        
+        await _firestore.collection('users').doc(userId).update({
+          'streak': newStreak,
+          'longestStreak': newLongestStreak,
+          'lastCompletionDate': now, // Important: Update last completion date
+        });
+        _user = _user!.copyWith(
+          streak: newStreak,
+          longestStreak: newLongestStreak,
+          lastCompletionDate: now,
+        );
+        notifyListeners();
+        return true;
+      }
+      
+      // Proceed if lastCompletionDate is not null
+      final lastCompletionDay = DateTime(
+        lastCompletionDate.year, 
+        lastCompletionDate.month, 
+        lastCompletionDate.day
+      );
+      
+      debugPrint('[UserProvider UpdateStreak] Checking streak. Today: $today, Last Completion Day: $lastCompletionDay');
+
+      int currentStreak = _user!.streak;
+      int currentLongestStreak = _user!.longestStreak;
+      int newStreak = currentStreak;
+      int newLongestStreak = currentLongestStreak;
+      bool streakUpdated = false;
+      
+      // Check if the user has already completed something today
+      if (lastCompletionDay.isAtSameMomentAs(today)) {
+        debugPrint('[UserProvider UpdateStreak] Already completed today. No streak change.');
+        // Update lastCompletionDate to NOW to reflect the most recent activity
+        await _firestore.collection('users').doc(userId).update({'lastCompletionDate': now});
+        _user = _user!.copyWith(lastCompletionDate: now);
+        notifyListeners(); // Notify even if streak doesn't change, as date updated
+        return false; // Streak didn't change, but date did
+      }
+      
+      // Check if the last completion was yesterday
+      final yesterday = today.subtract(const Duration(days: 1));
+      if (lastCompletionDay.isAtSameMomentAs(yesterday)) {
+        // Consecutive day - increment streak
+        if (incrementStreak) {
+          newStreak = currentStreak + 1;
+          newLongestStreak = newStreak > currentLongestStreak ? newStreak : currentLongestStreak;
+          debugPrint('[UserProvider UpdateStreak] Consecutive day. Incrementing streak to $newStreak.');
+          streakUpdated = true;
+        } else {
+          debugPrint('[UserProvider UpdateStreak] Consecutive day, but incrementStreak is false. No change.');
+        }
+      } else {
+        // Not consecutive (gap of 1+ days OR first completion handled above)
+        // Reset streak to 1 because the chain is broken.
+        newStreak = 1;
+        newLongestStreak = newStreak > currentLongestStreak ? newStreak : currentLongestStreak; // Longest streak might be 1 now
+        debugPrint('[UserProvider UpdateStreak] Not a consecutive day. Resetting streak to 1.');
+        streakUpdated = true;
+      }
+      
+      if (streakUpdated) {
+        debugPrint('[UserProvider UpdateStreak] Updating Firestore. New Streak: $newStreak, New Longest: $newLongestStreak');
+        // Update Firestore
+        await _firestore.collection('users').doc(userId).update({
+          'streak': newStreak,
+          'longestStreak': newLongestStreak,
+          'lastCompletionDate': now, // Always update last completion date on change
+        });
+        
+        // Update local user
+        _user = _user!.copyWith(
+          streak: newStreak,
+          longestStreak: newLongestStreak,
+          lastCompletionDate: now,
+        );
+        
+        notifyListeners();
+        debugPrint('[UserProvider UpdateStreak] Update complete.');
+        return true;
+      }
+      
+      debugPrint('[UserProvider UpdateStreak] No streak update was necessary.');
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('[UserProvider UpdateStreak] Error updating streak: $e\n$stackTrace');
+      return false;
     }
   }
 
@@ -767,6 +867,22 @@ class UserProvider extends ChangeNotifier {
     
     try {
       final userId = _user!.id;
+      
+      // <<< Refresh user data BEFORE checking completion status >>>
+      debugPrint('[toggleLessonCompletion] Refreshing user data before processing lesson $lessonId');
+      final docSnapshot = await _firestore.collection('users').doc(userId).get();
+      if (!docSnapshot.exists) {
+        debugPrint('[toggleLessonCompletion] User document no longer exists.');
+        clearUserData();
+        return false;
+      }
+      // Update local user state immediately with latest data
+      _user = User.fromFirestore(docSnapshot);
+      debugPrint('[toggleLessonCompletion] Refreshed user data. Current streak: ${_user?.streak}, Last Completion: ${_user?.lastCompletionDate}');
+      // Notify listeners after refreshing data, before proceeding
+      notifyListeners(); 
+      // <<< End Refresh >>>
+      
       List<String> updatedLessons = [..._user!.completedLessons];
       
       // Only allow marking lessons as completed, not uncompleting them
@@ -775,6 +891,7 @@ class UserProvider extends ChangeNotifier {
         final hasCompletedMedia = await _mediaCompletionService.isMediaCompleted(userId, lessonId);
         
         if (!hasCompletedMedia) {
+          debugPrint('[toggleLessonCompletion] Media for lesson $lessonId not completed yet.');
           // Show message that user needs to watch/listen to the content first
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -793,15 +910,20 @@ class UserProvider extends ChangeNotifier {
           return false;
         }
         
+        debugPrint('[toggleLessonCompletion] Media completed. Proceeding to mark lesson $lessonId as complete.');
         // Add to completed lessons
         updatedLessons.add(lessonId);
         
         // Add XP for completing a lesson
         await addXp(userId, 50, 'Lesson completion');
 
-        // Update in Firestore
+        // Get current date for lastCompletionDate (used if streak updates)
+        final now = DateTime.now();
+
+        // Update in Firestore (only completedLessons for now, streak/date handled later)
         await _firestore.collection('users').doc(userId).update({
           'completedLessons': updatedLessons,
+          // 'lastCompletionDate': now, // Moved to updateStreak if needed
         });
         
         // Log the completion
@@ -812,24 +934,139 @@ class UserProvider extends ChangeNotifier {
           'timestamp': FieldValue.serverTimestamp(),
         });
         
-        // Update local user
+        // Update local user (only completedLessons initially)
         _user = _user!.copyWith(completedLessons: updatedLessons);
         notifyListeners();
         
         // Check if this lesson completion completes an entire course
-        await checkAndAwardCourseCompletionXp(lessonId);
+        await checkAndAwardCourseCompletionXp(lessonId); // This might add more XP
+        
+        // Update streak for lesson completion (now uses refreshed data)
+        debugPrint('[toggleLessonCompletion] Calling updateStreak for lesson $lessonId');
+        final bool streakIncremented = await updateStreak(userId, true);
+        
+        // Optional: Add celebration logic here if streakIncremented is true
+        if (streakIncremented && context.mounted) {
+           final currentStreak = _user?.streak ?? 0;
+           debugPrint('[toggleLessonCompletion] Streak incremented to $currentStreak. Showing celebration.');
+           Future.delayed(const Duration(milliseconds: 500), () {
+             if (context.mounted) {
+               context.showStreakCelebration(streakCount: currentStreak);
+             }
+           });
+        }
         
         return true;
+      } else if (updatedLessons.contains(lessonId)) {
+        debugPrint('[toggleLessonCompletion] Lesson $lessonId already completed. Ignoring.');
+        // Silently ignore attempts to uncheck completed lessons or mark already completed ones
+        return true; 
       } else {
-        // Silently ignore attempts to uncheck completed lessons
-        return true;
+         debugPrint('[toggleLessonCompletion] Attempting to mark lesson $lessonId as incomplete (isCompleted=false). Ignoring.');
+         return true; // Ignore unchecking
       }
-    } catch (e) {
-      debugPrint('Error toggling lesson completion: $e');
+    } catch (e, stackTrace) {
+      debugPrint('[toggleLessonCompletion] Error: $e\n$stackTrace');
       return false;
     }
   }
   
+  // Track game completion
+  Future<bool> trackGameCompletion(String userId, String gameId, int score) async {
+    if (_user == null) return false;
+    
+    try {
+      // Get current date for lastCompletionDate
+      final now = DateTime.now();
+      
+      // Update lastCompletionDate in user document
+      await _firestore.collection('users').doc(userId).update({
+        'lastCompletionDate': now,
+      });
+      
+      // Log game completion
+      await _firestore.collection('game_completions').add({
+        'userId': userId,
+        'gameId': gameId,
+        'score': score,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      
+      // Award XP based on score
+      int xpAmount = 25;
+      if (score > 50) xpAmount = 50;
+      if (score > 80) xpAmount = 75;
+      await addXp(userId, xpAmount, 'Game completion');
+      
+      // Award Focus Points
+      await addFocusPoints(userId, 5, 'Game completion');
+      
+      // Update local user
+      _user = _user!.copyWith(
+        lastCompletionDate: now,
+      );
+      
+      // Update streak for game completion
+      await updateStreak(userId, true);
+      
+      // Check for badges
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error tracking game completion: $e');
+      return false;
+    }
+  }
+  
+  // Track journal entry completion
+  Future<bool> trackJournalEntryCompletion(String userId, Map<String, dynamic> journalData) async {
+    if (_user == null) return false;
+    
+    try {
+      // Get current date for lastCompletionDate
+      final now = DateTime.now();
+      
+      // Update lastCompletionDate in user document
+      await _firestore.collection('users').doc(userId).update({
+        'lastCompletionDate': now,
+      });
+      
+      // Add journal entry to Firestore
+      await _firestore.collection('journal_entries').add({
+        'userId': userId,
+        'content': journalData['content'],
+        'mood': journalData['mood'],
+        'tags': journalData['tags'] ?? [],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      
+      // Award XP
+      await addXp(userId, 30, 'Journal entry');
+      
+      // Award Focus Points
+      await addFocusPoints(userId, 5, 'Journal entry');
+      
+      // Update local user
+      _user = _user!.copyWith(
+        lastCompletionDate: now,
+      );
+      
+      // Update streak for journal completion
+      await updateStreak(userId, true);
+      
+      // Check for badges
+      await _badgeService.checkForNewBadges(userId, _user!);
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error tracking journal entry: $e');
+      return false;
+    }
+  }
+
   // Check if a course is completed and award XP (only once per course)
   Future<void> checkAndAwardCourseCompletionXp(String lessonId) async {
     if (_user == null) return;
@@ -1157,4 +1394,171 @@ class UserProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  // New method to check streak status on app launch - detects missed days
+  Future<void> checkAndUpdateStreakStatus(String userId) async {
+    if (_user == null) return;
+    
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final lastCompletionDate = _user!.lastCompletionDate;
+      final lastCompletionDay = DateTime(
+        lastCompletionDate.year, 
+        lastCompletionDate.month, 
+        lastCompletionDate.day
+      );
+      
+      int currentStreak = _user!.streak;
+      int currentLongestStreak = _user!.longestStreak;
+      
+      // If last completion was more than 1 day ago, the streak is broken
+      if (today.difference(lastCompletionDay).inDays > 1) {
+        debugPrint('UserProvider: Streak broken due to missed day(s). Last activity: $lastCompletionDay, Today: $today');
+        
+        // Update Firestore - reset streak to 0 (will be incremented to 1 on next activity)
+        await _firestore.collection('users').doc(userId).update({
+          'streak': 0,
+        });
+        
+        // Update local user
+        _user = _user!.copyWith(streak: 0);
+        notifyListeners();
+      } else {
+        debugPrint('UserProvider: Streak intact. Last completion day: $lastCompletionDay, Today: $today');
+      }
+    } catch (e) {
+      debugPrint('Error checking streak status: $e');
+    }
+  }
+
+  // Method to set lastCompletionDate to yesterday (for testing)
+  Future<void> setLastCompletionToYesterday(String userId) async {
+    if (_user == null) return;
+    
+    try {
+      final now = DateTime.now();
+      final yesterday = DateTime(now.year, now.month, now.day - 1);
+      
+      // Update Firestore
+      await _firestore.collection('users').doc(userId).update({
+        'lastCompletionDate': yesterday,
+      });
+      
+      // Update local user
+      _user = _user!.copyWith(lastCompletionDate: yesterday);
+      notifyListeners();
+      
+      debugPrint('UserProvider: Last completion date set to yesterday: $yesterday');
+    } catch (e) {
+      debugPrint('Error setting last completion date to yesterday: $e');
+    }
+  }
+
+  // --- Admin Methods ---
+
+  // Admin: Add a specified amount of XP
+  Future<bool> adminAddXp(int amount) async {
+    if (_user == null || !_user!.isAdmin) return false;
+    try {
+      print('[ADMIN] Adding $amount XP for user ${_user!.id}');
+      await addXp(_user!.id, amount, 'Admin Add XP');
+      return true;
+    } catch (e) {
+      print('[ADMIN] Error adding XP: $e');
+      return false;
+    }
+  }
+
+  // Admin: Set user level by setting XP
+  Future<bool> adminSetLevel(int targetLevel) async {
+    if (_user == null || !_user!.isAdmin || targetLevel < 1) return false;
+    try {
+      print('[ADMIN] Setting level to $targetLevel for user ${_user!.id}');
+      // Get the minimum XP required for the target level
+      int targetXp = UserLevelService.levelThresholds[targetLevel] ?? -1;
+      
+      if (targetXp == -1) {
+         print('[ADMIN] Error: Invalid target level $targetLevel');
+         return false;
+      }
+      
+      int currentXp = _user!.xp;
+      int oldLevel = UserLevelService.getUserLevel(currentXp); // Capture old level
+      
+      // Update XP in Firestore
+      await _firestore.collection('users').doc(_user!.id).update({'xp': targetXp});
+      
+      // Log XP history (optional, could be noisy)
+      // await _firestore.collection('xp_history').add(...);
+      
+      // Update local user
+      _user = _user!.copyWith(xp: targetXp);
+      notifyListeners(); // Notify listeners IMMEDIATELY after local XP update
+      
+      // Check for level up (important for focus points etc. if levels were skipped)
+      await UserLevelService.checkAndProcessLevelUp(_user!.id, currentXp, targetXp);
+      
+      // Check for new badges after XP update
+      await _badgeService.checkForNewBadges(_user!.id, _user!);
+      
+      print('[ADMIN] User XP set to $targetXp for Level $targetLevel');
+      
+      // --- Trigger Level Up Screen if level increased ---
+      int newLevel = UserLevelService.getUserLevel(targetXp);
+      if (newLevel > oldLevel) {
+        print('[ADMIN] Level increased from $oldLevel to $newLevel. Triggering LevelUpScreen.');
+        // Use navigatorKey from main.dart to navigate
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (context) => LevelUpScreen(newLevel: newLevel),
+          ),
+        );
+      }
+      // --- End Level Up Screen Trigger ---
+      
+      return true;
+    } catch (e) {
+      print('[ADMIN] Error setting level: $e');
+      return false;
+    }
+  }
+
+  // Admin: Increment streak (simulates a completion yesterday)
+  Future<bool> adminIncrementStreak() async {
+    if (_user == null || !_user!.isAdmin) return false;
+    try {
+      print('[ADMIN] Incrementing streak for user ${_user!.id}');
+      // Set last completion to yesterday to guarantee streak increase
+      await setLastCompletionToYesterday(_user!.id);
+      // Call updateStreak with increment=true
+      await updateStreak(_user!.id, true);
+      print('[ADMIN] Streak increment attempted. New streak: ${_user?.streak}');
+      return true;
+    } catch (e) {
+      print('[ADMIN] Error incrementing streak: $e');
+      return false;
+    }
+  }
+  
+   // Admin: Reset streak to 0
+  Future<bool> adminResetStreak() async {
+    if (_user == null || !_user!.isAdmin) return false;
+    try {
+      print('[ADMIN] Resetting streak for user ${_user!.id}');
+      await _firestore.collection('users').doc(_user!.id).update({
+        'streak': 0,
+        'lastCompletionDate': null, // Reset last completion date
+      });
+      _user = _user!.copyWith(streak: 0, lastCompletionDate: null);
+      notifyListeners();
+      print('[ADMIN] Streak reset to 0.');
+      return true;
+    } catch (e) {
+      print('[ADMIN] Error resetting streak: $e');
+      return false;
+    }
+  }
+
+  // --- End Admin Methods ---
 } 

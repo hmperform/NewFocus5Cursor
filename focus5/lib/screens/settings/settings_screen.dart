@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
+import 'package:flutter/services.dart'; // For TextInputFormatter
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -16,6 +17,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _downloadOverWifi = true;
   
+  // Controllers for admin inputs
+  final TextEditingController _xpAmountController = TextEditingController();
+  final TextEditingController _targetLevelController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -27,11 +32,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     });
   }
+  
+  @override
+  void dispose() {
+    _xpAmountController.dispose();
+    _targetLevelController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final accentColor = themeProvider.accentColor;
+    final userProvider = Provider.of<UserProvider>(context); // Listen for user changes
+    final bool isAdmin = userProvider.user?.isAdmin ?? false;
     
     return Scaffold(
       appBar: AppBar(
@@ -129,6 +143,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           const Divider(),
           
+          // --- Admin Tools Section (conditionally shown) ---
+          if (isAdmin)
+            _buildAdminToolsSection(context, userProvider),
+            
           // Sign Out Option
           Padding(
             padding: const EdgeInsets.all(24.0),
@@ -190,6 +208,144 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+  
+  // --- New method to build Admin Tools section ---
+  Widget _buildAdminToolsSection(BuildContext context, UserProvider userProvider) {
+    final accentColor = Provider.of<ThemeProvider>(context).accentColor;
+    final userId = userProvider.user?.id ?? ''; // For safety
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Admin Tools'),
+        // --- Add XP ---
+        ListTile(
+          title: const Text('Add XP'),
+          subtitle: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _xpAmountController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    hintText: 'Enter XP amount',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: accentColor),
+                child: const Text('Add', style: TextStyle(color: Colors.black)),
+                onPressed: () async {
+                  final amount = int.tryParse(_xpAmountController.text);
+                  if (amount != null && amount > 0 && userId.isNotEmpty) {
+                    final success = await userProvider.adminAddXp(amount);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(success ? 'Added $amount XP' : 'Failed to add XP')),
+                    );
+                    _xpAmountController.clear();
+                    FocusScope.of(context).unfocus(); // Dismiss keyboard
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        // --- Set Level ---
+        ListTile(
+          title: const Text('Set Level'),
+          subtitle: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _targetLevelController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    hintText: 'Enter target level',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: accentColor),
+                child: const Text('Set', style: TextStyle(color: Colors.black)),
+                onPressed: () async {
+                  final level = int.tryParse(_targetLevelController.text);
+                  if (level != null && level > 0 && userId.isNotEmpty) {
+                    final success = await userProvider.adminSetLevel(level);
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(success ? 'Level set to $level' : 'Failed to set level')),
+                    );
+                    _targetLevelController.clear();
+                     FocusScope.of(context).unfocus(); // Dismiss keyboard
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        // --- Increment Streak ---
+        ListTile(
+          title: const Text('Increment Streak'),
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: accentColor),
+            child: const Text('+1 Day', style: TextStyle(color: Colors.black)),
+            onPressed: () async {
+              if (userId.isNotEmpty) {
+                final success = await userProvider.adminIncrementStreak();
+                 ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(success ? 'Streak incremented' : 'Failed to increment streak')),
+                );
+              }
+            },
+          ),
+        ),
+         // --- Reset Streak ---
+        ListTile(
+          title: const Text('Reset Streak'),
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]), // Warning color
+            child: const Text('Reset'),
+            onPressed: () async {
+              if (userId.isNotEmpty) {
+                 // Confirmation Dialog
+                 showDialog(
+                   context: context,
+                   builder: (context) => AlertDialog(
+                     title: const Text('Confirm Reset Streak'),
+                     content: const Text('Are you sure you want to reset the streak to 0 and clear the last completion date?'),
+                     actions: [
+                       TextButton(
+                         onPressed: () => Navigator.pop(context),
+                         child: const Text('Cancel'),
+                       ),
+                       TextButton(
+                         style: TextButton.styleFrom(foregroundColor: Colors.red),
+                         onPressed: () async {
+                           Navigator.pop(context); // Close dialog
+                           final success = await userProvider.adminResetStreak();
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(content: Text(success ? 'Streak Reset' : 'Failed to reset streak')),
+                           );
+                         },
+                         child: const Text('Reset'),
+                       ),
+                     ],
+                   ),
+                 );
+              }
+            },
+          ),
+        ),
+        const Divider(),
+      ],
+    );
+  }
+  // --- End new method ---
   
   void _showDeleteAccountDialog() {
     showDialog(

@@ -8,6 +8,8 @@ import 'package:focus5/widgets/scale_screen.dart';
 import 'package:focus5/widgets/fill_in_blank_screen.dart';
 import 'package:focus5/providers/user_provider.dart';
 import 'package:focus5/utils/level_utils.dart'; // Re-enabled import
+import 'dart:async';
+import 'package:focus5/widgets/streak_celebration_popup.dart';
 
 class PostCompletionScreen extends StatefulWidget {
   final DailyAudio module;
@@ -39,6 +41,8 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
   int xpGained = 50; // TODO: Get this dynamically from module/config
   int _currentLevel = 1;
   int _targetLevel = 1;
+
+  bool _hasShownStreakCelebration = false; // Added to track streak celebration
 
   @override
   void initState() {
@@ -276,8 +280,8 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
                   builder: (context, controller, _) {
                     // Show completion screen if isCompleted is true
                     if (_isCompleted) {
-                      // Pass the calculated current and target levels to the build method
-                      return _buildCompletionScreen(context, _currentLevel, _targetLevel);
+                      // Pass the calculated current level (before XP gain) for both initially
+                      return _buildCompletionScreen(context, _currentLevel, _currentLevel);
                     }
                     
                     // Otherwise show the current question screen
@@ -347,7 +351,7 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
   Widget _buildCurrentScreen(PostCompletionController controller) {
     // Add a check for completion state if needed, though handled by parent builder now
      if (_isCompleted) {
-        return _buildCompletionScreen(context, _currentLevel, _targetLevel); // Should not be reached if logic is correct
+        return _buildCompletionScreen(context, _currentLevel, _currentLevel); // Should not be reached if logic is correct
      }
 
     switch (controller.currentScreenType) {
@@ -365,16 +369,38 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
   
   // Widget for the completion screen - Accepts levels as parameters
   Widget _buildCompletionScreen(BuildContext context, int displayCurrentLevel, int displayTargetLevel) {
-     final primaryColor = Theme.of(context).primaryColor;
-     
+    final primaryColor = Theme.of(context).primaryColor;
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    // Schedule the streak celebration to show after a short delay
+    if (!_hasShownStreakCelebration && userProvider.user != null) {
+      _hasShownStreakCelebration = true; // Set flag to avoid showing multiple times
+      
+      // Show streak celebration after a short delay so it appears after this completion screen
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted && context.mounted) {
+          // Get current streak from user
+          final currentStreak = userProvider.user?.streak ?? 0;
+          
+          // Only show the celebration if streak is at least 1
+          if (currentStreak >= 1) {
+            debugPrint('PostCompletionScreen: Showing streak celebration for streak of $currentStreak days');
+            context.showStreakCelebration(streakCount: currentStreak);
+          } else {
+            debugPrint('PostCompletionScreen: Not showing streak celebration, streak is $currentStreak');
+          }
+        }
+      });
+    }
+    
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(30.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-             Icon(Icons.check_circle_outline, color: primaryColor, size: 60), // Smaller icon
-             SizedBox(height: 15),
+            Icon(Icons.check_circle_outline, color: primaryColor, size: 60), // Smaller icon
+            SizedBox(height: 15),
             Text(
               "Reflection Complete!", // Changed text
               style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
@@ -386,56 +412,56 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
             AnimatedBuilder(
               animation: _xpTextAnimation,
               builder: (context, child) {
-                 return Text(
-                   "+${_xpTextAnimation.value} XP",
-                   style: TextStyle(fontSize: 22, color: primaryColor, fontWeight: FontWeight.bold),
-                 );
+                return Text(
+                  "+${_xpTextAnimation.value} XP",
+                  style: TextStyle(fontSize: 22, color: primaryColor, fontWeight: FontWeight.bold),
+                );
               },
             ),
             SizedBox(height: 15),
             
             // XP Bar Area - Use levels passed as parameters
             Row(
-               children: [
-                 // Use displayCurrentLevel passed to the function
-                 Text("Lv $displayCurrentLevel", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                 SizedBox(width: 8),
-                 Expanded(
-                   child: AnimatedBuilder(
-                      animation: _xpBarAnimation,
-                      builder: (context, child) {
-                         return ClipRRect( // Clip the progress bar for rounded corners
-                            borderRadius: BorderRadius.circular(4), 
-                            child: LinearProgressIndicator(
-                             value: _xpBarAnimation.value,
-                             backgroundColor: Colors.white.withOpacity(0.3),
-                             valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
-                             minHeight: 8, 
-                           ),
-                         );
-                      },
-                   ),
-                 ),
-                 SizedBox(width: 8),
-                 // Use displayTargetLevel passed to the function
-                 Text("Lv $displayTargetLevel", style: TextStyle(color: Colors.white70, fontSize: 14)),
-               ],
+              children: [
+                // Use displayCurrentLevel passed to the function
+                Text("Lv $displayCurrentLevel", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                SizedBox(width: 8),
+                Expanded(
+                  child: AnimatedBuilder(
+                    animation: _xpBarAnimation,
+                    builder: (context, child) {
+                      return ClipRRect( // Clip the progress bar for rounded corners
+                        borderRadius: BorderRadius.circular(4), 
+                        child: LinearProgressIndicator(
+                          value: _xpBarAnimation.value,
+                          backgroundColor: Colors.white.withOpacity(0.3),
+                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                          minHeight: 8, 
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(width: 8),
+                // Display current level + 1 on the right
+                Text("Lv ${displayCurrentLevel + 1}", style: TextStyle(color: Colors.white70, fontSize: 14)),
+              ],
             ),
             
-             SizedBox(height: 35),
-             ElevatedButton(
-               // Navigate to home screen route
-               onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false),
-               style: ElevatedButton.styleFrom(
-                 padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                 backgroundColor: primaryColor,
-                 foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-               ),
-               child: Text("Back to Home", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-             )
+            SizedBox(height: 35),
+            ElevatedButton(
+              // Navigate to home screen route
+              onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+              child: Text("Back to Home", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            )
           ],
         ),
       ),

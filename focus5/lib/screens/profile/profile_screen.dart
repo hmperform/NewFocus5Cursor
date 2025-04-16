@@ -791,8 +791,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     });
     
-    return DailyStreakWidget(
-      currentStreak: user.streak,
-    );
+    return DailyStreakWidget();
   }
 } 

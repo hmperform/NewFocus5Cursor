@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:provider/provider.dart';
+import '../providers/user_provider.dart'; // Import UserProvider
 
 class DailyStreakWidget extends StatelessWidget {
-  final int currentStreak;
-  final int? longestStreak;
-  final DateTime? lastLoginDate;
-  final DateTime? lastActive;
-  
+  // Remove direct streak properties, will get from provider
+  // final int currentStreak;
+  // final int? longestStreak;
+  // final DateTime? lastLoginDate; // Use lastCompletionDate from provider
+  // final DateTime? lastActive;
+
   const DailyStreakWidget({
     Key? key,
-    required this.currentStreak,
-    this.longestStreak,
-    this.lastLoginDate,
-    this.lastActive,
+    // Remove required parameters
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Get user data from UserProvider
+    final userProvider = Provider.of<UserProvider>(context);
+    final user = userProvider.user;
+    final currentStreak = user?.streak ?? 0;
+    final longestStreak = user?.longestStreak ?? currentStreak;
+    final lastCompletionDate = user?.lastCompletionDate;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -33,71 +41,66 @@ class DailyStreakWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildWeekDayRow(context),
+          // Pass necessary data to the build methods
+          _buildWeekDayRow(context, currentStreak, lastCompletionDate),
           const SizedBox(height: 16),
-          _buildStatsRow(context),
+          _buildStatsRow(context, currentStreak, longestStreak),
         ],
       ),
     );
   }
-  
-  Widget _buildWeekDayRow(BuildContext context) {
-    // Days of the week
+
+  Widget _buildWeekDayRow(BuildContext context, int currentStreak, DateTime? lastCompletionDate) {
     final List<String> days = ["M", "T", "W", "T", "F", "S", "S"];
-    
-    // Get current day of week (1-7, where 1 is Monday)
     final now = DateTime.now();
-    int currentDayIndex = now.weekday - 1; // Convert to 0-based index (0 = Monday)
-    
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Determine the start of the current week (assuming Monday is the first day)
+    final startOfWeek = today.subtract(Duration(days: today.weekday - 1));
+
+    // Determine the date range of the current streak
+    DateTime? streakStartDay;
+    DateTime? streakEndDay; // This is the lastCompletionDay
+
+    if (currentStreak > 0 && lastCompletionDate != null) {
+      streakEndDay = DateTime(lastCompletionDate.year, lastCompletionDate.month, lastCompletionDate.day);
+      streakStartDay = streakEndDay.subtract(Duration(days: currentStreak - 1));
+      // Debug print
+      print('[DailyStreakWidget] Streak Range: Start=$streakStartDay, End=$streakEndDay (Current Streak: $currentStreak)');
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: List.generate(7, (index) {
+        // Calculate the date for the current day in the loop (Monday=0, Sunday=6)
+        final dayInWeek = startOfWeek.add(Duration(days: index));
         bool isActive = false;
-        
-        // Only proceed if there's an active streak
-        if (currentStreak > 0) {
-          if (currentStreak == 1) {
-            // For a 1-day streak, just highlight today's day
-            isActive = index == currentDayIndex;
-          } else if (lastActive != null) {
-            // For streaks > 1, calculate which days should be active
-            
-            // Get date for the weekday at this index
-            final int daysFromToday = (currentDayIndex - index + 7) % 7;
-            final DateTime thisWeekdayDate = DateTime.now().subtract(Duration(days: daysFromToday));
-            
-            // Calculate streak start date
-            final DateTime lastActiveDay = DateTime(lastActive!.year, lastActive!.month, lastActive!.day);
-            final DateTime streakStartDate = DateTime(
-              lastActiveDay.year, 
-              lastActiveDay.month, 
-              lastActiveDay.day
-            ).subtract(Duration(days: currentStreak - 1));
-            
-            // A day is active if it falls between streak start and last active date
-            isActive = !thisWeekdayDate.isBefore(streakStartDate) && 
-                      !thisWeekdayDate.isAfter(lastActiveDay);
-          } else {
-            // Fallback if no lastActive is available
-            int daysFromCurrent = (currentDayIndex - index + 7) % 7;
-            isActive = daysFromCurrent < currentStreak;
-          }
+
+        // Check if this day falls within the streak range
+        if (streakStartDay != null && streakEndDay != null) {
+          isActive = !dayInWeek.isBefore(streakStartDay) && !dayInWeek.isAfter(streakEndDay);
         }
+
+        // Determine color based on active status
+        final activeColor = const Color(0xFFB4FF00);
+        final inactiveColor = Colors.grey[400];
+        final color = isActive ? activeColor : inactiveColor;
         
+        // Debug print for each day
+        // print('[DailyStreakWidget] Day: ${days[index]} ($dayInWeek), Is Active: $isActive');
+
         return Column(
           children: [
-            // Lightning bolt icon
             Icon(
               Icons.bolt,
-              color: isActive ? const Color(0xFFB4FF00) : Colors.grey[400],
+              color: color,
               size: 28,
             ),
             const SizedBox(height: 4),
-            // Day label
             Text(
               days[index],
               style: TextStyle(
-                color: isActive ? const Color(0xFFB4FF00) : Colors.grey[400],
+                color: color,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -106,29 +109,30 @@ class DailyStreakWidget extends StatelessWidget {
       }),
     );
   }
-  
-  Widget _buildStatsRow(BuildContext context) {
-    final bestStreak = longestStreak ?? currentStreak;
+
+  Widget _buildStatsRow(BuildContext context, int currentStreak, int longestStreak) {
+    // Use the longestStreak value passed from build method
+    final bestStreak = longestStreak;
     
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildStatItem(
-          context, 
-          label: "CURRENT", 
-          value: "$currentStreak days", 
+          context,
+          label: "CURRENT",
+          value: "$currentStreak days",
           iconColor: const Color(0xFFB4FF00)
         ),
         _buildStatItem(
-          context, 
-          label: "BEST", 
-          value: "$bestStreak days", 
-          iconColor: Colors.red
+          context,
+          label: "BEST",
+          value: "$bestStreak days",
+          iconColor: Colors.blue
         ),
       ],
     );
   }
-  
+
   Widget _buildStatItem(
     BuildContext context, {
     required String label,

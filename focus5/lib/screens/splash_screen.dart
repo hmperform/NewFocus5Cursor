@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -9,6 +10,7 @@ import '../constants/theme.dart';
 import 'auth/login_screen.dart';
 import 'onboarding/onboarding_screen.dart';
 import 'home/home_screen.dart';
+import '../providers/user_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   final bool isFirstLaunch;
@@ -19,88 +21,71 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  VoidCallback? _authListener;
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _checkAuthAndNavigate();
+    
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeIn,
+      ),
+    );
+    
+    _controller.forward();
+    
+    // Navigate after delay
+    _navigateToNextScreen();
   }
 
   @override
   void dispose() {
-    if (_authListener != null) {
-      Provider.of<AuthProvider>(context, listen: false).removeListener(_authListener!);
-    }
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _checkAuthAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
+  Future<void> _navigateToNextScreen() async {
+    // Check streak status on app start
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    bool navigationHandled = false;
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
     
-    _authListener = () {
-      if (!mounted || navigationHandled) return;
-
-      final currentStatus = authProvider.status;
-      final isReady = authProvider.isAuthenticatedAndReady;
-
-      print("[Listener] SplashScreen Listener: Auth Status: $currentStatus, IsReady: $isReady, IsFirstLaunch: ${widget.isFirstLaunch}");
-
-      if (currentStatus != AuthStatus.authenticating && currentStatus != AuthStatus.initial) {
-        _navigateToNextScreen(authProvider);
-        navigationHandled = true;
+    // Start loading user data
+    final userId = authProvider.currentUser?.id;
+    if (userId != null) {
+      await userProvider.loadUserData(userId);
+      // Check streak status after user data is loaded
+      if (userProvider.user != null) {
+        await userProvider.checkAndUpdateStreakStatus(userId);
       }
-    };
-
-    authProvider.addListener(_authListener!);
-
-    print("SplashScreen: Triggering initial authProvider.checkAuthStatus()...");
-    await authProvider.checkAuthStatus();
-    print("SplashScreen: Initial checkAuthStatus() completed.");
-
-    if (!mounted) return;
-    final initialStatus = authProvider.status;
-    print("SplashScreen: Status immediately after check: $initialStatus");
-    if (initialStatus != AuthStatus.authenticating && initialStatus != AuthStatus.initial) {
-        if (!navigationHandled) {
-            print("SplashScreen: Navigating based on status after initial check.");
-             _navigateToNextScreen(authProvider);
-             navigationHandled = true;
-        } else {
-             print("SplashScreen: Navigation already handled by listener during initial check.");
-        }
-    } else {
-         print("SplashScreen: Status still initial/authenticating after check. Waiting for listener...");
     }
-  }
-
-  void _navigateToNextScreen(AuthProvider authProvider) {
-     if (_authListener != null) {
-        authProvider.removeListener(_authListener!);
-        _authListener = null;
-     }
-     
-     final currentStatus = authProvider.status;
-     final isReady = authProvider.isAuthenticatedAndReady;
-
-     if (widget.isFirstLaunch) {
-       print("SplashScreen: Navigating to Onboarding (First Launch)");
-       Navigator.of(context).pushReplacementNamed('/onboarding');
-     } else if (isReady) {
-       print("SplashScreen: Navigating to Home (Authenticated & Ready)");
-       Navigator.of(context).pushReplacementNamed('/home');
-     } else if (currentStatus == AuthStatus.unauthenticated || currentStatus == AuthStatus.error) {
-       print("SplashScreen: Navigating to Login (Unauthenticated or Error)");
-       Navigator.of(context).pushReplacementNamed('/login');
-     } else {
-       print("SplashScreen: Fallback - Navigating to Login (State: $currentStatus, Ready: $isReady)");
-       Navigator.of(context).pushReplacementNamed('/login');
-     }
+    
+    // Delay splash screen slightly for nicer animation
+    await Future.delayed(const Duration(milliseconds: 2500));
+    
+    if (!mounted) return;
+    
+    // Determine the next route
+    String nextRoute;
+    
+    if (widget.isFirstLaunch) {
+      nextRoute = '/onboarding';
+    } else if (authProvider.isLoggedIn) {
+      nextRoute = '/home';
+    } else {
+      nextRoute = '/login';
+    }
+    
+    // Navigate to the determined route
+    Navigator.of(context).pushReplacementNamed(nextRoute);
   }
 
   @override
@@ -117,89 +102,63 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       body: Container(
         width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              accentColor,
-              accentColor.withOpacity(0.8),
+              Theme.of(context).primaryColor,
+              Theme.of(context).primaryColor.withOpacity(0.8),
             ],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(),
-              // Logo
-              Container(
-                height: 160,
-                width: 160,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(30),
+        child: Center(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 150,
+                  height: 150,
                   child: Image.asset(
                     'assets/images/logos/just_focus5_head.png',
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      debugPrint('Error loading logo: $error');
-                      return Icon(
-                        Icons.fitness_center,
-                        size: 80,
-                        color: accentColor,
-                      );
-                    },
                   ),
                 ),
-              )
-              .animate()
-              .fadeIn(duration: 600.ms)
-              .scale(delay: 200.ms, duration: 500.ms),
-              
-              const SizedBox(height: 24),
-              
-              // App name
-              Text(
-                "FOCUS 5",
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                  letterSpacing: 2,
+                const SizedBox(height: 24),
+                Text(
+                  'FOCUS 5',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.3),
+                        offset: const Offset(0, 2),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
                 ),
-              )
-              .animate()
-              .fadeIn(delay: 300.ms, duration: 600.ms),
-              
-              const SizedBox(height: 8),
-              
-              // Tagline
-              Text(
-                "Mental Training for Athletes",
-                style: TextStyle(
-                  fontSize: 16,
-                  color: textColor.withOpacity(0.9),
-                  fontWeight: FontWeight.w500,
+                const SizedBox(height: 8),
+                Text(
+                  'Mental Performance App',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.9),
+                    letterSpacing: 1,
+                  ),
                 ),
-              )
-              .animate()
-              .fadeIn(delay: 500.ms, duration: 600.ms),
-              
-              const Spacer(),
-              
-              // Loading indicator
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(textColor),
-              )
-              .animate()
-              .fadeIn(delay: 800.ms, duration: 500.ms),
-              
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: 48),
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ],
+            ),
           ),
         ),
       ),

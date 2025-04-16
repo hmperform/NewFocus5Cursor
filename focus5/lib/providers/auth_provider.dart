@@ -25,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isUserDataReady => _userProvider?.user != null && !_userProvider!.isLoading;
   bool get isAuthenticatedAndReady => status == AuthStatus.authenticated && isUserDataReady;
+  bool get isLoggedIn => status == AuthStatus.authenticated;
 
   AuthProvider(this._userProvider) {
     checkAuthStatus();
