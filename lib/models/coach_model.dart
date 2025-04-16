@@ -14,6 +14,7 @@ class Coach {
   final String bookingLink;
   final List<String> courses;
   final DateTime createdAt;
+  final Map<String, dynamic>? associatedUser;
 
   Coach({
     required this.id,
@@ -29,9 +30,21 @@ class Coach {
     required this.bookingLink,
     required this.courses,
     required this.createdAt,
+    this.associatedUser,
   });
 
   factory Coach.fromJson(Map<String, dynamic> json) {
+    // Handle parsing DateTime from either Timestamp or ISO string
+    DateTime parseDateTime(dynamic value) {
+      if (value is Timestamp) {
+        return value.toDate();
+      } else if (value is String) {
+        return DateTime.parse(value);
+      } else {
+        return DateTime.now();
+      }
+    }
+
     return Coach(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
@@ -45,11 +58,23 @@ class Coach {
       isActive: json['isActive'] ?? false,
       bookingLink: json['bookingLink'] ?? '',
       courses: List<String>.from(json['courses'] ?? []),
-      createdAt: (json['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: json['createdAt'] != null 
+          ? parseDateTime(json['createdAt'])
+          : DateTime.now(),
+      associatedUser: json['associatedUser'] as Map<String, dynamic>?,
     );
   }
 
   Map<String, dynamic> toJson() {
+    // Helper to convert DateTime to Timestamp or ISO string
+    dynamic dateTimeToValue(DateTime dateTime) {
+      try {
+        return Timestamp.fromDate(dateTime);
+      } catch (e) {
+        return dateTime.toIso8601String();
+      }
+    }
+
     return {
       'id': id,
       'name': name,
@@ -63,7 +88,8 @@ class Coach {
       'isActive': isActive,
       'bookingLink': bookingLink,
       'courses': courses,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': dateTimeToValue(createdAt),
+      'associatedUser': associatedUser,
     };
   }
 
@@ -81,6 +107,7 @@ class Coach {
     String? bookingLink,
     List<String>? courses,
     DateTime? createdAt,
+    Map<String, dynamic>? associatedUser,
   }) {
     return Coach(
       id: id ?? this.id,
@@ -96,6 +123,7 @@ class Coach {
       bookingLink: bookingLink ?? this.bookingLink,
       courses: courses ?? this.courses,
       createdAt: createdAt ?? this.createdAt,
+      associatedUser: associatedUser ?? this.associatedUser,
     );
   }
 } 

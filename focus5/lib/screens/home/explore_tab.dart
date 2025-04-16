@@ -7,7 +7,7 @@ import 'package:focus5/providers/coach_provider.dart';
 import 'package:focus5/providers/content_provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
 import '../../screens/home/article_detail_screen.dart';
-import 'package:focus5/screens/coach/coach_profile_screen.dart';
+import '../../screens/coach/coach_profile_screen.dart';
 import 'package:focus5/screens/explore/focus_area_courses_screen.dart';
 import 'package:focus5/screens/home/course_detail_screen.dart';
 import 'package:focus5/services/firebase_config_service.dart';
@@ -281,14 +281,16 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             itemBuilder: (context, index) {
               final coach = coaches[index];
               return Container(
-                width: MediaQuery.of(context).size.width * 0.5, // Changed from 0.7 to 0.5
+                width: MediaQuery.of(context).size.width * 0.5,
                 margin: const EdgeInsets.only(right: 16),
                 child: GestureDetector(
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => CoachProfileScreen(coachId: coach.id),
+                        builder: (context) => CoachProfileScreen(
+                          coachId: coach.id,
+                        ),
                       ),
                     );
                   },

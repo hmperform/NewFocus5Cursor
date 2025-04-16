@@ -15,7 +15,7 @@ import '../../models/coach_model.dart';
 import '../../widgets/article/article_card.dart';
 import '../../widgets/course/course_gallery.dart';
 import 'course_detail_screen.dart';
-import 'coach_profile_screen.dart';
+import '../coach/coach_profile_screen.dart';
 import 'articles_list_screen.dart';
 import 'all_coaches_screen.dart';
 import 'all_courses_screen.dart';
@@ -24,9 +24,7 @@ import '../../services/paywall_service.dart';
 import 'article_detail_screen.dart';
 import '../explore/focus_area_courses_screen.dart';
 import '../../widgets/custom_button.dart';
-import 'coach_detail_screen.dart';
 import '../../widgets/coach/coach_list_tile.dart';
-import 'package:focus5/screens/home/coach_profile_screen.dart';
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -136,7 +134,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => CoachProfileScreen(coach: coach),
+                    builder: (context) => CoachProfileScreen(
+                      coachId: coach.id,
+                    ),
                   ),
                 );
               },
