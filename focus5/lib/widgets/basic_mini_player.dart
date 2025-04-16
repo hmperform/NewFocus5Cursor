@@ -5,7 +5,9 @@ import '../services/basic_video_service.dart';
 import '../screens/basic_player_screen.dart';
 import '../providers/audio_provider.dart';
 import '../screens/home/audio_player_screen.dart';
+import '../screens/lessons/lesson_audio_player_screen.dart';
 import '../models/content_models.dart';
+import '../providers/user_provider.dart';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -122,6 +124,8 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
   }
 
   void _openFullScreenPlayer(BuildContext context, {bool isVideo = false}) {
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+
     if (isVideo) {
       final videoService = Provider.of<BasicVideoService>(context, listen: false);
       if (videoService.videoController == null) return;
@@ -134,57 +138,92 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
       ).then((_) {
         if (mounted) {
           videoService.setFullScreen(false);
-          _checkPlaybackState();
         }
       });
     } else {
-      // Audio Logic
+      // --- Simplified Audio Logic --- 
       debugPrint('[BasicMiniPlayer] _openFullScreenPlayer called for AUDIO.');
-      final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-      final audio = audioProvider.currentAudio;
-      if (audio == null) {
-        debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: audio is null, returning.');
-        return;
+      final audioSource = audioProvider.audioSource;
+      final currentAudioId = audioProvider.currentAudio?.id;
+      
+      if (currentAudioId == null) {
+         debugPrint('[BasicMiniPlayer] No current audio ID found in provider.');
+         return;
       }
-      debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: Current audio ID: ${audio.id}');
+      
+      // <<< LOGGING START >>>
+      final bool isFullScreenBeforeSet = audioProvider.isFullScreenPlayerOpen;
+      debugPrint('[BasicMiniPlayer] State before setFullScreen(true): isFullScreenPlayerOpen=$isFullScreenBeforeSet');
+      // <<< LOGGING END >>>
 
       // Set the full screen state before navigation
       audioProvider.setFullScreenPlayerOpen(true);
+      
+      // <<< LOGGING START >>>
+      // It's important to re-read the state *after* calling setFullScreenPlayerOpen
+      // to see if the provider state itself updated immediately.
+      final bool isFullScreenAfterSet = audioProvider.isFullScreenPlayerOpen;
+      debugPrint('[BasicMiniPlayer] State just before Navigator.push: isFullScreenPlayerOpen=$isFullScreenAfterSet, Source: $audioSource');
+      // <<< LOGGING END >>>
 
-      // Create the DailyAudio object for the screen
-      final dailyAudio = DailyAudio(
-        id: audio.id,
-        title: audio.title,
-        description: audio.description,
-        audioUrl: audio.audioUrl,
-        thumbnail: audio.imageUrl,
-        slideshow1: audio.slideshowImages.isNotEmpty ? audio.slideshowImages[0] : '',
-        slideshow2: audio.slideshowImages.length > 1 ? audio.slideshowImages[1] : '',
-        slideshow3: audio.slideshowImages.length > 2 ? audio.slideshowImages[2] : '',
-        creatorId: FirebaseFirestore.instance.doc('coaches/default'),
-        creatorName: FirebaseFirestore.instance.doc('coaches/default'),
-        focusAreas: [audio.subtitle ?? ''],
-        durationMinutes: 10,
-        xpReward: 50,
-        universityExclusive: false,
-        createdAt: DateTime.now(),
-        datePublished: DateTime.now(),
-      );
+      // <<< MODIFIED: Schedule navigation for the next frame >>>
+      Future.delayed(Duration.zero, () {
+        if (!mounted) return; // Check if still mounted before navigating
 
-      // Use rootNavigator to ensure we're using the top-level navigator
-      Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (context) => AudioPlayerScreen(
-            audio: dailyAudio,
-            currentDay: 1,
-          ),
-        ),
-      ).then((_) {
-        debugPrint('[BasicMiniPlayer] _openFullScreenPlayer: AudioPlayerScreen was popped.');
-        if (mounted) {
-          audioProvider.setFullScreenPlayerOpen(false);
+        // Determine which screen to navigate to based on source type
+        if (audioSource == AudioSource.lesson) {
+          final originalLesson = audioProvider.originalLesson;
+          if (originalLesson != null) {
+            debugPrint('[BasicMiniPlayer] Navigating to LessonAudioPlayerScreen with original lesson.');
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(
+                builder: (context) => LessonAudioPlayerScreen(
+                  lesson: originalLesson, 
+                  courseTitle: originalLesson.courseTitle ?? 'Course', 
+                ),
+              ),
+            ).then((_) {
+              debugPrint('[BasicMiniPlayer] LessonAudioPlayerScreen was popped.');
+              // The state update is now handled by LessonAudioPlayerScreen's dispose
+              // if (mounted) {
+              //   final bool isFullScreenAfterPop = audioProvider.isFullScreenPlayerOpen;
+              //   debugPrint('[BasicMiniPlayer] State after LessonAudioPlayerScreen pop: isFullScreenPlayerOpen=$isFullScreenAfterPop');
+              //   audioProvider.setFullScreenPlayerOpen(false);
+              // }
+            });
+          } else {
+             debugPrint('[BasicMiniPlayer] Error: Audio source is Lesson, but originalLesson is null in provider.');
+             audioProvider.setFullScreenPlayerOpen(false); // Reset state if navigation fails
+          }
+
+        } else { // Default to Daily Audio (AudioSource.daily or AudioSource.unknown)
+          final originalDailyAudio = audioProvider.originalDailyAudio;
+          if (originalDailyAudio != null) {
+            debugPrint('[BasicMiniPlayer] Navigating to AudioPlayerScreen with original daily audio.');
+            final userProvider = Provider.of<UserProvider>(context, listen: false); 
+            final totalLoginDays = userProvider.user?.totalLoginDays ?? 1; 
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(
+                builder: (context) => AudioPlayerScreen(
+                  audio: originalDailyAudio, 
+                  currentDay: totalLoginDays,
+                ),
+              ),
+            ).then((_) {
+              debugPrint('[BasicMiniPlayer] AudioPlayerScreen was popped.');
+              // State update handled by AudioPlayerScreen's dispose/back button
+              // if (mounted) {
+              //    final bool isFullScreenAfterPop = audioProvider.isFullScreenPlayerOpen;
+              //    debugPrint('[BasicMiniPlayer] State after AudioPlayerScreen pop: isFullScreenPlayerOpen=$isFullScreenAfterPop');
+              //    audioProvider.setFullScreenPlayerOpen(false);
+              // }
+            });
+          } else {
+             debugPrint('[BasicMiniPlayer] Error: Audio source is Daily/Unknown, but originalDailyAudio is null in provider.');
+             audioProvider.setFullScreenPlayerOpen(false); // Reset state if navigation fails
+          }
         }
-      });
+      }); // End of Future.delayed
     }
   }
   
@@ -251,7 +290,10 @@ class _BasicMiniPlayerState extends State<BasicMiniPlayer> {
              onBackward: () => context.read<BasicVideoService>().seekBackward(seconds: 10),
              onForward: () => context.read<BasicVideoService>().seekForward(seconds: 10),
              onClose: () => context.read<BasicVideoService>().closePlayer(),
-             onTap: () => _openFullScreenPlayer(context, isVideo: true),
+             onTap: () {
+                debugPrint('[BasicMiniPlayer] onTap detected for video mini player.');
+               _openFullScreenPlayer(context, isVideo: true);
+             },
            );
         } else {
            debugPrint('[BasicMiniPlayer] Building SizedBox.shrink (no mini player to show).');

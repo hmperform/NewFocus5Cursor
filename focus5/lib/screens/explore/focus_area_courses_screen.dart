@@ -5,6 +5,8 @@ import '../../providers/theme_provider.dart';
 import '../../models/content_models.dart';
 import '../home/course_detail_screen.dart';
 import '../../services/paywall_service.dart';
+import '../../utils/app_icons.dart';
+import 'package:transparent_image/transparent_image.dart';
 
 class FocusAreaCoursesScreen extends StatefulWidget {
   final String focusArea;
@@ -128,18 +130,28 @@ class _FocusAreaCoursesScreenState extends State<FocusAreaCoursesScreen> {
   }
   
   Widget _buildCoursesList() {
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-    
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(top: 8.0, bottom: 80),
       itemCount: _courses.length,
       itemBuilder: (context, index) {
-        final course = _courses[index];
-        
-        return GestureDetector(
+        return _buildCourseCard(context, _courses[index]);
+      },
+    );
+  }
+
+  Widget _buildCourseCard(BuildContext context, Course course) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Card(
+        elevation: 4.0,
+        clipBehavior: Clip.antiAlias, 
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15.0),
+        ),
+        child: InkWell(
           onTap: () async {
             final paywallService = PaywallService();
             final canAccess = await paywallService.checkAccess();
@@ -154,144 +166,127 @@ class _FocusAreaCoursesScreenState extends State<FocusAreaCoursesScreen> {
               MaterialPageRoute(
                 builder: (context) => CourseDetailScreen(
                   courseId: course.id,
-                  course: course,
+                  course: course, 
                 ),
               ),
             );
           },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
                 children: [
-                  // Course image
-                  SizedBox(
-                    height: 180,
+                  Container(
+                    height: screenWidth * 0.4,
                     width: double.infinity,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          course.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.grey.shade200,
-                            child: Icon(Icons.image, size: 64, color: Colors.grey.shade400),
-                          ),
-                        ),
-                        if (course.premium)
-                          Positioned(
-                            top: 12,
-                            right: 12,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade800,
-                                borderRadius: BorderRadius.circular(20),
+                    child: course.imageUrl.isNotEmpty
+                        ? FadeInImage.memoryNetwork(
+                            placeholder: kTransparentImage,
+                            image: course.imageUrl,
+                            fit: BoxFit.cover,
+                            imageErrorBuilder: (context, error, stackTrace) => 
+                              Container(
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.school, color: Colors.grey, size: 50),
                               ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.star,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Premium',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          )
+                        : Container(
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.school, color: Colors.grey, size: 50),
                           ),
-                      ],
-                    ),
                   ),
-                  
-                  // Course info
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          course.title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
+                  if (course.premium)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade700,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 3, offset: Offset(0, 1))]
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          course.description,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: textColor.withOpacity(0.7),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 16,
-                              color: textColor.withOpacity(0.6),
-                            ),
-                            const SizedBox(width: 4),
+                            Icon(Icons.star, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
                             Text(
-                              '${course.durationMinutes} mins',
+                              'Premium',
                               style: TextStyle(
-                                fontSize: 14,
-                                color: textColor.withOpacity(0.6),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Icon(
-                              Icons.book,
-                              size: 16,
-                              color: textColor.withOpacity(0.6),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${course.modules.length} modules',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textColor.withOpacity(0.6),
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
                 ],
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            course.title,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${course.lessonsList.length} Lessons',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey[600],
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (course.focusPointsCost > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: themeProvider.accentColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AppIcons.getFocusPointIcon(
+                              width: 14,
+                              height: 14,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${course.focusPointsCost}',
+                              style: TextStyle(
+                                color: themeProvider.accentColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 } 

@@ -26,6 +26,7 @@ class Lesson {
   final bool premium;
   final Map<String, dynamic>? courseId;
   final List<String>? slideshowImages;
+  final String? courseTitle;
   // Add a convenience getter to access the course ID string
   String get courseIdString => courseId != null && courseId!.containsKey('id') ? courseId!['id'] as String : '';
   // Add a getter to create a DocumentReference from the courseId map
@@ -50,6 +51,7 @@ class Lesson {
     this.premium = false,
     required this.courseId,
     this.slideshowImages,
+    this.courseTitle,
   });
 
   factory Lesson.fromJson(Map<String, dynamic> json) {
@@ -104,6 +106,7 @@ class Lesson {
       premium: json['premium'] as bool? ?? false,
       courseId: parsedCourseId,
       slideshowImages: (json['slideshowImages'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      courseTitle: json['courseTitle'] as String?,
     );
   }
 
@@ -125,6 +128,7 @@ class Lesson {
       'premium': premium,
       'courseId': courseId,
       'slideshowImages': slideshowImages,
+      'courseTitle': courseTitle,
     };
   }
 }
@@ -734,16 +738,22 @@ class Article {
   }
 }
 
+// Enum to identify the origin of the audio in AudioProvider
+enum AudioSource { daily, lesson, unknown }
+
+// Audio Class used by AudioProvider
 class Audio {
   final String id;
   final String title;
-  final String subtitle;
+  final String subtitle; // Used for courseTitle in lessons, focusAreas in daily
   final String description;
   final String imageUrl;
   final String audioUrl;
   final int sequence;
   final String? waveformUrl;
   final List<String> slideshowImages;
+  final AudioSource sourceType; // <-- ADD THIS
+  final String? courseTitle;    // <-- ADD THIS (explicitly for lessons)
 
   Audio({
     required this.id,
@@ -755,19 +765,29 @@ class Audio {
     required this.sequence,
     this.waveformUrl,
     required this.slideshowImages,
+    this.sourceType = AudioSource.unknown, // <-- ADD DEFAULT
+    this.courseTitle,                     // <-- ADD THIS
   });
 
+  // fromMap and toMap might not be strictly necessary if AudioProvider
+  // constructs this object programmatically, but added for completeness
   factory Audio.fromMap(Map<String, dynamic> map) {
     return Audio(
-      id: map['id'] as String,
-      title: map['title'] as String,
+      id: map['id'] as String? ?? '',
+      title: map['title'] as String? ?? '',
       subtitle: map['subtitle'] as String? ?? '',
-      description: map['description'] as String,
-      imageUrl: map['imageUrl'] as String,
-      audioUrl: map['audioUrl'] as String,
-      sequence: map['sequence'] as int,
+      description: map['description'] as String? ?? '',
+      imageUrl: map['imageUrl'] as String? ?? '',
+      audioUrl: map['audioUrl'] as String? ?? '',
+      sequence: map['sequence'] as int? ?? 0,
       waveformUrl: map['waveformUrl'] as String?,
-      slideshowImages: List<String>.from(map['slideshowImages'] as List<dynamic>),
+      slideshowImages: map['slideshowImages'] != null 
+          ? List<String>.from(map['slideshowImages'])
+          : [],
+      sourceType: map['sourceType'] != null
+          ? AudioSource.values.firstWhere((e) => e.name == map['sourceType'], orElse: () => AudioSource.unknown)
+          : AudioSource.unknown,
+       courseTitle: map['courseTitle'] as String?,
     );
   }
 
@@ -782,6 +802,8 @@ class Audio {
       'sequence': sequence,
       'waveformUrl': waveformUrl,
       'slideshowImages': slideshowImages,
+      'sourceType': sourceType.name, // Store enum name as string
+      'courseTitle': courseTitle,
     };
   }
 } 

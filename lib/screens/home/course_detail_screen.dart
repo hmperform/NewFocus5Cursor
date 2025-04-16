@@ -127,15 +127,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Course image with Hero animation
-                  Hero(
-                    tag: 'course-image-${_course!.id}',
-                    child: ImageUtils.networkImageWithFallback(
-                      imageUrl: _course!.imageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: 250,
-                    ),
+                  // Course image (No Hero animation)
+                  ImageUtils.networkImageWithFallback(
+                    imageUrl: _course!.imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: 250,
                   ),
                   // Gradient overlay for text visibility
                   Container(

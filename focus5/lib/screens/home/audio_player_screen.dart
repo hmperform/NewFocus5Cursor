@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' hide AudioSource;
 import 'package:transparent_image/transparent_image.dart';
 import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/user_provider.dart';
@@ -35,6 +35,12 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
+    
+    // <<< LOGGING START >>>
+    final audioProviderInitial = Provider.of<AudioProvider>(context, listen: false);
+    debugPrint('[AudioPlayerScreen] initState: isFullScreenPlayerOpen=${audioProviderInitial.isFullScreenPlayerOpen}');
+    // <<< LOGGING END >>>
+    
     debugPrint('[AudioPlayerScreen] initState for audio: ${widget.audio.title} (ID: ${widget.audio.id})');
     
     // Get the provider and ensure it's ready
@@ -67,7 +73,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         final audioProvider = Provider.of<AudioProvider>(context, listen: false);
         // Only initialize audio if it's not already playing the same track
         if (audioProvider.currentAudio?.id != widget.audio.id) {
-          // Convert DailyAudio to Audio
+          // Convert DailyAudio to Audio for the provider
           final audio = Audio(
             id: widget.audio.id,
             title: widget.audio.title,
@@ -75,15 +81,17 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
             audioUrl: widget.audio.audioUrl,
             imageUrl: widget.audio.thumbnail,
             description: widget.audio.description,
-            sequence: 0,
+            sequence: 0, // Or use a relevant sequence if DailyAudio has one
             slideshowImages: [
               widget.audio.slideshow1,
               widget.audio.slideshow2,
               widget.audio.slideshow3,
             ].where((s) => s.isNotEmpty).toList(),
+            sourceType: AudioSource.daily, // Set source type for daily audio
+            courseTitle: null, // No course title for daily audio
           );
           
-          await audioProvider.startAudioFromDaily(audio);
+          await audioProvider.startAudioPlayback(audio); // <-- CORRECT METHOD CALL
           debugPrint('[AudioPlayerScreen] Audio playback started successfully');
         } else {
           debugPrint('[AudioPlayerScreen] Same audio already playing, skipping initialization');
@@ -245,7 +253,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
   Widget build(BuildContext context) {
     return Consumer<AudioProvider>(
       builder: (context, audioProvider, child) {
-        debugPrint('[AudioPlayerScreen] Build method. Provider state: isPlaying=${audioProvider.isPlaying}, showMiniPlayer=${audioProvider.showMiniPlayer}, isFullScreen=${audioProvider.isFullScreenPlayerOpen}, currentAudioId=${audioProvider.currentAudio?.id}');
+        // <<< LOGGING START >>>
+        debugPrint('[AudioPlayerScreen] Build: isFullScreenPlayerOpen=${audioProvider.isFullScreenPlayerOpen}, currentAudioId=${audioProvider.currentAudio?.id}');
+        // <<< LOGGING END >>>
         
         // Calculate waveform progress from provider state
         _waveformProgress = audioProvider.totalDuration > 0 

@@ -4,6 +4,7 @@ import 'package:focus5/providers/daily_audio_provider.dart';
 import 'package:focus5/screens/home/audio_player_screen.dart';
 import 'package:focus5/models/content_models.dart';
 import 'package:focus5/services/user_service.dart';
+import 'package:focus5/providers/audio_provider.dart';
 
 class AudioModuleCard extends StatelessWidget {
   const AudioModuleCard({Key? key}) : super(key: key);
@@ -40,17 +41,6 @@ class AudioModuleCard extends StatelessWidget {
             final currentPlayingAudioId = audioProvider.currentAudio?.id;
             debugPrint('[AudioModuleCard] Current playing audio ID in provider: $currentPlayingAudioId');
 
-            // Create the Audio object
-            final basicAudio = Audio(
-              id: audio.id,
-              title: audio.title,
-              subtitle: audio.focusAreas.join(', '),
-              audioUrl: audio.audioUrl,
-              imageUrl: audio.thumbnail,
-              description: audio.description,
-              slideshowImages: [audio.slideshow1, audio.slideshow2, audio.slideshow3].where((s) => s.isNotEmpty).toList(),
-            );
-
             try {
               // If this is the currently playing audio, just open the full screen player
               if (currentPlayingAudioId == audio.id) {
@@ -69,13 +59,13 @@ class AudioModuleCard extends StatelessWidget {
                 return;
               }
 
-              // If it's a different audio, start playing it
+              // If it's a different audio, start playing it using the new method
               debugPrint('[AudioModuleCard] Starting new audio via provider.');
-              await audioProvider.startAudioFromDaily(basicAudio);
-              
+              await audioProvider.startAudioPlayback(audio);
+
               // Only navigate if we're still mounted and the audio was successfully started
               if (!context.mounted) return;
-              if (audioProvider.currentAudio?.id == basicAudio.id) {
+              if (audioProvider.currentAudio?.id == audio.id) {
                 debugPrint('[AudioModuleCard] Audio started successfully, opening full screen player');
                 audioProvider.setFullScreenPlayerOpen(true);
                 Navigator.push(

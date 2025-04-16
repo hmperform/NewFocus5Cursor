@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' hide AudioSource;
 import 'package:transparent_image/transparent_image.dart';
 import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/user_provider.dart';
@@ -30,6 +30,7 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
   int _currentSlideIndex = 0;
   bool _isCompleted = false; // Local completion state for UI, not the official one
   StreamSubscription<PlayerState>? _playerStateSubscription; // Subscription for completion
+  late AudioProvider _audioProviderInstance; // <<< ADDED: Store provider instance
 
   List<String> _slideshowImages = [];
 
@@ -44,10 +45,18 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
   @override
   void initState() {
     super.initState();
+    
+    // <<< ADDED: Get and store provider instance >>>
+    _audioProviderInstance = Provider.of<AudioProvider>(context, listen: false);
+    
+    // <<< LOGGING START >>>
+    debugPrint('[LessonAudioPlayerScreen] initState: isFullScreenPlayerOpen=${_audioProviderInstance.isFullScreenPlayerOpen}');
+    // <<< LOGGING END >>>
+    
     debugPrint('[LessonAudioPlayerScreen] initState for lesson: ${widget.lesson.title} (ID: ${widget.lesson.id})');
 
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-    audioProvider.setFullScreenPlayerOpen(true);
+    // Use the stored instance from now on in initState
+    _audioProviderInstance.setFullScreenPlayerOpen(true); 
 
     // Initialize slideshow images from Lesson object
     // Assuming lesson object has a slideshowImages field similar to the JSON example
@@ -67,8 +76,9 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
 
     // Start audio playback and listen for completion
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initializeAndPlayAudio(audioProvider);
-      _listenForCompletion(audioProvider);
+      // Pass the stored instance
+      await _initializeAndPlayAudio(_audioProviderInstance);
+      _listenForCompletion(_audioProviderInstance);
     });
   }
 
@@ -76,36 +86,42 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
     debugPrint('[LessonAudioPlayerScreen] Starting audio playback for lesson ID: ${widget.lesson.id}');
     if (widget.lesson.audioUrl == null || widget.lesson.audioUrl!.isEmpty) {
        debugPrint('[LessonAudioPlayerScreen] No audio URL found for lesson ID: ${widget.lesson.id}');
-       ScaffoldMessenger.of(context).showSnackBar(
-         const SnackBar(content: Text('No audio available for this lesson')),
-       );
-       Navigator.of(context).pop();
+       if (mounted) { // Check if mounted before showing SnackBar/popping
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('No audio available for this lesson')),
+         );
+         Navigator.of(context).pop();
+       }
        return;
     }
 
     try {
       // Only initialize audio if it's not already playing the same track
       if (audioProvider.currentAudio?.id != widget.lesson.id) {
-        // Create a generic Audio object for the provider
-        final audio = Audio(
-          id: widget.lesson.id,
-          title: widget.lesson.title,
-          subtitle: widget.courseTitle, // Use course title as subtitle
-          audioUrl: widget.lesson.audioUrl!,
-          imageUrl: widget.lesson.thumbnailUrl ?? '', // Use lesson thumbnail
-          description: widget.lesson.description ?? '',
-          slideshowImages: _slideshowImages,
-          sequence: widget.lesson.sortOrder, // Use sort order if needed
-        );
+        // Create a generic Audio object for the provider - NO LONGER NEEDED HERE
+        // final audio = Audio(
+        //   id: widget.lesson.id,
+        //   title: widget.lesson.title,
+        //   subtitle: widget.courseTitle, 
+        //   audioUrl: widget.lesson.audioUrl!,
+        //   imageUrl: widget.lesson.thumbnailUrl ?? '',
+        //   description: widget.lesson.description ?? '',
+        //   slideshowImages: _slideshowImages,
+        //   sequence: widget.lesson.sortOrder, 
+        //   sourceType: AudioSource.lesson,   
+        //   courseTitle: widget.courseTitle, 
+        // );
 
-        await audioProvider.startAudioFromDaily(audio); // Reusing this method, ensure it fits
+        // await audioProvider.startAudioPlayback(audio); // OLD CALL
+        await audioProvider.startAudioPlayback(widget.lesson); // <-- PASS ORIGINAL LESSON
         debugPrint('[LessonAudioPlayerScreen] Audio playback started successfully via provider');
       } else {
-        // If same audio, ensure it's playing
+        // If same audio, ensure it's playing and full screen state is correct
         if (!audioProvider.isPlaying) {
            audioProvider.audioPlayer.play();
         }
-        debugPrint('[LessonAudioPlayerScreen] Same audio already managed by provider, ensuring playback.');
+        audioProvider.setFullScreenPlayerOpen(true); // Ensure full screen state
+        debugPrint('[LessonAudioPlayerScreen] Same audio already managed by provider, ensuring playback and full screen.');
       }
 
       if (audioProvider.isPlaying && _slideshowImages.isNotEmpty) {
@@ -206,14 +222,14 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
     _slideshowController.dispose();
     _playerStateSubscription?.cancel(); // Cancel subscription
 
+    // <<< MODIFIED: Use stored provider instance, removed context lookup >>>
     // Inform the provider that the full screen player is closing *only if*
     // this specific audio instance is the one currently managed by the provider.
     // Avoid resetting if another audio was started in the meantime.
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-     if (audioProvider.currentAudio?.id == widget.lesson.id) {
-       audioProvider.setFullScreenPlayerOpen(false);
+     if (_audioProviderInstance.currentAudio?.id == widget.lesson.id) {
+       _audioProviderInstance.setFullScreenPlayerOpen(false);
        // Decide if you want to stop the audio or let it continue in mini-player
-       // audioProvider.stop(); // Uncomment to stop audio when screen is closed
+       // _audioProviderInstance.stop(); // Uncomment to stop audio when screen is closed
      }
     super.dispose();
   }
@@ -223,6 +239,10 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
     // Use Consumer for reactive UI updates based on AudioProvider state
     return Consumer<AudioProvider>(
       builder: (context, audioProvider, child) {
+        // <<< LOGGING START >>>
+        debugPrint('[LessonAudioPlayerScreen] Build: isFullScreenPlayerOpen=${audioProvider.isFullScreenPlayerOpen}');
+        // <<< LOGGING END >>>
+
         // Ensure the provider's current audio matches this lesson's audio
         // This check might be needed if the user navigates away and back quickly
         // or if background audio changes state.
@@ -469,10 +489,9 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
   }
 
   void _handleBackButton() {
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-    audioProvider.setFullScreenPlayerOpen(false);
-    // Consider stopping audio or allowing mini-player
-    // audioProvider.stop(); 
+    // <<< MODIFIED: Remove redundant state change call >>>
+    // final audioProvider = Provider.of<AudioProvider>(context, listen: false); // No longer needed here
+    // audioProvider.setFullScreenPlayerOpen(false); // Removed - handled by dispose
     Navigator.of(context).pop();
   }
 
