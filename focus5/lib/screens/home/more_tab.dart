@@ -3,7 +3,6 @@ import 'package:transparent_image/transparent_image.dart';
 import 'package:provider/provider.dart';
 import '../more/games_screen.dart';
 import '../more/journal_screen.dart';
-import '../more/settings_screen.dart';
 import 'media_tab.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
@@ -98,17 +97,27 @@ class MoreTab extends StatelessWidget {
                     },
                   ),
                   
-                  // Settings
+                  // Replaced Settings with Help & Support
                   _buildMenuItem(
                     context,
-                    'Settings',
-                    Icons.settings,
+                    'Help & Support',
+                    Icons.help_outline,
                     Colors.purple.shade300,
                     () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SettingsScreen(),
+                      // Show help dialog or navigate to help screen
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Help & Support'),
+                          content: const Text(
+                            'Need assistance? Contact us at support@focus5.com or visit our help center.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
                         ),
                       );
                     },

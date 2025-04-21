@@ -489,6 +489,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Streak widget - replace the three detail cards for streak
           _buildStreakWidget(user),
+          const SizedBox(height: 24),
+          
+          // Add a divider between sections
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Divider(
+              color: Colors.grey[800],
+              thickness: 1,
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Add the new stats section
+          _buildStatsSection(user),
           const SizedBox(height: 32),
 
           // Sign out button (Uses AuthProvider)
@@ -781,16 +795,124 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildStreakWidget(User user) {
-    // Generate week data - this is a placeholder; in a real app, you'd have actual data
-    // For now, we'll simulate based on the current streak
-    List<bool> weekData = List.generate(7, (index) {
-      if (index < user.streak) {
-        return true; // Active for days in the streak
-      } else {
-        return false; // Inactive for other days
-      }
-    });
-    
     return DailyStreakWidget();
+  }
+  
+  // New method to build a visually appealing stats section
+  Widget _buildStatsSection(User user) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0, bottom: 16.0),
+            child: Text(
+              'My Stats',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildStatCard(
+                icon: Icons.headphones,
+                value: '${user.completedAudios.length}',
+                label: 'Audios',
+                gradientColors: [Colors.purple, Colors.deepPurple],
+              ),
+              _buildStatCard(
+                icon: Icons.menu_book,
+                value: '${user.completedCourses.length}',
+                label: 'Courses',
+                gradientColors: [Colors.blue, Colors.lightBlue],
+              ),
+              _buildStatCard(
+                icon: Icons.emoji_events,
+                value: '${user.badges.length}',
+                label: 'Badges',
+                gradientColors: [Colors.amber, Colors.orange],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildStatCard({
+    required IconData icon, 
+    required String value, 
+    required String label, 
+    required List<Color> gradientColors
+  }) {
+    return Container(
+      width: 100,
+      height: 110,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            gradientColors[0].withOpacity(0.2),
+            gradientColors[1].withOpacity(0.2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: gradientColors[0].withOpacity(0.3),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: gradientColors,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: gradientColors[0].withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 } 

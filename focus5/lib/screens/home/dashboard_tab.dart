@@ -206,6 +206,7 @@ class _DashboardTabState extends State<DashboardTab> {
               padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
               children: [
                 const SizedBox(height: 8),
+                _buildTopSection(context, MediaQuery.of(context).size.width),
                 _buildDayStreak(),
                 _buildStartYourDay(context),
                 _buildRecentCourses(),
@@ -238,6 +239,28 @@ class _DashboardTabState extends State<DashboardTab> {
     );
   }
 
+  Widget _buildTopSection(BuildContext context, double screenWidth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "Dashboard",
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Daily Streak Widget removed - it's already displayed in _buildDayStreak
+      ],
+    );
+  }
+
   Widget _buildDayStreak() {
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
@@ -258,7 +281,7 @@ class _DashboardTabState extends State<DashboardTab> {
     }
     
     // Use the streak value from user data and the updated DailyStreakWidget
-    return DailyStreakWidget();
+    return DailyStreakWidget(showStreak: true);
   }
 
   Widget _buildRecentCourses() {
