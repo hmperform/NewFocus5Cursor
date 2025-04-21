@@ -222,6 +222,20 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final textColor = Theme.of(context).colorScheme.onBackground;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
+    if (coachProvider.isLoading && coaches.isEmpty) {
+      return Container(
+        height: 100,
+        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
+      );
+    }
+
+    if (coachProvider.error != null && coaches.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Error loading coaches: ${coachProvider.error}', style: TextStyle(color: Colors.red)),
+      );
+    }
+
     if (coaches.isEmpty) {
       return const SizedBox.shrink();
     }

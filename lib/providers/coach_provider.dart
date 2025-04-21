@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart'; // Import SchedulerBinding
 import '../models/coach_model.dart';
 import '../services/coach_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +11,16 @@ class CoachProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Helper method to safely notify listeners
+  void _safeNotifyListeners() {
+    // Use addPostFrameCallback to ensure listeners are notified after the build phase
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (hasListeners) { // Check if there are still listeners
+        notifyListeners();
+      }
+    });
+  }
+
   // Getters
   List<Coach> get coaches => _coaches;
   Coach? get selectedCoach => _selectedCoach;
@@ -19,36 +30,34 @@ class CoachProvider with ChangeNotifier {
   // Methods
   void setSelectedCoach(Coach coach) {
     _selectedCoach = coach;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void clearSelectedCoach() {
     _selectedCoach = null;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // Load coaches
   Future<void> loadCoaches({bool activeOnly = true}) async {
+    if (_isLoading) return; // Prevent concurrent loads
     _isLoading = true;
     _errorMessage = null;
-    notifyListeners();
+    _safeNotifyListeners(); // Notify loading start safely
 
     try {
       _coaches = await _coachService.getCoaches(activeOnly: activeOnly);
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to load coaches: $e';
       debugPrint('Error in loadCoaches: $e');
+    } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners(); // Notify loading end safely
     }
   }
 
   // Get coach by ID
   Future<Coach?> getCoachById(String coachId) async {
-    if (_isLoading) return null; // Avoid fetching if already loading
-    
     try {
       // First check if we already have this coach loaded
       Coach? localCoach = _coaches.firstWhere((c) => c.id == coachId, orElse: () => null as Coach);
@@ -56,19 +65,18 @@ class CoachProvider with ChangeNotifier {
         return localCoach;
       }
       
-      // If not found locally, fetch from service
-      _isLoading = true;
-      notifyListeners();
-      
+      // Fetch from service (no need to manage loading state here, handled by caller)
       final Coach? coach = await _coachService.getCoachById(coachId);
       
-      _isLoading = false;
-      notifyListeners();
       return coach;
     } catch (e) {
-      _errorMessage = "Failed to get coach details: $e";
-      _isLoading = false;
-      notifyListeners();
+      // Update error message safely, but don't change loading state
+      final newErrorMessage = "Failed to get coach details: $e";
+      if (_errorMessage != newErrorMessage) {
+        _errorMessage = newErrorMessage;
+        _safeNotifyListeners();
+      }
+      debugPrint('Error in getCoachById: $_errorMessage');
       return null;
     }
   }
@@ -80,80 +88,74 @@ class CoachProvider with ChangeNotifier {
   }
   
   Future<String?> createCoach(Coach coach) async {
+    if (_isLoading) return null;
+    _isLoading = true;
+    _errorMessage = null;
+    _safeNotifyListeners();
+    
+    String? coachId;
     try {
-      _isLoading = true;
-      notifyListeners();
-      
-      final String? coachId = await _coachService.createCoach(coach);
-      
+      coachId = await _coachService.createCoach(coach);
       if (coachId != null) {
-        // Add new coach to local list with the generated ID
         _coaches.add(coach.copyWith(id: coachId));
       }
-      
-      _isLoading = false;
-      notifyListeners();
-      
-      return coachId;
     } catch (e) {
-      _isLoading = false;
       _errorMessage = 'Failed to create coach: ${e.toString()}';
       debugPrint('Error creating coach: $e');
-      notifyListeners();
-      return null;
+      coachId = null; 
+    } finally {
+      _isLoading = false;
+      _safeNotifyListeners();
     }
+    return coachId;
   }
   
   Future<bool> updateCoach(Coach coach) async {
+    if (_isLoading) return false;
+    _isLoading = true;
+    _errorMessage = null;
+    _safeNotifyListeners();
+    
+    bool success = false;
     try {
-      _isLoading = true;
-      notifyListeners();
-      
-      final bool success = await _coachService.updateCoach(coach);
-      
+      success = await _coachService.updateCoach(coach);
       if (success) {
-        // Update coach in local list
         final index = _coaches.indexWhere((c) => c.id == coach.id);
         if (index != -1) {
           _coaches[index] = coach;
         }
       }
-      
-      _isLoading = false;
-      notifyListeners();
-      
-      return success;
     } catch (e) {
-      _isLoading = false;
       _errorMessage = 'Failed to update coach: ${e.toString()}';
       debugPrint('Error updating coach: $e');
-      notifyListeners();
-      return false;
+      success = false;
+    } finally {
+      _isLoading = false;
+      _safeNotifyListeners();
     }
+    return success;
   }
   
   Future<bool> deleteCoach(String coachId) async {
+    if (_isLoading) return false;
+    _isLoading = true;
+    _errorMessage = null;
+    _safeNotifyListeners();
+    
+    bool success = false;
     try {
-      _isLoading = true;
-      notifyListeners();
-      
-      final bool success = await _coachService.deleteCoach(coachId);
-      
+      success = await _coachService.deleteCoach(coachId);
       if (success) {
-        // Remove coach from local list
         _coaches.removeWhere((coach) => coach.id == coachId);
       }
-      
-      _isLoading = false;
-      notifyListeners();
-      
-      return success;
     } catch (e) {
-      _isLoading = false;
       _errorMessage = 'Failed to delete coach: ${e.toString()}';
       debugPrint('Error deleting coach: $e');
-      notifyListeners();
-      return false;
+      success = false;
+    } finally {
+      _isLoading = false;
+      _safeNotifyListeners();
     }
+    return success;
   }
 } 

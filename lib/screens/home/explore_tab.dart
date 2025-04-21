@@ -130,15 +130,52 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
             final coach = coaches[index];
             return CoachListTile(
               coach: coach,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CoachProfileScreen(
-                      coachId: coach.id,
-                    ),
-                  ),
-                );
+              onTap: () async {
+                print('Explore Tab - Navigating to Coach Profile with ID: ${coach.id}');
+                
+                if (coach.id.isNotEmpty) {
+                  // Pre-load coach data
+                  final coachProvider = Provider.of<CoachProvider>(context, listen: false);
+                  final scaffoldMessenger = ScaffoldMessenger.of(context);
+                  
+                  try {
+                    // Show a loading indicator
+                    final loadingSnackBar = SnackBar(
+                      content: Row(
+                        children: const [
+                          CircularProgressIndicator(strokeWidth: 2),
+                          SizedBox(width: 16),
+                          Text('Loading coach profile...')
+                        ],
+                      ),
+                      duration: const Duration(seconds: 2),
+                    );
+                    scaffoldMessenger.showSnackBar(loadingSnackBar);
+                    
+                    // Pre-fetch the coach data
+                    final fullCoachData = await coachProvider.getCoachById(coach.id);
+                    
+                    if (fullCoachData != null) {
+                      // Use named route to ensure consistent navigation
+                      Navigator.of(context).pushNamed(
+                        '/coach-profile',
+                        arguments: coach.id,
+                      );
+                    } else {
+                      throw Exception('Could not load coach details');
+                    }
+                  } catch (e) {
+                    print('Explore Tab - Error loading coach data: $e');
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(content: Text('Error: Could not load coach details: $e')),
+                    );
+                  }
+                } else {
+                  print('Explore Tab - Error: Coach ID is empty, cannot navigate.');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Error: Could not load coach details.')),
+                  );
+                }
               },
             );
           },

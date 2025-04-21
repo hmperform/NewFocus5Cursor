@@ -15,6 +15,7 @@ import 'package:focus5/screens/auth/signup_screen.dart';
 import 'package:focus5/screens/onboarding/profile_setup_screen.dart';
 import 'package:focus5/screens/splash_screen.dart';
 import 'package:focus5/models/content_models.dart';
+import 'screens/coach/coach_profile_screen.dart';
 import 'screens/chat/chat_list_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/chat/new_chat_screen.dart';
@@ -33,6 +34,9 @@ final Map<String, WidgetBuilder> routes = {
   '/settings': (context) => const SettingsScreen(),
   '/messages': (context) => const ChatListScreen(),
   '/messages/new': (context) => const NewChatScreen(),
+  '/coach-profile': (context) => CoachProfileScreen(
+    coachId: ModalRoute.of(context)!.settings.arguments as String,
+  ),
 };
 
 // For routes with parameters, create a separate function that handles proper typing
