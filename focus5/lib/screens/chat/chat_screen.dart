@@ -4,6 +4,13 @@ import 'dart:ui';  // Add this import for ImageFilter
 import '../../models/chat_models.dart';
 import '../../providers/chat_provider.dart';
 import 'package:flutter/rendering.dart';
+import 'widgets/content_sharing_screen.dart';
+import '../../main.dart'; // Import main.dart to access navigatorKey
+// Import providers needed for fetching content
+import '../../providers/content_provider.dart'; 
+import '../../providers/audio_provider.dart'; 
+import '../../models/content_models.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -529,11 +536,125 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                     color: isMe ? Colors.blue : Colors.grey.shade200,
                                                     borderRadius: BorderRadius.circular(20),
                                                   ),
-                                                  child: Text(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      if (message.sharedContent != null) ...[
+                                                        // Shared content card
+                                                        Container(
+                                                          margin: const EdgeInsets.only(bottom: 8),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white,
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: Colors.black.withOpacity(0.1),
+                                                                blurRadius: 4,
+                                                                offset: const Offset(0, 2),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          child: ClipRRect(
+                                                            borderRadius: BorderRadius.circular(12),
+                                                            child: Material(
+                                                              color: Colors.transparent,
+                                                              child: InkWell(
+                                                                onTap: () {
+                                                                  _openSharedContent(message.sharedContent!);
+                                                                },
+                                                                child: Column(
+                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                  children: [
+                                                                    if (message.sharedContent!.thumbnailUrl != null &&
+                                                                        message.sharedContent!.thumbnailUrl!.isNotEmpty)
+                                                                      Image.network(
+                                                                        message.sharedContent!.thumbnailUrl!,
+                                                                        height: 150,
+                                                                        width: double.infinity,
+                                                                        fit: BoxFit.cover,
+                                                                        errorBuilder: (context, error, stackTrace) {
+                                                                          return Container(
+                                                                            height: 100,
+                                                                            color: Colors.grey.shade300,
+                                                                            child: Center(
+                                                                              child: Icon(
+                                                                                message.sharedContent!.contentType == 'course'
+                                                                                    ? Icons.school
+                                                                                    : message.sharedContent!.contentType == 'module'
+                                                                                        ? Icons.headphones
+                                                                                        : Icons.article,
+                                                                                size: 32,
+                                                                                color: Colors.grey.shade700,
+                                                                              ),
+                                                                            ),
+                                                                          );
+                                                                        },
+                                                                      ),
+                                                                    Padding(
+                                                                      padding: const EdgeInsets.all(12),
+                                                                      child: Column(
+                                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          Row(
+                                                                            children: [
+                                                                              Icon(
+                                                                                message.sharedContent!.contentType == 'course'
+                                                                                    ? Icons.school
+                                                                                    : message.sharedContent!.contentType == 'module'
+                                                                                        ? Icons.headphones
+                                                                                        : Icons.article,
+                                                                                size: 16,
+                                                                                color: Colors.grey.shade700,
+                                                                              ),
+                                                                              const SizedBox(width: 8),
+                                                                              Text(
+                                                                                message.sharedContent!.contentType.toUpperCase(),
+                                                                                style: TextStyle(
+                                                                                  fontSize: 12,
+                                                                                  fontWeight: FontWeight.bold,
+                                                                                  color: Colors.grey.shade700,
+                                                                                ),
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                          const SizedBox(height: 8),
+                                                                          Text(
+                                                                            message.sharedContent!.title,
+                                                                            style: const TextStyle(
+                                                                              fontSize: 16,
+                                                                              fontWeight: FontWeight.bold,
+                                                                              color: Colors.black,
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(height: 4),
+                                                                          Text(
+                                                                            message.sharedContent!.description,
+                                                                            style: TextStyle(
+                                                                              fontSize: 14,
+                                                                              color: Colors.grey.shade800,
+                                                                            ),
+                                                                            maxLines: 2,
+                                                                            overflow: TextOverflow.ellipsis,
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                      // Regular message text
+                                                      if (message.content.isNotEmpty)
+                                                        Text(
                                                     message.content,
                                                     style: TextStyle(
                                                       color: isMe ? Colors.white : Colors.black,
                                                     ),
+                                                        ),
+                                                    ],
                                                   ),
                                                 ),
                                               ),
@@ -692,6 +813,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 );
                               },
                             ),
+                            // Share Content button for admins and coaches
+                            Consumer<ChatProvider>(
+                              builder: (context, chatProvider, child) {
+                                // Only show for admins and coaches
+                                if (chatProvider.isAdmin || chatProvider.isCoach) {
+                                  return IconButton(
+                                    icon: Icon(
+                                      Icons.share,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                    onPressed: () {
+                                      _showContentSharingDialog(context);
+                                    },
+                                  );
+                                } else {
+                                  return const SizedBox.shrink();
+                                }
+                              },
+                            ),
                             // Message text field
                             Expanded(
                               child: TextField(
@@ -804,5 +944,131 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } else {
       return '${time.day}/${time.month}/${time.year}';
     }
+  }
+
+  // Method to open shared content - now async to fetch data
+  Future<void> _openSharedContent(SharedContent sharedContent) async {
+    final contentType = sharedContent.contentType;
+    final contentId = sharedContent.contentId;
+    final navigator = navigatorKey.currentState; // Use global navigator
+
+    if (navigator == null) {
+      debugPrint('Error: navigatorKey.currentState is null!');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Navigation error: Could not get navigator state.')),
+        );
+      }
+      return;
+    }
+
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Center(child: CircularProgressIndicator());
+        },
+      );
+    }
+
+    try {
+      debugPrint('Opening shared content: $contentType with ID: $contentId');
+
+      // Different fetching and navigation based on content type
+      switch (contentType) {
+        case 'course':
+          // TODO: Implement fetching course details if needed
+          // Assuming CourseDetailScreen takes courseId and fetches itself
+          navigator.pop(); // Dismiss loading dialog
+          navigator.pushNamed('/course-details', arguments: contentId);
+          break;
+          
+        case 'module':
+          // Fetch DailyAudio data
+          // Assuming AudioProvider or similar can fetch by ID
+          // Note: Providers might not be directly accessible here if ChatScreen doesn't provide them.
+          // We might need to fetch directly from Firestore or refactor provider access.
+          // For now, let's assume a direct Firestore fetch for simplicity.
+          final doc = await FirebaseFirestore.instance.collection('daily_audio').doc(contentId).get();
+          if (!doc.exists || doc.data() == null) {
+             throw Exception('Audio module not found');
+          }
+          final audioData = doc.data()!;
+          audioData['id'] = doc.id; // Add ID for fromJson
+          final dailyAudio = DailyAudio.fromJson(audioData);
+
+          // Dismiss loading dialog
+          navigator.pop(); 
+          
+          // Navigate to MediaPlayerScreen with fetched data
+          // Convert DailyAudio to MediaItem or pass required fields
+          navigator.pushNamed('/media_player', arguments: { 
+             // TODO: Verify MediaPlayerScreen arguments. Does it take DailyAudio directly? 
+             // Or does it need a MediaItem? Or individual fields?
+             // Passing individual fields for now based on constructor:
+            'title': dailyAudio.title,
+            'subtitle': dailyAudio.category, // Or assemble from focusAreas
+            'mediaUrl': dailyAudio.audioUrl,
+            'mediaType': MediaType.audio,
+            'imageUrl': dailyAudio.thumbnail,
+            // 'mediaItem': MediaItem.fromDailyAudio(dailyAudio), // Option if it takes MediaItem
+          });
+          break;
+          
+        case 'article':
+          // Fetch Article data
+          final articleDoc = await FirebaseFirestore.instance.collection('articles').doc(contentId).get();
+           if (!articleDoc.exists || articleDoc.data() == null) {
+             throw Exception('Article not found');
+          }
+          final articleData = articleDoc.data()!;
+          articleData['id'] = articleDoc.id; // Add ID for fromJson
+          final article = Article.fromJson(articleData);
+          
+          navigator.pop(); // Dismiss loading dialog
+          
+          // Navigate with required data for ArticleDetailScreen
+          navigator.pushNamed('/article-details', arguments: { // Pass arguments as map
+            'title': article.title,
+            'imageUrl': article.thumbnailUrl,
+            'content': article.content,
+            // Pass article object if screen expects it?
+            // 'article': article 
+          });
+          break;
+          
+        default:
+          navigator.pop(); // Dismiss loading dialog
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Cannot open content of type: $contentType')),
+            );
+          }
+      }
+    } catch (e) {
+      debugPrint('Error opening shared content: $e');
+      navigator.pop(); // Dismiss loading dialog on error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading content: $e')),
+        );
+      }
+    }
+  }
+  
+  // Show dialog for selecting content to share
+  void _showContentSharingDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => ContentSharingScreen(
+        chatId: widget.chatId,
+      ),
+    );
   }
 } 

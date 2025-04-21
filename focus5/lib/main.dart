@@ -38,6 +38,9 @@ import 'services/initialize_database.dart';
 import 'screens/coaches/coaches_list_screen.dart';
 import 'screens/badges/all_badges_screen.dart';
 import 'providers/audio_provider.dart';
+import 'screens/home/course_detail_screen.dart';
+import 'screens/article/article_detail_screen.dart';
+import 'models/content_models.dart';
 
 // Add global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -254,20 +257,54 @@ class _Focus5AppState extends State<Focus5App> {
         '/coaches': (context) => const CoachesListScreen(),
         '/all_badges': (context) => const AllBadgesScreen(),
         '/module_to_lesson_migration': (context) => const ModulesToLessonsMigrationScreen(),
+        '/course-details': (context) {
+          final courseId = ModalRoute.of(context)!.settings.arguments as String?;
+          return courseId != null 
+                 ? CourseDetailScreen(courseId: courseId)
+                 : Scaffold(body: Center(child: Text('Error: Missing Course ID'))); 
+        },
+        '/article-details': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+          if (args != null && 
+              args.containsKey('title') && 
+              args.containsKey('imageUrl')) {
+            return ArticleDetailScreen(
+              title: args['title'] as String,
+              imageUrl: args['imageUrl'] as String,
+              content: args['content'] as String?, // Content is optional
+            );
+          } else {
+            // Handle missing or invalid arguments
+             return Scaffold(
+                appBar: AppBar(title: const Text('Error')),
+                body: const Center(child: Text('Error: Missing arguments for Article Details')));
+          }
+        },
       },
       onGenerateRoute: (settings) {
-        if (settings.name == '/media_player') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => MediaPlayerScreen(
-              title: args['title'],
-              subtitle: args['subtitle'],
-              mediaUrl: args['mediaUrl'],
-              mediaType: args['mediaType'],
-              imageUrl: args['imageUrl'],
-              mediaItem: args['mediaItem'],
-            ),
-          );
+        if (settings.name == '/media_player' || settings.name == '/audio-player') {
+          final args = settings.arguments;
+          if (args is Map<String, dynamic> && args.containsKey('mediaUrl')) {
+            return MaterialPageRoute(
+              builder: (context) => MediaPlayerScreen(
+                title: args['title'] as String? ?? 'Audio',
+                subtitle: args['subtitle'] as String? ?? '',
+                mediaUrl: args['mediaUrl'] as String,
+                mediaType: args['mediaType'] as MediaType? ?? MediaType.audio,
+                imageUrl: args['imageUrl'] as String?,
+                mediaItem: args.containsKey('mediaItem') ? args['mediaItem'] as MediaItem? : null,
+              ),
+            );
+          } else {
+            // Handle incorrect arguments or other cases if needed
+             debugPrint('Invalid arguments for /media_player or /audio-player: $args');
+            return MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: const Text('Error')),
+                body: const Center(child: Text('Error: Invalid arguments for audio player')),
+              ),
+            );
+          }
         }
         
         if (settings.name == '/mental_fitness_results') {
@@ -291,7 +328,14 @@ class _Focus5AppState extends State<Focus5App> {
           );
         }
         
-        return null;
+        // If route is not handled by `routes` or `onGenerateRoute`, show error page
+        debugPrint('Route not found: ${settings.name}');
+        return MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Error')),
+            body: Center(child: Text('No route defined for ${settings.name}')),
+          ),
+        );
       },
     );
   }

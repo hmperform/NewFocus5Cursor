@@ -466,6 +466,71 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  // Send a message with shared content
+  Future<void> sendMessageWithSharedContent(
+    String chatId, 
+    String content, 
+    SharedContent sharedContent,
+  ) async {
+    if (currentUserId == 'unknown' || _auth.currentUser == null) {
+      throw Exception('You must be logged in to send messages');
+    }
+    
+    try {
+      final timestamp = DateTime.now();
+      final messageRef = _firestore.collection('messages').doc();
+      final chatRef = _firestore.collection('chats').doc(chatId);
+      
+      // Create message data
+      final message = {
+        'chatId': chatId,
+        'chatRef': chatRef,
+        'content': content.isEmpty ? 'Shared a ${sharedContent.contentType}' : content,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'senderId': currentUserId,
+        'senderRef': _firestore.collection('users').doc(currentUserId),
+        'readBy': [currentUserId],
+        'sharedContent': {
+          'contentId': sharedContent.contentId,
+          'contentType': sharedContent.contentType,
+          'title': sharedContent.title,
+          'description': sharedContent.description,
+          'thumbnailUrl': sharedContent.thumbnailUrl,
+          'metadata': sharedContent.metadata,
+        },
+      };
+      
+      // Update chat document
+      final chatDoc = await chatRef.get();
+      if (!chatDoc.exists) {
+        throw Exception('Chat does not exist');
+      }
+      
+      // Update chat with latest message info
+      await chatRef.update({
+        'lastMessageText': content.isEmpty 
+          ? 'Shared a ${sharedContent.contentType}: ${sharedContent.title}' 
+          : content,
+        'lastMessageTime': Timestamp.fromDate(timestamp),
+        'lastMessageSenderId': currentUserId,
+        'readBy': [currentUserId],
+      });
+      
+      // Add message to Firestore
+      debugPrint('ChatProvider: Adding message with shared content to Firestore with ID: ${messageRef.id}');
+      await messageRef.set(message);
+      debugPrint('ChatProvider: Message with shared content sent successfully with ID: ${messageRef.id}');
+      
+      // Add to recently sent messages to prevent duplicate
+      _recentlySentMessages[messageRef.id] = DateTime.now();
+      
+    } catch (e, stackTrace) {
+      debugPrint('ChatProvider Error: Error sending message with shared content: $e');
+      debugPrint('ChatProvider Error: Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
   // Mark chat as read
   Future<void> markChatAsRead(String chatId) async {
     try {
@@ -628,6 +693,21 @@ class ChatProvider with ChangeNotifier {
         }
       });
       
+      // Parse shared content if present
+      SharedContent? sharedContent;
+      if (data['sharedContent'] != null) {
+        final sharedContentData = data['sharedContent'] as Map<String, dynamic>;
+        sharedContent = SharedContent(
+          contentId: sharedContentData['contentId'] ?? '',
+          contentType: sharedContentData['contentType'] ?? 'unknown',
+          title: sharedContentData['title'] ?? '',
+          description: sharedContentData['description'] ?? '',
+          thumbnailUrl: sharedContentData['thumbnailUrl'],
+          metadata: sharedContentData['metadata'] ?? {},
+        );
+        debugPrint('ChatProvider: Parsed shared content: ${sharedContent.contentType} - ${sharedContent.title}');
+      }
+      
       return ChatMessage(
         id: doc.id,
         senderId: senderId,
@@ -639,6 +719,7 @@ class ChatProvider with ChangeNotifier {
                 (key, value) => MapEntry(key, List<String>.from(value))
               ))
             : null,
+        sharedContent: sharedContent,
       );
     }).where((message) => message != null).cast<ChatMessage>().toList();
 

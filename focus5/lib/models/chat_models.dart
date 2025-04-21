@@ -57,6 +57,7 @@ class ChatMessage {
   final DateTime timestamp;
   final bool isRead;
   final Map<String, List<String>>? reactions;
+  final SharedContent? sharedContent;
 
   ChatMessage({
     required this.id,
@@ -65,6 +66,25 @@ class ChatMessage {
     required this.timestamp,
     required this.isRead,
     this.reactions,
+    this.sharedContent,
+  });
+}
+
+class SharedContent {
+  final String contentId;
+  final String contentType; // 'course', 'module', or 'article'
+  final String title;
+  final String description;
+  final String? thumbnailUrl;
+  final Map<String, dynamic> metadata; // Additional fields specific to the content type
+
+  SharedContent({
+    required this.contentId,
+    required this.contentType,
+    required this.title,
+    required this.description,
+    this.thumbnailUrl,
+    this.metadata = const {},
   });
 }
 
