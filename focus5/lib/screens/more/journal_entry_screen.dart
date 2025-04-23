@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/journal_model.dart';
 import '../../providers/journal_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../providers/auth_provider.dart';
 
 class JournalEntryScreen extends StatefulWidget {
   final String? entryId;
@@ -29,6 +31,7 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
   
   bool _isEditing = false;
   JournalEntry? _initialEntry;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -111,7 +114,8 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.check),
-            onPressed: _saveEntry,
+            onPressed: _isSaving ? null : _saveEntry,
+            color: _isSaving ? Colors.grey : null,
           ),
         ],
       ),
@@ -404,17 +408,26 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         updatedAt: DateTime.now(),
       );
       
+      setState(() {
+        _isSaving = true;
+      });
+      
       journalProvider.updateEntry(updatedEntry).then((success) {
         if (success) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Journal entry updated')),
-          );
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Journal entry updated')),
+            );
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(journalProvider.error ?? 'Failed to update entry')),
           );
         }
+        setState(() {
+          _isSaving = false;
+        });
       });
     } else {
       // Create new entry
@@ -423,22 +436,36 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
           ? _promptController.text.trim() 
           : 'Journal Entry';
           
+      setState(() {
+        _isSaving = true;
+      });
+      
       journalProvider.addEntry(
         prompt: prompt,
         content: content,
         date: now,
         mood: _selectedMood,
         tags: _tags,
-      ).then((entry) {
+        context: context,
+      ).then((entry) async {
         if (entry != null) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Journal entry saved')),
-          );
+          // Wait a brief moment to allow any badge screen to show
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Journal entry saved')),
+            );
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(journalProvider.error ?? 'Failed to save entry')),
           );
+        }
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
         }
       });
     }

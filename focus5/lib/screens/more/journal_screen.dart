@@ -2,27 +2,137 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/journal_model.dart';
 import '../../providers/journal_provider.dart';
+import '../../widgets/journal/journal_entry_card.dart';
 import 'journal_entry_screen.dart';
 
-class JournalScreen extends StatelessWidget {
+class JournalScreen extends StatefulWidget {
   const JournalScreen({Key? key}) : super(key: key);
+
+  @override
+  State<JournalScreen> createState() => _JournalScreenState();
+}
+
+class _JournalScreenState extends State<JournalScreen> {
+  bool _isSelectionMode = false;
+  Set<String> _selectedEntries = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedEntries.clear();
+      }
+    });
+  }
+
+  void _toggleEntrySelection(String entryId) {
+    setState(() {
+      if (_selectedEntries.contains(entryId)) {
+        _selectedEntries.remove(entryId);
+      } else {
+        _selectedEntries.add(entryId);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedEntries(BuildContext context, JournalProvider journalProvider) async {
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${_selectedEntries.length} Entries'),
+        content: Text('Are you sure you want to delete ${_selectedEntries.length} journal entries? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (!confirm) return;
+
+    bool hasError = false;
+    for (String entryId in _selectedEntries) {
+      final success = await journalProvider.deleteEntry(entryId);
+      if (!success) {
+        hasError = true;
+      }
+    }
+
+    if (mounted) {
+      if (hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Some entries could not be deleted')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected entries deleted')),
+        );
+      }
+      setState(() {
+        _isSelectionMode = false;
+        _selectedEntries.clear();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Journal'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: _isSelectionMode
+            ? Text('${_selectedEntries.length} selected')
+            : const Text('Journal'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              _showFilterOptions(context);
-            },
-          ),
+          if (_isSelectionMode) ...[
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _selectedEntries.isEmpty 
+                  ? null 
+                  : () => _deleteSelectedEntries(context, Provider.of<JournalProvider>(context, listen: false)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _toggleSelectionMode,
+            ),
+          ] else ...[
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value == 'select') {
+                  _toggleSelectionMode();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'select',
+                  child: Row(
+                    children: [
+                      Icon(Icons.checklist),
+                      SizedBox(width: 8),
+                      Text('Select'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
       body: Consumer<JournalProvider>(
-        builder: (context, journalProvider, child) {
+        builder: (context, journalProvider, _) {
           final entries = journalProvider.entries;
           
           if (entries.isEmpty) {
@@ -92,7 +202,22 @@ class JournalScreen extends StatelessWidget {
                   itemCount: entries.length,
                   itemBuilder: (context, index) {
                     final entry = entries[index];
-                    return _buildJournalEntry(context, entry);
+                    return JournalEntryCard(
+                      entry: entry,
+                      isSelectionMode: _isSelectionMode,
+                      isSelected: _selectedEntries.contains(entry.id),
+                      onTap: () {
+                        if (_isSelectionMode) {
+                          _toggleEntrySelection(entry.id);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => JournalEntryScreen(entryId: entry.id),
+                            ),
+                          );
+                        }
+                      },
+                    );
                   },
                 ),
               ),
@@ -100,16 +225,18 @@ class JournalScreen extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const JournalEntryScreen(),
+      floatingActionButton: _isSelectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const JournalEntryScreen(),
+                  ),
+                );
+              },
+              child: const Icon(Icons.add),
             ),
-          );
-        },
-        child: const Icon(Icons.add),
-      ),
     );
   }
 

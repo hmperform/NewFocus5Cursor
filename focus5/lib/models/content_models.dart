@@ -835,23 +835,28 @@ class AppBadge {
 
   factory AppBadge.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    // Handle specificIds separately to avoid type casting issues
+    List<String>? specificIds;
+    if (data['specificIds'] != null) {
+      try {
+        specificIds = (data['specificIds'] as List).map((e) => e.toString()).toList();
+      } catch (e) {
+        debugPrint('Error parsing specificIds for badge ${doc.id}: $e');
+        specificIds = null;
+      }
+    }
+    
     return AppBadge(
       id: doc.id,
-      name: data['name'] ?? 'Unknown Badge',
-      description: data['description'] ?? '',
-      imageUrl: data['imageUrl'],
-      badgeImage: data['badgeImage'], // Use badgeImage
-      // EarnedAt shouldn't be read from the definition, it's user-specific
-      // We keep the field but don't populate it from the definition doc
-      // earnedAt: data['earnedAt'] != null 
-      //     ? (data['earnedAt'] as Timestamp).toDate()
-      //     : null,
-      xpValue: data['xpValue'] ?? 0,
-      criteriaType: data['criteriaType'] ?? '',
-      requiredCount: data['requiredCount'] ?? 0,
-      specificIds: data['specificIds'] != null
-          ? List<String>.from(data['specificIds'])
-          : null,
+      name: data['name']?.toString() ?? 'Unknown Badge',
+      description: data['description']?.toString() ?? '',
+      imageUrl: data['imageUrl']?.toString(),
+      badgeImage: data['badgeImage']?.toString(),
+      xpValue: (data['xpValue'] as num?)?.toInt() ?? 0,
+      criteriaType: data['criteriaType']?.toString() ?? '',
+      requiredCount: (data['requiredCount'] as num?)?.toInt() ?? 0,
+      specificIds: specificIds,
     );
   }
 

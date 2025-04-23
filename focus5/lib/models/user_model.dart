@@ -33,6 +33,8 @@ class User {
   final List<Map<String, dynamic>> purchasedCourses;
   final DateTime lastCompletionDate;
   final List<String> savedCourses;
+  final int? lifetimeJournalEntries;
+  final int? currentJournalEntries;
 
   User({
     required this.id,
@@ -65,6 +67,8 @@ class User {
     this.purchasedCourses = const [],
     required this.lastCompletionDate,
     this.savedCourses = const [],
+    this.lifetimeJournalEntries,
+    this.currentJournalEntries,
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.lastActive = lastActive ?? DateTime.now(),
@@ -202,6 +206,8 @@ class User {
       savedCourses: data['savedCourses'] != null 
           ? List<String>.from(data['savedCourses']) 
           : [],
+      lifetimeJournalEntries: data['lifetimeJournalEntries'] as int? ?? 0,
+      currentJournalEntries: data['currentJournalEntries'] as int? ?? 0,
     );
   }
 
@@ -235,6 +241,8 @@ class User {
       'purchasedCourses': purchasedCourses,
       'lastCompletionDate': Timestamp.fromDate(lastCompletionDate),
       'savedCourses': savedCourses,
+      if (lifetimeJournalEntries != null) 'lifetimeJournalEntries': lifetimeJournalEntries,
+      if (currentJournalEntries != null) 'currentJournalEntries': currentJournalEntries,
     };
   }
 
@@ -269,6 +277,8 @@ class User {
     List<Map<String, dynamic>>? purchasedCourses,
     DateTime? lastCompletionDate,
     List<String>? savedCourses,
+    int? lifetimeJournalEntries,
+    int? currentJournalEntries,
   }) {
     return User(
       id: id ?? this.id,
@@ -301,6 +311,8 @@ class User {
       purchasedCourses: purchasedCourses ?? this.purchasedCourses,
       lastCompletionDate: lastCompletionDate ?? this.lastCompletionDate,
       savedCourses: savedCourses ?? this.savedCourses,
+      lifetimeJournalEntries: lifetimeJournalEntries ?? this.lifetimeJournalEntries,
+      currentJournalEntries: currentJournalEntries ?? this.currentJournalEntries,
     );
   }
 }

@@ -1052,47 +1052,57 @@ class UserProvider extends ChangeNotifier {
     if (_user == null) return false;
     
     try {
+      debugPrint('[trackJournalEntryCompletion] Starting journal entry tracking for user $userId');
+      debugPrint('[trackJournalEntryCompletion] Current lifetime entries (before): ${_user?.lifetimeJournalEntries ?? 0}');
+      
       // Get current date for lastCompletionDate
       final now = DateTime.now();
       
-      // Update lastCompletionDate in user document
-      await _firestore.collection('users').doc(userId).update({
-        'lastCompletionDate': now,
+      // Create a transaction to ensure atomic updates
+      await _firestore.runTransaction((transaction) async {
+        // Get the latest user data
+        final userDoc = await transaction.get(_firestore.collection('users').doc(userId));
+        final currentLifetimeEntries = userDoc.data()?['lifetimeJournalEntries'] as int? ?? 0;
+        
+        debugPrint('[trackJournalEntryCompletion] Latest lifetime entries from Firestore: $currentLifetimeEntries');
+        debugPrint('[trackJournalEntryCompletion] Will update to: ${currentLifetimeEntries + 1}');
+        
+        // Update user document atomically
+        transaction.update(_firestore.collection('users').doc(userId), {
+          'lastCompletionDate': now,
+          'lifetimeJournalEntries': currentLifetimeEntries + 1,
+        });
+        
+        // Add journal entry within the same transaction
+        final journalRef = _firestore.collection('journal_entries').doc();
+        transaction.set(journalRef, {
+          'userId': userId,
+          'content': journalData['content'],
+          'mood': journalData['mood'],
+          'tags': journalData['tags'] ?? [],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       });
       
-      // Add journal entry to Firestore
-      await _firestore.collection('journal_entries').add({
-        'userId': userId,
-        'content': journalData['content'],
-        'mood': journalData['mood'],
-        'tags': journalData['tags'] ?? [],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      debugPrint('[trackJournalEntryCompletion] Transaction completed successfully');
       
       // Award XP
       await addXp(userId, 30, 'Journal entry');
       
-      // Award Focus Points
-      await addFocusPoints(userId, 5, 'Journal entry');
+      // Refetch user to get updated data
+      await loadUserData(userId);
+      debugPrint('[trackJournalEntryCompletion] User data reloaded. New lifetime entries: ${_user?.lifetimeJournalEntries ?? 0}');
       
-      // Update local user
-      _user = _user!.copyWith(
-        lastCompletionDate: now,
-      );
-      
-      // Update streak for journal completion
-      await updateStreak(userId, true);
-      
-      notifyListeners(); // Notify after local updates
+      // Check for badge unlocks
+      if (_badgeService != null) {
+        debugPrint('[trackJournalEntryCompletion] Checking for badges...');
+        await _badgeService!.checkForNewBadges(userId, _user!, context: context);
+      }
 
-      // --> Check for badges after completing journal entry and updating user state <--
-      debugPrint('[trackJournalEntryCompletion] Checking badges. Current streak: ${_user?.streak}');
-      // await checkAndAwardBadges(context); // Method doesn't exist
-      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); // Direct call
-      
       return true;
+      
     } catch (e) {
-      debugPrint('Error tracking journal entry: $e');
+      debugPrint('[trackJournalEntryCompletion] Error tracking journal entry: $e');
       return false;
     }
   }
@@ -1924,10 +1934,26 @@ class UserProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // Check for new badges and show popups if any are earned
-  Future<List<AppBadge>> checkForNewBadgesWithContext(BuildContext context) async {
-    if (_user == null) return [];
-    return await _badgeService.checkForNewBadges(_user!.id, _user!, context: context);
+  // Check for new badges with context for showing popups
+  Future<void> checkForNewBadgesWithContext(BuildContext context) async {
+    if (_user == null) return;
+    
+    debugPrint('[UserProvider.checkForNewBadgesWithContext] Checking for new badges...');
+    try {
+      final earnedBadges = await _badgeService.checkForNewBadges(
+        _user!.id,
+        _user!,
+        context: context, // Pass context for badge popups
+      );
+      
+      if (earnedBadges.isNotEmpty) {
+        debugPrint('[UserProvider.checkForNewBadgesWithContext] User earned ${earnedBadges.length} new badges!');
+        // Refresh user data to get updated badges list
+        await loadUserData(_user!.id);
+      }
+    } catch (e) {
+      debugPrint('[UserProvider.checkForNewBadgesWithContext] Error checking for badges: $e');
+    }
   }
   
   // Track content completion (audio, course, etc.) and check for badges

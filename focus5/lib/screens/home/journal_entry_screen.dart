@@ -7,6 +7,7 @@ import '../../providers/journal_provider.dart';
 import '../../widgets/journal/journal_tag_selector.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/user_provider.dart';
 
 class JournalEntryScreen extends StatefulWidget {
   final JournalEntry? existingEntry;
@@ -569,7 +570,9 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
         final success = await journalProvider.updateEntry(updatedEntry);
         
         if (success) {
-          Navigator.pop(context);
+          if (mounted) {
+            Navigator.pop(context);
+          }
         } else {
           _showErrorMessage('Failed to update journal entry');
         }
@@ -581,10 +584,15 @@ class _JournalEntryScreenState extends State<JournalEntryScreen> {
           date: _selectedDate,
           mood: _selectedMood,
           tags: _selectedTags,
+          context: context, // Pass context for badge checking
         );
         
         if (newEntry != null) {
-          Navigator.pop(context);
+          // Wait a brief moment to allow any badge screen to show
+          await Future.delayed(const Duration(milliseconds: 300));
+          if (mounted) {
+            Navigator.pop(context);
+          }
         } else {
           _showErrorMessage('Failed to save journal entry');
         }

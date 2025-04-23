@@ -20,8 +20,11 @@ class JournalTab extends StatefulWidget {
 }
 
 class _JournalTabState extends State<JournalTab> {
-  bool _isSearching = false;
+  bool _isSelectionMode = false;
+  Set<String> _selectedEntries = {};
   String _searchQuery = '';
+  bool _showFavoritesOnly = false;
+  bool _showSearchBar = false;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -47,158 +50,244 @@ class _JournalTabState extends State<JournalTab> {
     super.dispose();
   }
 
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedEntries.clear();
+      }
+    });
+  }
+
+  void _toggleEntrySelection(String entryId) {
+    setState(() {
+      if (_selectedEntries.contains(entryId)) {
+        _selectedEntries.remove(entryId);
+      } else {
+        _selectedEntries.add(entryId);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedEntries(JournalProvider journalProvider) async {
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${_selectedEntries.length} Entries'),
+        content: Text('Are you sure you want to delete ${_selectedEntries.length} journal entries? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (!confirm) return;
+
+    bool hasError = false;
+    for (String entryId in _selectedEntries) {
+      final success = await journalProvider.deleteEntry(entryId);
+      if (!success) {
+        hasError = true;
+      }
+    }
+
+    if (mounted) {
+      if (hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Some entries could not be deleted')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected entries deleted')),
+        );
+      }
+      setState(() {
+        _isSelectionMode = false;
+        _selectedEntries.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final journalProvider = Provider.of<JournalProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
-    final entries = journalProvider.entries;
-    final isLoading = journalProvider.isLoading;
-    final error = journalProvider.error;
-    
-    // Get theme-aware colors
     final accentColor = themeProvider.accentColor;
-    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: null,
-      body: RefreshIndicator(
-        onRefresh: () => journalProvider.refreshEntries(),
-        color: accentColor,
-        backgroundColor: surfaceColor,
-        child: isLoading && entries.isEmpty
-            ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                ),
-              )
-            : error != null && entries.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.orange,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Failed to load entries',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          error,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => journalProvider.refreshEntries(),
-                          child: const Text('Retry'),
-                        ),
-                      ],
+    return Consumer<JournalProvider>(
+      builder: (context, journalProvider, _) {
+        final entries = journalProvider.entries
+            .where((entry) => _showFavoritesOnly ? entry.isFavorite : true)
+            .where((entry) => 
+              _searchQuery.isEmpty ||
+              entry.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              entry.prompt.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              entry.tags.any((tag) => tag.toLowerCase().contains(_searchQuery.toLowerCase()))
+            )
+            .toList();
+
+        return Scaffold(
+          appBar: AppBar(
+            title: _showSearchBar
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Search journals...',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
                     ),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                    onChanged: (value) => setState(() => _searchQuery = value),
                   )
-                : entries.isEmpty
-                    ? const JournalEmptyState()
-                    : _buildJournalList(entries, context),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToNewEntry(context),
-        backgroundColor: accentColor,
-        child: Icon(
-          Icons.add,
-          color: themeProvider.accentTextColor,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJournalList(List<JournalEntry> entries, BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final accentColor = themeProvider.accentColor;
-    
-    // Group entries by month
-    final groupedEntries = <String, List<JournalEntry>>{};
-    
-    for (var entry in entries) {
-      final monthYear = DateFormat('MMMM yyyy').format(entry.date);
-      if (!groupedEntries.containsKey(monthYear)) {
-        groupedEntries[monthYear] = [];
-      }
-      groupedEntries[monthYear]!.add(entry);
-    }
-    
-    // Sort the keys (month-year) in descending order
-    final sortedMonths = groupedEntries.keys.toList()
-      ..sort((a, b) {
-        // Parse the month-year string back to date for comparison
-        final dateA = DateFormat('MMMM yyyy').parse(a);
-        final dateB = DateFormat('MMMM yyyy').parse(b);
-        return dateB.compareTo(dateA); // Descending order
-      });
-    
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: sortedMonths.length,
-      itemBuilder: (context, index) {
-        final monthYear = sortedMonths[index];
-        final monthEntries = groupedEntries[monthYear]!;
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                monthYear,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: accentColor,
+                : const Text('Journal'),
+            actions: [
+              if (_isSelectionMode) ...[
+                Text(
+                  '${_selectedEntries.length} selected',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: monthEntries.length,
-              itemBuilder: (context, entryIndex) {
-                final entry = monthEntries[entryIndex];
-                return JournalEntryCard(
-                  entry: entry,
-                  onTap: () => _navigateToEntryDetails(context, entry),
-                );
-              },
-            ),
-          ],
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: _selectedEntries.isEmpty 
+                      ? null 
+                      : () => _deleteSelectedEntries(journalProvider),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _toggleSelectionMode,
+                ),
+              ] else ...[
+                IconButton(
+                  icon: Icon(
+                    _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
+                    color: _showFavoritesOnly ? Colors.red : null,
+                  ),
+                  onPressed: () {
+                    setState(() => _showFavoritesOnly = !_showFavoritesOnly);
+                  },
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'select') {
+                      _toggleSelectionMode();
+                    } else if (value == 'search') {
+                      setState(() {
+                        _showSearchBar = !_showSearchBar;
+                        if (!_showSearchBar) {
+                          _searchQuery = '';
+                          _searchController.clear();
+                        }
+                      });
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'select',
+                      child: Row(
+                        children: [
+                          Icon(Icons.checklist),
+                          SizedBox(width: 8),
+                          Text('Select'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'search',
+                      child: Row(
+                        children: [
+                          Icon(Icons.search),
+                          SizedBox(width: 8),
+                          Text('Search'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          body: entries.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.book_outlined,
+                        size: 64,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _showFavoritesOnly
+                            ? 'No favorite entries yet'
+                            : _searchQuery.isNotEmpty
+                                ? 'No entries match your search'
+                                : 'No journal entries yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) {
+                    final entry = entries[index];
+                    return JournalEntryCard(
+                      entry: entry,
+                      highlightText: _searchQuery,
+                      isSelectionMode: _isSelectionMode,
+                      isSelected: _selectedEntries.contains(entry.id),
+                      onTap: () {
+                        if (_isSelectionMode) {
+                          _toggleEntrySelection(entry.id);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => JournalEntryScreen(
+                                entry: entry,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    );
+                  },
+                ),
+          floatingActionButton: _isSelectionMode
+              ? null
+              : FloatingActionButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const JournalEntryScreen(),
+                      ),
+                    );
+                  },
+                  backgroundColor: accentColor,
+                  child: const Icon(Icons.add),
+                ),
         );
       },
-    );
-  }
-
-  void _navigateToNewEntry(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const JournalEntryScreen(),
-      ),
-    );
-  }
-
-  void _navigateToEntryDetails(BuildContext context, JournalEntry entry) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => JournalEntryScreen(
-          existingEntry: entry,
-        ),
-      ),
     );
   }
 

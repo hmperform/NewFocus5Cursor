@@ -14,9 +14,27 @@ class BadgeService {
     try {
       final querySnapshot = await _firestore.collection('badges').get();
       
-      return querySnapshot.docs
-          .map((doc) => BadgeDefinition.fromJson({...doc.data(), 'id': doc.id}))
-          .toList();
+      final List<BadgeDefinition> badges = [];
+      for (var doc in querySnapshot.docs) {
+        try {
+          final badge = AppBadge.fromFirestore(doc);
+          badges.add(BadgeDefinition(
+            id: badge.id,
+            name: badge.name,
+            description: badge.description,
+            imageUrl: badge.imageUrl ?? '',
+            badgeImage: badge.badgeImage,
+            xpValue: badge.xpValue,
+            criteriaType: badge.criteriaType,
+            requiredCount: badge.requiredCount,
+            specificIds: badge.specificIds,
+          ));
+        } catch (e) {
+          debugPrint('Error parsing badge definition for ${doc.id}: $e');
+        }
+      }
+      
+      return badges;
     } catch (e) {
       debugPrint('Error getting badges: $e');
       return [];
@@ -27,6 +45,8 @@ class BadgeService {
   Future<List<AppBadge>> checkForNewBadges(String userId, User currentUser, {BuildContext? context}) async {
     try {
       final badgeDefinitions = await getAllBadgeDefinitions();
+      debugPrint('[checkForNewBadges] Fetched ${badgeDefinitions.length} definitions. IDs: ${badgeDefinitions.map((d) => d.id).toList()}');
+      
       final earnedBadges = <AppBadge>[];
       
       // Get list of badges the user already has using badgesgranted IDs
@@ -34,15 +54,22 @@ class BadgeService {
           .map((ref) => ref['id'] as String?)
           .where((id) => id != null)
           .toSet();
+      debugPrint('[checkForNewBadges] User already has badges: ${existingBadgeIds.toString()}');
       
       for (final definition in badgeDefinitions) {
+        debugPrint('[checkForNewBadges] Checking definition: ${definition.id}');
+        
         if (existingBadgeIds.contains(definition.id)) {
           // User already has this badge
+          debugPrint('[checkForNewBadges] User already has ${definition.id}, skipping.');
           continue;
         }
         
         // Check if the user has met the requirements for this badge
-        if (await _hasEarnedBadge(userId, definition, currentUser)) {
+        bool earned = await _hasEarnedBadge(userId, definition, currentUser);
+        debugPrint('[checkForNewBadges] Result for ${definition.id}: $earned');
+        
+        if (earned) {
           // Create the badge for the user
           final newBadge = AppBadge(
             id: definition.id,
@@ -163,13 +190,17 @@ class BadgeService {
           final uniqueDays = await _getUniqueLoginDays(userId);
           return uniqueDays >= requiredDays;
           
-        case 'journal_entries':
+        case 'JournalEntriesWritten':
           // Number of journal entries created
           final int requiredEntries = badge.requiredCount;
-          final entriesCount = await _getJournalEntriesCount(userId);
-          return entriesCount >= requiredEntries;
+          // Use the lifetimeJournalEntries field from the User object
+          final int currentLifetimeCount = user.lifetimeJournalEntries ?? 0;
+          final bool result = currentLifetimeCount >= requiredEntries;
+          debugPrint('[BadgeService._hasEarnedBadge] Checking JournalEntriesWritten: User Lifetime Count=${currentLifetimeCount}, Required=${requiredEntries}. Result: $result');
+          return result;
           
         default:
+          debugPrint('[BadgeService._hasEarnedBadge] Unknown criteria type: ${badge.criteriaType}');
           return false;
       }
     } catch (e) {
@@ -389,8 +420,10 @@ class BadgeService {
         try {
           final badge = AppBadge.fromFirestore(doc);
           badges.add(badge);
-        } catch (e) {
-          debugPrint('BadgeService: Error parsing badge ${doc.id}: $e');
+        } catch (e, s) { // Catch the error (e) and stack trace (s)
+          // Log the specific error details for the failing badge
+          debugPrint('BadgeService: Error parsing badge ${doc.id}. Error: ${e.toString()}');
+          debugPrint('BadgeService: Stack trace for ${doc.id}: ${s.toString()}');
           // Continue to the next badge on error
         }
       }

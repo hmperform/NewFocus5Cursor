@@ -11,12 +11,16 @@ class JournalEntryCard extends StatelessWidget {
   final JournalEntry entry;
   final VoidCallback onTap;
   final String? highlightText;
+  final bool isSelectionMode;
+  final bool isSelected;
   
   const JournalEntryCard({
     Key? key,
     required this.entry,
     required this.onTap,
     this.highlightText,
+    this.isSelectionMode = false,
+    this.isSelected = false,
   }) : super(key: key);
 
   @override
@@ -78,105 +82,119 @@ class JournalEntryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Date circle
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: themeProvider.isDarkMode 
-                              ? const Color(0xFF2A2A2A) 
-                              : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              DateFormat('d').format(entry.date),
-                              style: TextStyle(
-                                color: accentColor,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              DateFormat('MMM').format(entry.date),
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Entry content
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  DateFormat('EEEE').format(entry.date),
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  entry.mood.emoji,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              entry.prompt,
-                              style: TextStyle(
-                                color: accentColor,
-                                fontSize: 14,
-                                fontStyle: FontStyle.italic,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            contentWidget,
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (entry.tags.isNotEmpty)
+                  if (isSelectionMode) ...[
                     Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: entry.tags.map((tag) => _buildTagChip(tag, context)).toList(),
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => onTap(),
+                        activeColor: accentColor,
                       ),
                     ),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Date circle
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: themeProvider.isDarkMode 
+                                    ? const Color(0xFF2A2A2A) 
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    DateFormat('d').format(entry.date),
+                                    style: TextStyle(
+                                      color: accentColor,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    DateFormat('MMM').format(entry.date),
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Entry content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        DateFormat('EEEE').format(entry.date),
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        entry.mood.emoji,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      if (!isSelectionMode) ...[
+                                        const SizedBox(width: 8),
+                                        _buildFavoriteButton(context),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    entry.prompt,
+                                    style: TextStyle(
+                                      color: accentColor,
+                                      fontSize: 14,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  contentWidget,
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (entry.tags.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: entry.tags.map((tag) => _buildTagChip(tag, context)).toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-          // Favorite button
-          Positioned(
-            top: 8,
-            right: 8,
-            child: _buildFavoriteButton(context),
           ),
         ],
       ),

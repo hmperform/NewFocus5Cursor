@@ -3,8 +3,10 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
+import 'package:provider/provider.dart';
 
 import '../models/journal_model.dart';
+import '../providers/user_provider.dart';
 
 class JournalProvider with ChangeNotifier {
   final String _userId;
@@ -202,7 +204,30 @@ class JournalProvider with ChangeNotifier {
     required DateTime date,
     required MoodLevel mood,
     List<String> tags = const [],
+    BuildContext? context, // Add context parameter for badge checking
   }) async {
+    if (_userId == 'default_user') {
+      // Don't perform Firestore writes for the default user
+      // Still create a local entry for UI purposes if needed
+      final now = DateTime.now();
+      final uuid = const Uuid().v4();
+      final processedTags = tags.map((tag) => tag.toLowerCase().trim()).toList();
+      final newEntry = JournalEntry(
+        id: uuid, // Use a temporary ID for local state
+        userId: _userId,
+        prompt: prompt,
+        content: content,
+        date: date,
+        mood: mood,
+        tags: processedTags,
+        createdAt: now,
+        updatedAt: now,
+      );
+      _entries.insert(0, newEntry);
+      notifyListeners();
+      return newEntry;
+    }
+
     _setLoading(true);
     try {
       final now = DateTime.now();
@@ -224,32 +249,61 @@ class JournalProvider with ChangeNotifier {
         updatedAt: now,
       );
       
-      // Add to Firestore
-      if (_userId != 'default_user') {
-        await _firestore.collection('journal_entries').doc(uuid).set({
-          'userId': _userId,
-          'prompt': prompt,
-          'content': content,
-          'date': Timestamp.fromDate(date),
-          'mood': mood.name.toLowerCase(),
-          'tags': processedTags,
-          'createdWhen': Timestamp.fromDate(now),
-          'updatedAt': Timestamp.fromDate(now),
-          'isFavorite': false,
-        });
-      }
+      // Use a WriteBatch for atomic operation
+      WriteBatch batch = _firestore.batch();
+
+      // 1. Add Journal Entry to Firestore
+      DocumentReference entryRef = _firestore.collection('journal_entries').doc(uuid);
+      batch.set(entryRef, {
+        'userId': _userId,
+        'prompt': prompt,
+        'content': content,
+        'date': Timestamp.fromDate(date),
+        'mood': mood.name.toLowerCase(),
+        'tags': processedTags,
+        'createdWhen': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
+        'isFavorite': false,
+      });
+
+      // 2. Update User Document
+      DocumentReference userRef = _firestore.collection('users').doc(_userId);
+      batch.update(userRef, {
+        'lifetimeJournalEntries': FieldValue.increment(1),
+        'currentJournalEntries': FieldValue.increment(1),
+        'lastCompletionDate': Timestamp.fromDate(now),
+      });
+
+      // Commit the batch
+      await batch.commit();
       
-      // Add to local list
+      // Add to local list AFTER successful commit
       _entries.insert(0, newEntry);
       notifyListeners();
       
+      // If context is provided, handle badge checking and XP
+      if (context != null) {
+        try {
+          final userProvider = Provider.of<UserProvider>(context, listen: false);
+          // Add XP for the journal entry
+          await userProvider.addXp(_userId, 30, 'Journal entry');
+          // Check for badges
+          await userProvider.loadUserData(_userId); // Refresh user data
+          if (userProvider.user != null) {
+            debugPrint('Checking for new badges after journal entry...');
+            await userProvider.checkForNewBadgesWithContext(context);
+          }
+        } catch (e) {
+          debugPrint('Error handling badges/XP: $e');
+        }
+      }
+      
       _setError(null);
       return newEntry;
+      
     } catch (e) {
       _setError('Failed to add journal entry: ${e.toString()}');
-      if (kDebugMode) {
-        print('Error adding journal entry: $e');
-      }
+      debugPrint('Error adding journal entry: $e');
       return null;
     } finally {
       _setLoading(false);
@@ -302,14 +356,33 @@ class JournalProvider with ChangeNotifier {
   
   // Delete a journal entry
   Future<bool> deleteEntry(String entryId) async {
+    if (_userId == 'default_user') {
+      // Don't perform Firestore writes for the default user
+      // Remove from local list only
+      _entries.removeWhere((entry) => entry.id == entryId);
+      notifyListeners();
+      return true; 
+    }
+
     _setLoading(true);
     try {
-      // Delete from Firestore
-      if (_userId != 'default_user') {
-        await _firestore.collection('journal_entries').doc(entryId).delete();
-      }
+      // Use a WriteBatch for atomic operation
+      WriteBatch batch = _firestore.batch();
       
-      // Remove from local list
+      // 1. Delete Journal Entry from Firestore
+      DocumentReference entryRef = _firestore.collection('journal_entries').doc(entryId);
+      batch.delete(entryRef);
+      
+      // 2. Decrement User's Current Journal Entry Count
+      DocumentReference userRef = _firestore.collection('users').doc(_userId);
+      batch.update(userRef, {
+        'currentJournalEntries': FieldValue.increment(-1),
+      });
+      
+      // Commit the batch
+      await batch.commit();
+      
+      // Remove from local list AFTER successful commit
       _entries.removeWhere((entry) => entry.id == entryId);
       notifyListeners();
       

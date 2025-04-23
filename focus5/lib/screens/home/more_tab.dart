@@ -26,6 +26,7 @@ class MoreTab extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: backgroundColor,
         elevation: 0,
+        automaticallyImplyLeading: false,
         title: Text(
           'More',
           style: TextStyle(
