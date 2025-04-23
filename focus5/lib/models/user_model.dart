@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'content_models.dart';
 
 class User {
   final String id;
@@ -303,77 +305,4 @@ class User {
   }
 }
 
-class AppBadge {
-  final String id;
-  final String name;
-  final String description;
-  final String imageUrl;
-  final String? badgeImage;
-  final DateTime? earnedAt;
-  final int xpValue;
-
-  AppBadge({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.imageUrl,
-    this.badgeImage,
-    required this.earnedAt,
-    required this.xpValue,
-  });
-
-  factory AppBadge.fromJson(Map<String, dynamic> json) {
-    DateTime? earned;
-    if (json['earnedAt'] != null) {
-      if (json['earnedAt'] is Timestamp) {
-        earned = DateTime.fromMillisecondsSinceEpoch(
-          (json['earnedAt'] as Timestamp).millisecondsSinceEpoch
-        );
-      } else {
-        earned = DateTime.parse(json['earnedAt'].toString());
-      }
-    } else {
-      earned = null;
-    }
-    
-    return AppBadge(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
-      imageUrl: json['imageUrl'] as String,
-      badgeImage: json['badgeImage'] as String?,
-      earnedAt: earned,
-      xpValue: json['xpValue'] as int,
-    );
-  }
-
-  factory AppBadge.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    print('AppBadge.fromFirestore called with doc ID: ${doc.id}, data: $data');
-    
-    return AppBadge(
-      id: doc.id,
-      name: data['name'] ?? 'Unknown Badge',
-      description: data['description'] ?? '',
-      imageUrl: data['imageUrl'],
-      badgeImage: data['badgeImage'],
-      earnedAt: data['earnedAt'] != null 
-          ? (data['earnedAt'] as Timestamp).toDate() 
-          : DateTime.now(),
-      xpValue: data['xpValue'] is int ? data['xpValue'] : 0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'imageUrl': imageUrl,
-      'badgeImage': badgeImage,
-      'earnedAt': earnedAt?.toIso8601String(),
-      'xpValue': xpValue,
-    };
-  }
-} 
+// End of file maybe? 

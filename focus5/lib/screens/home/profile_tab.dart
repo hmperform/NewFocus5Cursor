@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/user_model.dart';
+import '../../models/content_models.dart';
 import '../../constants/theme.dart';
 import '../../utils/image_utils.dart';
 import '../../services/user_level_service.dart';
@@ -14,6 +15,7 @@ import '../../utils/app_icons.dart';
 import '../profile/profile_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../badges/badge_detail_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -519,93 +521,181 @@ class _ProfileTabState extends State<ProfileTab> {
                               color: textColor,
                             ),
                           ),
-                          if (user.badges.length > 3 || user.badgesgranted.length > 3)
-                            TextButton(
-                              onPressed: _navigateToAllBadges,
-                              child: Text(
-                                "See All",
-                                style: TextStyle(
-                                  color: accentColor,
-                                  fontWeight: FontWeight.bold,
+                          TextButton(
+                            onPressed: _navigateToAllBadges,
+                            child: Row(
+                              children: [
+                                Text(
+                                  "More",
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: accentColor,
+                                  size: 18,
+                                ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
-                      if (user.badges.isEmpty && user.badgesgranted.isEmpty)
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              "No badges earned yet. Complete courses and challenges to earn badges!",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: secondaryTextColor,
-                                fontSize: 14,
+                      Consumer<UserProvider>(
+                        builder: (context, userProvider, child) {
+                          // Check if user data is loaded
+                          if (userProvider.isLoading || userProvider.user == null) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    "Loading badges...",
+                                    style: TextStyle(
+                                      color: secondaryTextColor,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                        )
-                      else
-                        SizedBox(
-                          height: 120,
-                          child: user.badges.isNotEmpty ? 
-                            ListView.builder(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: user.badges.length > 3 ? 3 : user.badges.length,
-                              itemBuilder: (context, index) {
-                                final badge = user.badges[index];
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 16),
-                                  child: _buildBadgeItem(context, badge),
-                                );
-                              },
-                            ) :
-                            // If no badges are loaded yet, but we have references, show a loading indicator
-                            Center(
-                              child: user.badgesgranted.isNotEmpty ? 
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      "Loading badges...",
-                                      style: TextStyle(
-                                        color: secondaryTextColor,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ) :
-                                Text(
-                                  "No badges earned yet.",
+                            );
+                          }
+
+                          // Get all badge definitions and user's earned badge IDs
+                          final allDefinitions = userProvider.allBadgeDefinitions;
+                          final earnedBadgeIds = userProvider.user!.badgesgranted
+                              .map((ref) => ref['id'] as String?)
+                              .where((id) => id != null)
+                              .toSet();
+
+                          if (allDefinitions.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(
+                                  "No badges available. Complete challenges to earn badges!",
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: secondaryTextColor,
                                     fontSize: 14,
                                   ),
                                 ),
+                              ),
+                            );
+                          }
+
+                          // Create the list of badges with status
+                          final badgesWithStatus = allDefinitions.map((badgeDef) {
+                            final isEarned = earnedBadgeIds.contains(badgeDef.id);
+                            // If earned, try to get the detailed badge from userProvider.user.badges
+                            // This ensures we have the correct earnedAt date if available
+                            final earnedBadgeDetail = isEarned
+                                ? userProvider.user!.badges.firstWhere(
+                                    (b) => b.id == badgeDef.id,
+                                    orElse: () => badgeDef.copyWith(earnedAt: DateTime.now()) // Fallback if not found in detail list yet
+                                  )
+                                : badgeDef;
+                            return {
+                              'badge': earnedBadgeDetail,
+                              'isEarned': isEarned,
+                            };
+                          }).toList();
+
+                          // Show up to 3 badges (prioritize earned badges)
+                          final earnedBadges = badgesWithStatus
+                              .where((item) => item['isEarned'] == true)
+                              .toList();
+                          final unearnedBadges = badgesWithStatus
+                              .where((item) => item['isEarned'] == false)
+                              .toList();
+
+                          // Combine them, showing earned first, up to 3 total
+                          List<Map<String, dynamic>> displayBadges = [];
+                          displayBadges.addAll(earnedBadges);
+
+                          // If we have less than 3 earned badges, add some unearned ones
+                          if (earnedBadges.length < 3) {
+                            displayBadges.addAll(
+                              unearnedBadges.take(3 - earnedBadges.length)
+                            );
+                          }
+
+                          // Limit to 3 badges max
+                          final displayedBadges = displayBadges.take(3).toList();
+
+                          return SizedBox(
+                            height: 120, // Adjust height if needed
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: displayedBadges.length,
+                              itemBuilder: (context, index) {
+                                final badgeData = displayedBadges[index];
+                                final badge = badgeData['badge'] as AppBadge;
+                                final isEarned = badgeData['isEarned'] as bool;
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 16),
+                                  // Make sure _buildBadgeItemWithStatus exists or adapt _buildBadgeItem
+                                  child: _buildBadgeItemWithStatus(context, badge, isEarned),
+                                );
+                              },
                             ),
-                        ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
                 
                 const SizedBox(height: 32),
                 
-                // Stats row
+                // Stats row (Replaced Row with Wrap to prevent overflow)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceAround, // Distribute space around items
+                    runAlignment: WrapAlignment.center, // Center items vertically if they wrap
+                    spacing: 16.0, // Horizontal space between items
+                    runSpacing: 16.0, // Vertical space between rows if wrapping occurs
                     children: [
-                      _buildStatCircle("${user.badges.isNotEmpty ? user.badges.length : user.badgesgranted.length}", "Badges", context),
-                      _buildStatCircle("${user.streak}/${user.longestStreak}", "Current/\nBest Streak", context),
-                      _buildStatCircle("${user.completedAudios.length}", "Audio\ncompleted", context),
-                      _buildStatCircle("${user.completedCourses.length}", "Courses\ncompleted", context),
+                      // --- Updated StatCircle for Badges ---
+                      Consumer<UserProvider>(
+                         builder: (context, userProvider, child) {
+                            if (userProvider.user == null || userProvider.allBadgeDefinitions.isEmpty) {
+                               return _buildStatCircle("0/0", "Badges", context);
+                            }
+                            final earnedCount = userProvider.user!.badgesgranted.length;
+                            final totalCount = userProvider.allBadgeDefinitions.length;
+                            return _buildStatCircle("$earnedCount/$totalCount", "Badges", context);
+                         }
+                      ),
+                      // --- End Updated StatCircle ---
+                      // Use Consumer for other stats too for consistency
+                      Consumer<UserProvider>(
+                        builder: (context, userProvider, child) {
+                           final streak = userProvider.user?.streak ?? 0;
+                           final longestStreak = userProvider.user?.longestStreak ?? 0;
+                           return _buildStatCircle("$streak/$longestStreak", "Current/\nBest Streak", context);
+                        }
+                      ),
+                      Consumer<UserProvider>(
+                        builder: (context, userProvider, child) {
+                           final completedAudios = userProvider.user?.completedAudios.length ?? 0;
+                           return _buildStatCircle("$completedAudios", "Audio\ncompleted", context);
+                        }
+                      ),
+                       Consumer<UserProvider>(
+                        builder: (context, userProvider, child) {
+                           final completedCourses = userProvider.user?.completedCourses.length ?? 0;
+                           return _buildStatCircle("$completedCourses", "Courses\ncompleted", context);
+                        }
+                      ),
                     ],
                   ),
                 ),
@@ -782,6 +872,131 @@ class _ProfileTabState extends State<ProfileTab> {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildBadgeItemWithStatus(BuildContext context, AppBadge badge, bool isEarned) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final accentColor = themeProvider.accentColor;
+
+    return GestureDetector(
+      onTap: () {
+        // Navigate to detail screen, passing earned status
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BadgeDetailScreen(
+              badge: badge,
+              isEarned: isEarned, // Pass earned status
+            ),
+          ),
+        );
+      },
+      child: Opacity(
+        // Opacity handled by ColorFiltered now
+        // opacity: isEarned ? 1.0 : 0.5, 
+        opacity: 1.0, 
+        child: Container(
+          margin: const EdgeInsets.only(right: 12),
+          width: 100,
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Added to prevent stretching
+            children: [
+              Hero(
+                tag: 'badge_${badge.id}', // Keep Hero tag
+                child: Stack( // Wrap in Stack for overlay
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      height: 85,
+                      width: 85,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                        border: isEarned
+                            ? Border.all(color: accentColor.withOpacity(0.7), width: 2) // Add border if earned
+                            : Border.all(color: (isDarkMode ? Colors.white12 : Colors.black12), width: 1), // Subtle border if unearned
+                        boxShadow: isEarned ? [ // Add shadow if earned
+                          BoxShadow(
+                            color: accentColor.withOpacity(0.2),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ] : [], // No shadow if not earned
+                      ),
+                      child: ClipOval(
+                        child: ColorFiltered( // Apply greyscale if not earned
+                          colorFilter: isEarned
+                              ? const ColorFilter.mode(
+                                  Colors.transparent,
+                                  BlendMode.saturation,
+                                )
+                              : const ColorFilter.matrix([
+                                  // Greyscale matrix
+                                  0.2126, 0.7152, 0.0722, 0, 0,
+                                  0.2126, 0.7152, 0.0722, 0, 0,
+                                  0.2126, 0.7152, 0.0722, 0, 0,
+                                  0,      0,      0,      1, 0,
+                                ]),
+                          child: (badge.badgeImage ?? badge.imageUrl ?? '').isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: badge.badgeImage ?? badge.imageUrl ?? '',
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(accentColor.withOpacity(0.5)),
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => Icon(
+                                    Icons.broken_image,
+                                    color: isDarkMode ? Colors.white54 : Colors.black54,
+                                    size: 40,
+                                  ),
+                                )
+                              : Icon( // Fallback icon
+                                  Icons.emoji_events,
+                                  color: isDarkMode ? Colors.white30 : Colors.black38,
+                                  size: 40,
+                                 ),
+                        ),
+                      ),
+                    ),
+                    // Lock Icon Overlay if not earned
+                    if (!isEarned)
+                      Container(
+                        height: 85,
+                        width: 85,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withOpacity(0.4), // Semi-transparent overlay
+                        ),
+                        child: Icon(
+                          Icons.lock,
+                          color: Colors.white.withOpacity(0.8),
+                          size: 32,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                badge.name,
+                textAlign: TextAlign.center,
+                maxLines: 2, // Allow wrapping
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isEarned ? FontWeight.w600 : FontWeight.normal,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(isEarned ? 1.0 : 0.6),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

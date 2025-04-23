@@ -138,7 +138,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
       // --- Track completion ---
       debugPrint('[AudioPlayerScreen] Calling userProvider.trackAudioCompletion...');
-      await userProvider.trackAudioCompletion(userId, widget.audio.id);
+      await userProvider.trackAudioCompletion(userId, widget.audio.id, context: context);
       debugPrint('[AudioPlayerScreen] userProvider.trackAudioCompletion finished.');
 
       // --- Check for level up AFTER completion ---

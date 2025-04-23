@@ -806,4 +806,92 @@ class Audio {
       'courseTitle': courseTitle,
     };
   }
+}
+
+class AppBadge {
+  final String id;
+  final String name;
+  final String description;
+  final String? imageUrl; // Original field
+  final String? badgeImage; // Field for the primary badge display image
+  final DateTime earnedAt; // Keep this, even if not always set initially
+  final int xpValue;
+  final String criteriaType;
+  final int requiredCount;
+  final List<String>? specificIds;
+
+  AppBadge({
+    required this.id,
+    required this.name,
+    required this.description,
+    this.imageUrl,
+    this.badgeImage,
+    DateTime? earnedAt, // Make nullable in constructor for all badges
+    required this.xpValue,
+    required this.criteriaType,
+    required this.requiredCount,
+    this.specificIds,
+  }) : this.earnedAt = earnedAt ?? DateTime.now(); // Default if needed
+
+  factory AppBadge.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>? ?? {};
+    return AppBadge(
+      id: doc.id,
+      name: data['name'] ?? 'Unknown Badge',
+      description: data['description'] ?? '',
+      imageUrl: data['imageUrl'],
+      badgeImage: data['badgeImage'], // Use badgeImage
+      // EarnedAt shouldn't be read from the definition, it's user-specific
+      // We keep the field but don't populate it from the definition doc
+      // earnedAt: data['earnedAt'] != null 
+      //     ? (data['earnedAt'] as Timestamp).toDate()
+      //     : null,
+      xpValue: data['xpValue'] ?? 0,
+      criteriaType: data['criteriaType'] ?? '',
+      requiredCount: data['requiredCount'] ?? 0,
+      specificIds: data['specificIds'] != null
+          ? List<String>.from(data['specificIds'])
+          : null,
+    );
+  }
+
+  // Add copyWith method to allow creating a new instance with some properties updated
+  AppBadge copyWith({
+    String? id,
+    String? name,
+    String? description,
+    String? imageUrl,
+    String? badgeImage,
+    DateTime? earnedAt,
+    int? xpValue,
+    String? criteriaType,
+    int? requiredCount,
+    List<String>? specificIds,
+  }) {
+    return AppBadge(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      badgeImage: badgeImage ?? this.badgeImage,
+      earnedAt: earnedAt ?? this.earnedAt,
+      xpValue: xpValue ?? this.xpValue,
+      criteriaType: criteriaType ?? this.criteriaType,
+      requiredCount: requiredCount ?? this.requiredCount,
+      specificIds: specificIds ?? this.specificIds,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'description': description,
+        'imageUrl': imageUrl,
+        'badgeImage': badgeImage,
+        // Don't write earnedAt back to the definition
+        // 'earnedAt': Timestamp.fromDate(earnedAt),
+        'xpValue': xpValue,
+        'criteriaType': criteriaType,
+        'requiredCount': requiredCount,
+        'specificIds': specificIds,
+      };
 } 

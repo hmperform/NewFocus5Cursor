@@ -7,11 +7,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
 import 'dart:math' as math;
+import 'package:lottie/lottie.dart';
+import '../../models/content_models.dart';
 
 class BadgeDetailScreen extends StatefulWidget {
   final AppBadge badge;
+  final bool isEarned;
 
-  const BadgeDetailScreen({super.key, required this.badge});
+  const BadgeDetailScreen({
+    super.key, 
+    required this.badge,
+    this.isEarned = false,
+  });
 
   @override
   State<BadgeDetailScreen> createState() => _BadgeDetailScreenState();
@@ -22,10 +29,13 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
   late Animation<double> _fadeInAnimation;
   late Animation<double> _slideAnimation;
   late Animation<double> _borderAnimation;
+  late bool _showLock;
   
   @override
   void initState() {
     super.initState();
+    _showLock = !widget.isEarned;
+    
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -70,6 +80,102 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
     super.dispose();
   }
 
+  // Builds the badge image with proper styling based on locked/unlocked status
+  Widget _buildBadgeImage(bool isDarkMode, Color accentColor) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Glow effect
+        if (widget.isEarned)
+          Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: accentColor.withOpacity(0.5),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+          ),
+        
+        // Badge image
+        Hero(
+          tag: 'badge_${widget.badge.id}',
+          child: Container(
+            height: 180,
+            width: 180,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: widget.isEarned 
+                    ? accentColor.withOpacity(_borderAnimation.value)
+                    : Colors.grey.withOpacity(0.3),
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: ColorFiltered(
+                // Apply grayscale filter if not earned
+                colorFilter: widget.isEarned
+                    ? const ColorFilter.mode(
+                        Colors.transparent,
+                        BlendMode.saturation,
+                      )
+                    : const ColorFilter.matrix([
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0.2126, 0.7152, 0.0722, 0, 0,
+                        0, 0, 0, 1, 0,
+                      ]),
+                child: CachedNetworkImage(
+                  imageUrl: widget.badge.badgeImage ?? '',
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => Container(
+                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                    child: Icon(
+                      Icons.emoji_events,
+                      color: widget.isEarned ? accentColor : Colors.grey,
+                      size: 80,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        
+        // Lock overlay for unearned badges
+        if (_showLock)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withOpacity(0.5),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.lock_outline,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 60,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -85,11 +191,12 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
     
     // Badge type icons based on name
     IconData getBadgeTypeIcon() {
-      final name = widget.badge.name.toLowerCase();
-      if (name.contains('streak') || name.contains('day')) return Icons.calendar_month;
-      if (name.contains('audio')) return Icons.headphones;
-      if (name.contains('course')) return Icons.school;
-      if (name.contains('level')) return Icons.trending_up;
+      final criteriaType = widget.badge.criteriaType.toLowerCase();
+      if (criteriaType.contains('streak')) return Icons.calendar_month;
+      if (criteriaType.contains('audio')) return Icons.headphones;
+      if (criteriaType.contains('course')) return Icons.school;
+      if (criteriaType.contains('total')) return Icons.access_time_filled;
+      if (criteriaType.contains('journal')) return Icons.edit_note;
       return Icons.emoji_events;
     }
     
@@ -146,6 +253,37 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
                 
                 const SizedBox(height: 24),
                 
+                // Badge Status (Earned or Locked)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: widget.isEarned 
+                        ? Colors.green.withOpacity(0.2) 
+                        : Colors.grey.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.isEarned ? Icons.check_circle : Icons.lock,
+                        color: widget.isEarned ? Colors.green : Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.isEarned ? 'EARNED' : 'LOCKED',
+                        style: TextStyle(
+                          color: widget.isEarned ? Colors.green : Colors.grey,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
                 // Badge Name with icon
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -153,23 +291,25 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.2),
+                        color: (widget.isEarned ? accentColor : Colors.grey).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
                         getBadgeTypeIcon(),
-                        color: accentColor,
+                        color: widget.isEarned ? accentColor : Colors.grey,
                         size: 24,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      widget.badge.name,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
+                    Flexible(
+                      child: Text(
+                        widget.badge.name,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -200,14 +340,14 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: accentColor.withOpacity(isDarkMode ? 0.1 : 0.05),
+                          color: (widget.isEarned ? accentColor : Colors.grey).withOpacity(isDarkMode ? 0.1 : 0.05),
                           blurRadius: 15,
                           spreadRadius: 0,
                           offset: const Offset(0, 4),
                         ),
                       ],
                       border: Border.all(
-                        color: accentColor.withOpacity(isDarkMode ? 0.3 : 0.1),
+                        color: (widget.isEarned ? accentColor : Colors.grey).withOpacity(isDarkMode ? 0.3 : 0.1),
                         width: 1.5,
                       ),
                     ),
@@ -219,18 +359,18 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: accentColor.withOpacity(0.2),
+                                color: (widget.isEarned ? accentColor : Colors.grey).withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
-                                Icons.info_outline,
-                                color: accentColor,
+                                widget.isEarned ? Icons.info_outline : Icons.lock_open,
+                                color: widget.isEarned ? accentColor : Colors.grey,
                                 size: 22,
                               ),
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Badge Details',
+                              widget.isEarned ? 'Badge Details' : 'How to Unlock',
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: textColor,
@@ -247,57 +387,85 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
                           '${widget.badge.xpValue} XP',
                           Icons.star_rounded,
                           isDarkMode,
-                          accentColor,
-                          textColor,
-                          secondaryTextColor,
+                          widget.isEarned ? accentColor : Colors.grey,
                         ),
                         
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Divider(
-                            color: isDarkMode 
-                                ? Colors.grey.shade800 
-                                : Colors.grey.shade300,
+                        if (!widget.isEarned) ...[
+                          const SizedBox(height: 16),
+                          // Requirements to unlock
+                          _buildDetailRow(
+                            context,
+                            'Requirement',
+                            _getRequirementText(),
+                            _getRequirementIcon(),
+                            isDarkMode,
+                            Colors.grey,
                           ),
-                        ),
-                        
-                        // Earned Date
-                        _buildDetailRow(
-                          context, 
-                          'Earned On', 
-                          widget.badge.earnedAt != null 
-                              ? Formatters.formatDate(widget.badge.earnedAt!) 
-                              : 'Not yet earned',
-                          Icons.calendar_today_rounded,
-                          isDarkMode,
-                          accentColor,
-                          textColor,
-                          secondaryTextColor,
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Add progress section for badges that track completion
-                        if (_shouldShowProgressSection())
-                          _buildProgressSection(
-                            context, 
-                            theme, 
-                            isDarkMode, 
+                          
+                          const SizedBox(height: 16),
+                          // Progress (if applicable)
+                          _buildDetailRow(
+                            context,
+                            'Your Progress',
+                            _getProgressText(),
+                            Icons.stacked_line_chart,
+                            isDarkMode,
+                            Colors.grey,
+                          ),
+                        ] else if (widget.badge.earnedAt != null) ...[
+                          const SizedBox(height: 16),
+                          // Earned Date (if earned)
+                          _buildDetailRow(
+                            context,
+                            'Earned On',
+                            Formatters.formatDate(widget.badge.earnedAt),
+                            Icons.calendar_today,
+                            isDarkMode,
                             accentColor,
-                            textColor,
-                            secondaryTextColor,
                           ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 
-                // Add "How to Earn" section for unearnerd badges
-                if (widget.badge.earnedAt == null)
-                  _buildHowToEarnSection(context, theme, isDarkMode, accentColor, textColor, secondaryTextColor),
+                // Tip for locked badges
+                if (!widget.isEarned) ...[
+                  const SizedBox(height: 32),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.blue.withOpacity(0.1) : Colors.blue.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.lightbulb_outline,
+                          color: Colors.blue,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _getTipText(),
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.blue[200] : Colors.blue[800],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 
-                // Pad the bottom for better visual spacing and scrolling
-                SizedBox(height: MediaQuery.of(context).padding.bottom + 40),
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -306,407 +474,141 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
     );
   }
   
-  Widget _buildBadgeImage(bool isDarkMode, Color accentColor) {
-    final badgeSize = 180.0;
-    final borderWidth = 3.0;
-    
-    return Hero(
-      tag: 'badge_${widget.badge.id}',
-      child: Container(
-        height: badgeSize,
-        width: badgeSize,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withOpacity(isDarkMode ? 0.4 : 0.2),
-              blurRadius: 25,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Badge image with fallback
-            Positioned.fill(
-              child: ClipOval(
-                child: CachedNetworkImage(
-                  imageUrl: _getBadgeImageUrl(),
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: isDarkMode ? Colors.grey.shade900 : Colors.grey.shade200,
-                    child: Center(child: 
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                      ),
-                    ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: isDarkMode ? Colors.grey.shade900 : Colors.grey.shade200,
-                    child: Center(
-                      child: Icon(
-                        _getBadgeIconFromName(),
-                        color: accentColor,
-                        size: 70,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            
-            // Animated border only (no shimmer on the whole badge)
-            AnimatedBuilder(
-              animation: _borderAnimation,
-              builder: (context, child) {
-                return Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: NeonBorderPainter(
-                        color: accentColor,
-                        strokeWidth: borderWidth,
-                        progress: _borderAnimation.value,
-                        isDarkMode: isDarkMode,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  String _getBadgeImageUrl() {
-    // Try badgeImage first, then imageUrl
-    if (widget.badge.badgeImage != null && widget.badge.badgeImage!.isNotEmpty) {
-      return widget.badge.badgeImage!;
-    }
-    
-    // Fallback to imageUrl
-    return widget.badge.imageUrl;
-  }
-  
-  IconData _getBadgeIconFromName() {
-    final name = widget.badge.name.toLowerCase();
-    if (name.contains('audio')) return Icons.headphones;
-    if (name.contains('streak')) return Icons.local_fire_department;
-    if (name.contains('course')) return Icons.school;
-    if (name.contains('level')) return Icons.trending_up;
-    if (name.contains('complete')) return Icons.check_circle;
-    return Icons.emoji_events;
-  }
-  
-  bool _shouldShowProgressSection() {
-    final name = widget.badge.name.toLowerCase();
-    return name.contains('level') || 
-           name.contains('streak') || 
-           name.contains('progress') ||
-           name.contains('day');
-  }
-  
+  // Helper method to build consistent detail rows
   Widget _buildDetailRow(
-    BuildContext context, 
-    String label, 
-    String value, 
+    BuildContext context,
+    String label,
+    String value,
     IconData icon,
     bool isDarkMode,
-    Color accentColor,
-    Color textColor,
-    Color secondaryTextColor,
+    Color iconColor,
   ) {
-    final theme = Theme.of(context);
-    final valueColor = label == 'XP Value' ? accentColor : textColor;
-    
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
-            color: accentColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(10),
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: accentColor, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          '$label:',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: secondaryTextColor,
+          child: Center(
+            child: Icon(
+              icon,
+              color: iconColor,
+              size: 20,
+            ),
           ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: valueColor,
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildProgressSection(
-    BuildContext context, 
-    ThemeData theme, 
-    bool isDarkMode, 
-    Color accentColor,
-    Color textColor,
-    Color secondaryTextColor,
-  ) {
-    // Example values - in a real app, these would come from the badge data
-    final name = widget.badge.name.toLowerCase();
-    final int achievedDays = name.contains('streak') ? 14 : 270; 
-    final int targetDays = name.contains('streak') ? 30 : 365;
-    final double progress = achievedDays / targetDays;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Progress',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
-            ),
-            Text(
-              '${(progress * 100).toInt()}%',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: accentColor,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Stack(
-          children: [
-            // Background
-            Container(
-              height: 12,
-              decoration: BoxDecoration(
-                color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            // Progress with glow effect
-            Container(
-              height: 12,
-              width: MediaQuery.of(context).size.width * progress * 0.8, // Approximate width adjustment
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: LinearGradient(
-                  colors: [
-                    accentColor,
-                    accentColor.withOpacity(0.8),
-                  ],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: accentColor.withOpacity(0.4),
-                    blurRadius: 8,
-                    spreadRadius: 0,
-                  )
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              '$achievedDays / $targetDays ${name.contains("streak") ? "days streak" : "days"}',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: secondaryTextColor,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHowToEarnSection(
-    BuildContext context,
-    ThemeData theme,
-    bool isDarkMode,
-    Color accentColor,
-    Color textColor,
-    Color secondaryTextColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 32, left: 20, right: 20),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDarkMode ? Colors.grey.shade900.withOpacity(0.5) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: accentColor.withOpacity(0.2),
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.lightbulb_outline,
-                    color: accentColor,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'How to Earn',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildRequirementRow(
-              context, 
-              'Complete the required activities',
-              Icons.check_circle_outline,
-              accentColor,
-              textColor,
-            ),
-            const SizedBox(height: 12),
-            _buildRequirementRow(
-              context, 
-              'Maintain consistent engagement',
-              Icons.trending_up,
-              accentColor,
-              textColor,
-            ),
-            const SizedBox(height: 12),
-            _buildRequirementRow(
-              context, 
-              'Earn XP through completing sessions',
-              Icons.star_outline,
-              accentColor,
-              textColor,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRequirementRow(
-    BuildContext context,
-    String text,
-    IconData icon,
-    Color accentColor,
-    Color textColor,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          color: accentColor,
-          size: 20,
-        ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 16),
         Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 15,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
-}
-
-// Custom painter for animated neon-style border
-class NeonBorderPainter extends CustomPainter {
-  final Color color;
-  final double strokeWidth;
-  final double progress;
-  final bool isDarkMode;
   
-  NeonBorderPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.progress,
-    required this.isDarkMode,
-  });
-  
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Rect rect = Offset.zero & size;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2;
-    
-    final glowWidth = strokeWidth * 2;
-    
-    // Create path for the full circle
-    final circlePath = Path()
-      ..addOval(Rect.fromCircle(center: center, radius: radius));
-    
-    // Calculate the animation angle based on progress
-    final angle = 2 * math.pi * progress;
-    
-    // Main border stroke path with partial sweep depending on animation
-    // Only draw this if progress is at least a tiny amount (avoid flicker at beginning)
-    if (progress > 0.05) {
-      final borderPaint = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      
-      final path = Path();
-      path.addArc(
-        Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
-        -math.pi / 2, // Start from top
-        angle,
-      );
-      
-      canvas.drawPath(path, borderPaint);
-      
-      // Outer glow
-      final glowPaint = Paint()
-        ..color = color.withOpacity(isDarkMode ? 0.5 : 0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = glowWidth
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      
-      canvas.drawPath(path, glowPaint);
+  // Helper method to get requirement text based on badge criteria
+  String _getRequirementText() {
+    switch (widget.badge.criteriaType) {
+      case 'AudioModulesCompleted':
+        return 'Complete ${widget.badge.requiredCount} audio sessions';
+      case 'CoursesCompleted':
+        return 'Complete ${widget.badge.requiredCount} courses';
+      case 'CourseLessonsCompleted':
+        return 'Complete ${widget.badge.requiredCount} course lessons';
+      case 'JournalEntriesWritten':
+        return 'Write ${widget.badge.requiredCount} journal entries';
+      case 'StreakLength':
+        return 'Achieve a ${widget.badge.requiredCount}-day streak';
+      case 'TotalDaysInApp':
+        return 'Use the app for ${widget.badge.requiredCount} days';
+      default:
+        return widget.badge.description;
     }
   }
   
-  @override
-  bool shouldRepaint(NeonBorderPainter oldDelegate) => 
-      oldDelegate.progress != progress ||
-      oldDelegate.color != color ||
-      oldDelegate.strokeWidth != strokeWidth;
+  // Helper method to get requirement icon based on badge criteria
+  IconData _getRequirementIcon() {
+    switch (widget.badge.criteriaType) {
+      case 'AudioModulesCompleted':
+        return Icons.headphones;
+      case 'CoursesCompleted':
+        return Icons.school;
+      case 'CourseLessonsCompleted':
+        return Icons.menu_book;
+      case 'JournalEntriesWritten':
+        return Icons.edit_note;
+      case 'StreakLength':
+        return Icons.local_fire_department;
+      case 'TotalDaysInApp':
+        return Icons.access_time_filled;
+      default:
+        return Icons.emoji_events;
+    }
+  }
+  
+  // Helper method to get progress text based on user data
+  // In a real app, you'd get this from the UserProvider
+  String _getProgressText() {
+    // This is a placeholder - in a real implementation you would
+    // access the user's actual progress from UserProvider
+    switch (widget.badge.criteriaType) {
+      case 'AudioModulesCompleted':
+        return 'You\'ve completed some audio sessions';
+      case 'CoursesCompleted':
+        return 'You\'ve completed some courses';
+      case 'CourseLessonsCompleted':
+        return 'You\'ve completed some lessons';
+      case 'JournalEntriesWritten':
+        return 'You\'ve written some journal entries';
+      case 'StreakLength':
+        return 'Your current streak is getting there!';
+      case 'TotalDaysInApp':
+        return 'You\'ve used the app for multiple days';
+      default:
+        return 'Keep using the app to progress';
+    }
+  }
+  
+  // Helper method to get tip text based on badge criteria
+  String _getTipText() {
+    switch (widget.badge.criteriaType) {
+      case 'AudioModulesCompleted':
+        return 'Tip: Check out the Daily Audio section for new audio sessions to complete!';
+      case 'CoursesCompleted':
+        return 'Tip: Explore courses in your focus areas to complete this badge faster.';
+      case 'CourseLessonsCompleted':
+        return 'Tip: Focus on completing one course at a time to earn this badge.';
+      case 'JournalEntriesWritten':
+        return 'Tip: Try to write in your journal every day after practicing to track your progress.';
+      case 'StreakLength':
+        return 'Tip: Use the app every day to maintain your streak and unlock this badge!';
+      case 'TotalDaysInApp':
+        return 'Tip: Open the app daily, even if briefly, to count toward this badge.';
+      default:
+        return 'Tip: Keep using Focus 5 regularly to earn badges and improve your mental game!';
+    }
+  }
 } 

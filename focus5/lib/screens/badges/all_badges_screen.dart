@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../models/badge_model.dart';
+import '../../models/content_models.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../../models/user_model.dart';
@@ -193,12 +194,14 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
             badgeImage: badge.imageUrl,
             earnedAt: badge.earnedDate,
             xpValue: badge.xpValue,
+            criteriaType: badge.criteriaType.name,
+            requiredCount: badge.requiredCount,
           );
           
           Navigator.push(
             context, 
             MaterialPageRoute(
-              builder: (context) => BadgeDetailScreen(badge: appBadge),
+              builder: (context) => BadgeDetailScreen(badge: appBadge, isEarned: true),
             ),
           );
         } else {

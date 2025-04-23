@@ -13,6 +13,7 @@ import '../../providers/theme_provider.dart';
 import '../../utils/app_icons.dart';
 import '../../widgets/daily_streak_widget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../models/content_models.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);

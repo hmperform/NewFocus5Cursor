@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import 'user_level_service.dart';
+import '../models/content_models.dart'; // Ensure correct path to models
+import 'package:flutter/material.dart';
+import '../screens/badges/badge_unlock_screen.dart'; // Import the new screen
 
 class BadgeService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -21,13 +24,16 @@ class BadgeService {
   }
   
   // Check if a user has earned any new badges
-  Future<List<AppBadge>> checkForNewBadges(String userId, User currentUser) async {
+  Future<List<AppBadge>> checkForNewBadges(String userId, User currentUser, {BuildContext? context}) async {
     try {
       final badgeDefinitions = await getAllBadgeDefinitions();
       final earnedBadges = <AppBadge>[];
       
-      // Get list of badges the user already has
-      final existingBadgeIds = currentUser.badges.map((b) => b.id).toList();
+      // Get list of badges the user already has using badgesgranted IDs
+      final existingBadgeIds = currentUser.badgesgranted
+          .map((ref) => ref['id'] as String?)
+          .where((id) => id != null)
+          .toSet();
       
       for (final definition in badgeDefinitions) {
         if (existingBadgeIds.contains(definition.id)) {
@@ -43,8 +49,12 @@ class BadgeService {
             name: definition.name,
             description: definition.description,
             imageUrl: definition.imageUrl,
+            badgeImage: definition.badgeImage,
             earnedAt: DateTime.now(),
             xpValue: definition.xpValue,
+            criteriaType: definition.criteriaType,
+            requiredCount: definition.requiredCount,
+            specificIds: definition.specificIds,
           );
           
           // Add badge to user's collection
@@ -53,6 +63,21 @@ class BadgeService {
           // Add to the list of newly earned badges
           earnedBadges.add(newBadge);
         }
+      }
+      
+      // Show badge unlock popup(s) if any badges were earned and we have a context
+      if (earnedBadges.isNotEmpty && context != null) {
+        if (earnedBadges.length == 1) {
+          // Show a single badge popup for just one badge
+          showBadgeUnlockPopup(context, earnedBadges.first);
+        } else {
+          // Show multiple badges in sequence
+          showMultipleBadgeUnlocks(context, earnedBadges);
+        }
+        debugPrint('Showing popup(s) for ${earnedBadges.length} newly earned badges!');
+      } else if (earnedBadges.isNotEmpty) {
+        // Log if we can't show popups due to missing context
+        debugPrint('User earned ${earnedBadges.length} new badges, but no context to show popups.');
       }
       
       return earnedBadges;
@@ -71,8 +96,9 @@ class BadgeService {
           final int requiredXp = badge.requiredCount;
           return user.xp >= requiredXp;
           
-        case 'streak':
+        case 'StreakLength':
           final int requiredStreak = badge.requiredCount;
+          debugPrint('[BadgeService._hasEarnedBadge] Checking StreakLength: User Streak=${user.streak}, Required=${requiredStreak}');
           return user.streak >= requiredStreak;
           
         case 'level':
@@ -154,20 +180,24 @@ class BadgeService {
   
   // Award a badge to a user
   Future<void> _awardBadgeToUser(String userId, AppBadge badge) async {
+    debugPrint('[BadgeService._awardBadgeToUser] Attempting to award badge: ${badge.id} to user: $userId');
     try {
-      // Add the badge to the user's badge collection
-      await _firestore.collection('user_badges').add({
-        'userId': userId,
-        'badgeId': badge.id,
-        'earnedAt': FieldValue.serverTimestamp(),
-      });
+      // Add the badge REFERENCE to the user's badgesgranted array
+      final badgeReference = {
+        'id': badge.id,
+        'path': 'badges' // Assuming the collection name is 'badges'
+      };
+      debugPrint('[BadgeService._awardBadgeToUser] Prepared badge reference: $badgeReference');
       
-      // Add the badge to the user's badges array
-      await _firestore.collection('users').doc(userId).update({
-        'badges': FieldValue.arrayUnion([badge.toJson()]),
-        // Also give them the XP reward
-        'xp': FieldValue.increment(badge.xpValue),
-      });
+      final updateData = {
+        'badgesgranted': FieldValue.arrayUnion([badgeReference]), // Add the reference here
+        'xp': FieldValue.increment(badge.xpValue), // Also give them the XP reward
+      };
+      debugPrint('[BadgeService._awardBadgeToUser] Preparing to update Firestore user $userId with data: $updateData');
+      
+      await _firestore.collection('users').doc(userId).update(updateData);
+      
+      debugPrint('[BadgeService._awardBadgeToUser] Firestore update for badgesgranted and xp successful for user $userId, badge ${badge.id}.');
       
       // Log badge earned event
       await _firestore.collection('user_events').add({
@@ -308,8 +338,8 @@ class BadgeService {
       
       final user = User.fromFirestore(userDoc);
       
-      // Check if user already has this badge
-      if (user.badges.any((b) => b.id == badgeId)) {
+      // Check if user already has this badge using badgesgranted IDs
+      if (user.badgesgranted.any((ref) => ref['id'] == badgeId)) {
         debugPrint('User already has this badge: $badgeId');
         return false;
       }
@@ -321,8 +351,14 @@ class BadgeService {
         name: badgeData['name'] ?? 'Unknown Badge',
         description: badgeData['description'] ?? '',
         imageUrl: badgeData['imageUrl'] ?? '',
+        badgeImage: badgeData['badgeImage'],
         earnedAt: DateTime.now(),
         xpValue: badgeData['xpValue'] ?? 0,
+        criteriaType: badgeData['criteriaType'] ?? 'Unknown',
+        requiredCount: badgeData['requiredCount'] ?? 1,
+        specificIds: badgeData['specificIds'] != null 
+            ? List<String>.from(badgeData['specificIds']) 
+            : null,
       );
       
       // Award the badge
@@ -334,6 +370,107 @@ class BadgeService {
       return false;
     }
   }
+
+  // Method to fetch all badge definitions
+  Future<List<AppBadge>> fetchAllBadgeDefinitions() async {
+    try {
+      debugPrint('BadgeService: Fetching all badge definitions...');
+      final querySnapshot = await _firestore.collection('badges').get();
+      
+      if (querySnapshot.docs.isEmpty) {
+        debugPrint('BadgeService: No badge definitions found in Firestore');
+        // Return a default badge if no badges exist in Firestore
+        return [_createDefaultBadge()];
+      }
+      
+      final List<AppBadge> badges = [];
+      
+      for (var doc in querySnapshot.docs) {
+        try {
+          final badge = AppBadge.fromFirestore(doc);
+          badges.add(badge);
+        } catch (e) {
+          debugPrint('BadgeService: Error parsing badge ${doc.id}: $e');
+          // Continue to the next badge on error
+        }
+      }
+      
+      debugPrint('BadgeService: Successfully fetched ${badges.length} badge definitions');
+      
+      if (badges.isEmpty) {
+        // If all badges failed to parse, return a default badge
+        return [_createDefaultBadge()];
+      }
+      
+      return badges;
+    } catch (e) {
+      debugPrint('BadgeService: Error fetching badge definitions: $e');
+      // Return a default badge on error
+      return [_createDefaultBadge()];
+    }
+  }
+  
+  // Helper to create a default badge
+  AppBadge _createDefaultBadge() {
+    return AppBadge(
+      id: 'default_badge',
+      name: 'First Steps',
+      description: 'Start your mental performance journey',
+      imageUrl: 'assets/images/badges/default.png',
+      badgeImage: 'https://firebasestorage.googleapis.com/v0/b/focus-5-app.firebasestorage.app/o/default_badge.png?alt=media',
+      xpValue: 50,
+      criteriaType: 'FirstLogin',
+      requiredCount: 1,
+    );
+  }
+
+  // Method to fetch details for specific badge IDs (might already exist or be useful)
+  Future<List<AppBadge>> fetchBadgesByIds(List<String> badgeIds) async {
+    if (badgeIds.isEmpty) {
+      return [];
+    }
+    
+    List<AppBadge> badges = [];
+    // Fetch badges in chunks to avoid exceeding Firestore query limits if needed
+    // For simplicity, fetching one by one here, but batching is better for many IDs
+    for (String id in badgeIds) {
+       try {
+          final docSnapshot = await _firestore.collection('badges').doc(id).get();
+          if (docSnapshot.exists) {
+             badges.add(AppBadge.fromFirestore(docSnapshot));
+          } else {
+             print('Warning: Badge document with ID $id not found.');
+             // Handle missing badge doc? Create placeholder? Skip?
+          }
+       } catch (e) {
+          print('Error fetching badge details for ID $id: $e');
+          // Handle individual fetch error
+       }
+    }
+    return badges;
+  }
+
+  // Show badge unlock popup (Now navigates to full screen)
+  void showBadgeUnlockPopup(BuildContext context, AppBadge badge) {
+    // Navigate to the full-screen unlock page
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BadgeUnlockScreen(badge: badge),
+        fullscreenDialog: true, // Make it feel like a modal presentation
+      ),
+    );
+  }
+  
+  // Show multiple badges if user earned multiple at once (Show first badge full screen)
+  void showMultipleBadgeUnlocks(BuildContext context, List<AppBadge> badges) {
+    if (badges.isEmpty) return;
+    
+    // Just show the full screen for the first badge earned in this batch
+    // Showing multiple full screens sequentially could be annoying
+    showBadgeUnlockPopup(context, badges.first);
+    
+    // Original sequential dialog logic removed
+  }
 }
 
 // Badge definition class - represents the metadata for a badge
@@ -342,6 +479,7 @@ class BadgeDefinition {
   final String name;
   final String description;
   final String imageUrl;
+  final String? badgeImage;
   final int xpValue;
   final String criteriaType; // 'xp_milestone', 'streak', 'course_completion', 'audio_completion', etc.
   final int requiredCount;
@@ -353,6 +491,7 @@ class BadgeDefinition {
     required this.name,
     required this.description,
     required this.imageUrl,
+    this.badgeImage,
     required this.xpValue,
     required this.criteriaType,
     required this.requiredCount,
@@ -366,6 +505,7 @@ class BadgeDefinition {
       name: json['name'] as String,
       description: json['description'] as String,
       imageUrl: json['imageUrl'] as String,
+      badgeImage: json['badgeImage'] as String?,
       xpValue: json['xpValue'] as int,
       criteriaType: json['criteriaType'] as String,
       requiredCount: json['requiredCount'] as int,
@@ -381,6 +521,7 @@ class BadgeDefinition {
       'name': name,
       'description': description,
       'imageUrl': imageUrl,
+      'badgeImage': badgeImage,
       'xpValue': xpValue,
       'criteriaType': criteriaType,
       'requiredCount': requiredCount,

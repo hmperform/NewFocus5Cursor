@@ -19,6 +19,7 @@ import '../services/media_completion_service.dart';
 import 'dart:async'; // Import async
 import '../widgets/streak_celebration_popup.dart'; // <-- Import added
 import '../screens/level_up_screen.dart'; // <-- Import LevelUpScreen
+import '../widgets/badge_unlock_popup.dart'; // <-- Import for badge pop-up (will be created later)
 
 class UserProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -29,14 +30,15 @@ class UserProvider extends ChangeNotifier {
   StreamSubscription<DocumentSnapshot>? _userSubscription; // To manage the listener
   
   User? _user;
-  // List<JournalEntry> _journalEntries = []; // Commented out - Collection doesn't exist
-  bool _isLoading = false;
+  List<AppBadge> _allBadgeDefinitions = []; // <-- Add state for all badge definitions
+  bool _isLoading = false; // Change to private
   String? _errorMessage;
   Map<String, int> _lessonProgress = {}; // Key: lessonId, Value: last position in seconds
-
+  bool _initialized = false;
+  
   User? get user => _user;
-  // List<JournalEntry> get journalEntries => _journalEntries; // Commented out
-  bool get isLoading => _isLoading;
+  List<AppBadge> get allBadgeDefinitions => _allBadgeDefinitions; // <-- Getter
+  bool get isLoading => _isLoading; // Add getter
   String? get errorMessage => _errorMessage;
   int get xp => _user?.xp ?? 0;
   int get focusPoints => _user?.focusPoints ?? 0;
@@ -83,8 +85,11 @@ class UserProvider extends ChangeNotifier {
       }
 
       // Minimize logging
-      _isLoading = true;
+      _isLoading = true; // Use private field
       notifyListeners(); // Notify UI that loading has started
+
+      // Load all badge definitions first (or concurrently)
+      await loadAllBadgeDefinitions(); 
 
       // Cancel previous subscription before starting a new one
       await _userSubscription?.cancel();
@@ -95,7 +100,7 @@ class UserProvider extends ChangeNotifier {
       
       if (!docSnapshot.exists) {
         _user = null;
-        _isLoading = false;
+        _isLoading = false; // Use private field
         notifyListeners();
         return;
       }
@@ -115,7 +120,7 @@ class UserProvider extends ChangeNotifier {
         // Then fetch badge details
         await _fetchBadgeDetails(_user!.badgesgranted);
       } else {
-        _isLoading = false;
+        _isLoading = false; // Use private field
         notifyListeners();
       }
 
@@ -124,9 +129,11 @@ class UserProvider extends ChangeNotifier {
       
       _userSubscription = _firestore.collection('users').doc(userId).snapshots().listen(
         (doc) async {
+          // <<< ADDED LOGGING >>>
+          print('UserProvider [Listener]: Received snapshot update for user $userId. Doc exists: ${doc.exists}'); 
           if (!doc.exists) {
             _user = null; // User not found
-            _isLoading = false;
+            _isLoading = false; // Use private field
             notifyListeners();
             return;
           }
@@ -135,45 +142,69 @@ class UserProvider extends ChangeNotifier {
             // Cancel any pending debounce
             _debounceTimer?.cancel();
             
+            // Capture previous state BEFORE parsing new data
+            final previousBadgesGranted = _user?.badgesgranted ?? [];
+            // print('UserProvider [Listener]: Previous badgesgranted refs: ${previousBadgesGranted.length}'); // Optional debug
+            
+            // <<< ADDED LOGGING >>>
+            final incomingData = doc.data();
+            final incomingBadgesGranted = incomingData?['badgesgranted'] as List<dynamic>? ?? [];
+            print('UserProvider [Listener]: Incoming badgesgranted refs: ${incomingBadgesGranted.length}');
+            
             // Process user data with debounce to avoid excessive updates
             _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-              // Parse the user data first
-              User newUser = User.fromFirestore(doc);
+              print('UserProvider [Debounced]: Processing snapshot...'); // <<< ADDED LOGGING >>>
               
-              // Only fetch badge details if we have new references or no badges currently
-              if (newUser.badgesgranted.isNotEmpty && 
-                  (_user?.badges.isEmpty ?? true || 
-                   !_haveSameBadgeRefs(newUser.badgesgranted, _user?.badgesgranted ?? []))) {
-                await _fetchBadgeDetails(newUser.badgesgranted);
+              // Parse the new user data first
+              User newUser = User.fromFirestore(doc);
+              final newBadgesGranted = newUser.badgesgranted; // Already parsed from doc
+              print('UserProvider [Debounced]: New user badgesgranted refs: ${newBadgesGranted.length}');
+              
+              // *** MODIFIED LOGIC: Compare incoming refs with PREVIOUS refs ***
+              bool shouldFetchDetails = newBadgesGranted.isNotEmpty && 
+                  !_haveSameBadgeRefs(newBadgesGranted, previousBadgesGranted);
+                   
+              print('UserProvider [Debounced]: Should fetch badge details? $shouldFetchDetails'); // <<< ADDED LOGGING >>>
+
+              // Update the main user object BEFORE potentially fetching details
+              // This ensures non-badge data is updated promptly
+              _user = newUser; 
+
+              // Only fetch badge details if the references have actually changed
+              if (shouldFetchDetails) {
+                print('UserProvider [Debounced]: Calling _fetchBadgeDetails...'); // <<< ADDED LOGGING >>>
+                _isLoading = true; // Set loading true for badge fetch
+                notifyListeners(); // Notify for loading state
+                await _fetchBadgeDetails(newBadgesGranted); // Pass the new refs
               } else {
-                // If no badge changes, just update the user object
-                _user = newUser;
-                if (newUser.badges.isEmpty && (_user?.badges.isNotEmpty ?? false)) {
-                  // Keep existing badges if new user doesn't have them
-                  _user = _user!.copyWith(badges: _user!.badges);
-                }
-                _isLoading = false;
-                notifyListeners();
+                // If no badge changes, just notify with the updated user object
+                print('UserProvider [Debounced]: No badge changes detected, just notifying.'); // <<< ADDED LOGGING >>>
+                _isLoading = false; // Use private field
+                notifyListeners(); // Notify with updated user data (like XP, streak etc.)
               }
             });
-          } catch (e) {
-            _isLoading = false;
+          } catch (e, stackTrace) { // <<< ADDED stackTrace >>>
+            print('UserProvider [Listener Error]: $e\n$stackTrace'); // <<< ADDED LOGGING >>>
+            _isLoading = false; // Use private field
             _user = null;
             notifyListeners();
           }
         },
         onError: (error, stackTrace) {
-          _isLoading = false;
+          print('UserProvider [Listener Stream Error]: $error\n$stackTrace'); // <<< ADDED LOGGING >>>
+          _isLoading = false; // Use private field
           _user = null;
           notifyListeners();
         },
         onDone: () {
-          _isLoading = false;
+          print('UserProvider [Listener Done]'); // <<< ADDED LOGGING >>>
+          _isLoading = false; // Use private field
           notifyListeners();
         }
       );
-    } catch (e) {
-      _isLoading = false;
+    } catch (e, stackTrace) { // <<< ADDED stackTrace >>>
+      print('UserProvider [loadUserData Error]: $e\n$stackTrace'); // <<< ADDED LOGGING >>>
+      _isLoading = false; // Use private field
       _user = null;
       notifyListeners();
     }
@@ -183,10 +214,12 @@ class UserProvider extends ChangeNotifier {
   bool _haveSameBadgeRefs(List<Map<String, dynamic>> newRefs, List<Map<String, dynamic>> oldRefs) {
     if (newRefs.length != oldRefs.length) return false;
     
+    // Convert lists of maps to sets of IDs for comparison
     final newIds = newRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
     final oldIds = oldRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
     
-    return newIds.length == oldIds.length && newIds.every((id) => oldIds.contains(id));
+    // Check if sets have the same size and contain the same elements
+    return newIds.length == oldIds.length && newIds.containsAll(oldIds); 
   }
 
   // Fetch detailed badge information based on references
@@ -194,29 +227,19 @@ class UserProvider extends ChangeNotifier {
     if (badgeRefs.isEmpty) {
       print('UserProvider [_fetchBadgeDetails]: No badge references to process');
       if (_user != null) {
-        _user = _user!.copyWith(badges: []);
+        _user = _user!.copyWith(badges: []); // Ensure badges list is empty
       }
-      _isLoading = false;
-      notifyListeners();
+      _isLoading = false; // Reset loading state
+      notifyListeners(); // Notify UI
       return;
     }
     
-    print('UserProvider [_fetchBadgeDetails]: Processing ${badgeRefs.length} badge references');
+    print('UserProvider [_fetchBadgeDetails]: Fetching details for ${badgeRefs.length} badge references');
     List<AppBadge> fetchedBadges = [];
     Set<String> processedIds = {}; // Track processed badge IDs
 
-    // If we've already processed these same badge references recently, skip processing
-    final badgeRefIds = badgeRefs.map((ref) => ref['id'] as String?).where((id) => id != null).toSet();
-    final currentBadgeIds = _user?.badges.map((badge) => badge.id).toSet() ?? {};
-    
-    // Only refetch if the badge IDs have changed
-    if (_user != null && badgeRefIds.length == currentBadgeIds.length && 
-        badgeRefIds.every((id) => currentBadgeIds.contains(id))) {
-      print('UserProvider [_fetchBadgeDetails]: Badge IDs unchanged, skipping fetch');
-      _isLoading = false;  // Reset loading state
-      notifyListeners();   // Notify UI to update
-      return;
-    }
+    // *** REMOVED the check that skipped fetching ***
+    // if (_user != null && badgeRefIds.length == currentBadgeIds.length && ... ) { ... return; }
 
     for (var badgeRef in badgeRefs) {
       final badgeId = badgeRef['id'] as String?;
@@ -237,9 +260,14 @@ class UserProvider extends ChangeNotifier {
               name: badgeData['name'] ?? 'Unknown Badge',
               description: badgeData['description'] ?? '',
               imageUrl: badgeData['imageUrl'],
-              badgeImage: badgeData['badgeImage'], // Ensure badgeImage is captured
-              earnedAt: DateTime.now(), // Default if not available
+              badgeImage: badgeData['badgeImage'], 
+              earnedAt: DateTime.now(), // Set earnedAt when fetching details
               xpValue: badgeData['xpValue'] is int ? badgeData['xpValue'] : 0,
+              criteriaType: badgeData['criteriaType'] ?? 'Unknown', 
+              requiredCount: badgeData['requiredCount'] is int ? badgeData['requiredCount'] : 1, 
+              specificIds: badgeData['specificIds'] != null 
+                  ? List<String>.from(badgeData['specificIds']) 
+                  : null,
             );
             
             print('UserProvider [_fetchBadgeDetails]: Successfully loaded badge from Firestore: ${badge.name}');
@@ -256,6 +284,8 @@ class UserProvider extends ChangeNotifier {
               badgeImage: '',
               earnedAt: DateTime.now(),
               xpValue: 0,
+              criteriaType: 'Unknown', // Add required criteriaType
+              requiredCount: 1, // Add required requiredCount
             );
             fetchedBadges.add(badge);
           }
@@ -269,12 +299,13 @@ class UserProvider extends ChangeNotifier {
     
     // Update the user object's badges list safely
     if (_user != null) {
-      _user = _user!.copyWith(badges: fetchedBadges);
-      
-      // Only notify listeners once at the end of the entire badge fetch process
-      _isLoading = false;
-      notifyListeners();
+      // Use copyWith on the *current* _user state
+      _user = _user!.copyWith(badges: fetchedBadges); 
     }
+    
+    // Ensure loading state is false and notify listeners *after* updating _user
+    _isLoading = false; 
+    notifyListeners(); 
   }
 
   /* // Commented out - Collection doesn't exist
@@ -527,7 +558,7 @@ class UserProvider extends ChangeNotifier {
   }) async {
     if (_user == null) return false;
 
-    _isLoading = true;
+    _isLoading = true; // Use private field
     notifyListeners();
 
     try {
@@ -561,11 +592,11 @@ class UserProvider extends ChangeNotifier {
         await _firestore.collection('users').doc(_user!.id).update(updates);
       }
 
-      _isLoading = false;
+      _isLoading = false; // Use private field
       notifyListeners();
       return true;
     } catch (e) {
-      _isLoading = false;
+      _isLoading = false; // Use private field
       _errorMessage = 'Failed to update profile: ${e.toString()}';
       notifyListeners();
       return false;
@@ -614,53 +645,27 @@ class UserProvider extends ChangeNotifier {
   }
   
   // Track audio module completion
-  Future<void> trackAudioCompletion(String userId, String audioId) async {
+  Future<void> trackAudioCompletion(String userId, String audioId, {required BuildContext context}) async {
     if (_user == null) return;
-    
+
     try {
-      // Check if audio is already completed
-      if (_user!.completedAudios.contains(audioId)) return;
-      
-      // Add to completed audios
-      List<String> updatedAudios = [..._user!.completedAudios, audioId];
-      
-      // Get current date for lastCompletionDate
-      final now = DateTime.now();
-      
-      // Update user document with completion and update lastCompletionDate
-      await _firestore.collection('users').doc(userId).update({
-        'completedAudios': updatedAudios,
-        'lastCompletionDate': now,
-      });
-      
-      // Log completion
-      await _firestore.collection('audio_completions').add({
-        'userId': userId,
-        'audioId': audioId,
-        'completedAt': FieldValue.serverTimestamp(),
-      });
-      
-      // Award XP
-      await addXp(userId, 50, 'Audio completion');
-      
-      // Award Focus Points
-      await addFocusPoints(userId, 10, 'Audio completion');
-      
-      // Update local user
-      _user = _user!.copyWith(
-        completedAudios: updatedAudios,
-        lastCompletionDate: now,
-      );
-      
-      // Check for badges
-      await _badgeService.checkForNewBadges(userId, _user!);
-      
       // Check and update streak for daily audio completion
       if (audioId.startsWith('audio-') || audioId.startsWith('daily-')) {
         await updateStreak(userId, true);
       }
-      
+
+      // Notify listeners after updating user state but before badge check potentially modifies it again
       notifyListeners();
+
+      // --> Check for badges after completing audio and updating user state <--
+      debugPrint('[trackAudioCompletion] Checking badges. Current streak: ${_user?.streak}');
+      // We still call checkForNewBadges to trigger the award and popup,
+      // but we no longer manually update the local state here.
+      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); 
+
+      // REMOVED MANUAL LOCAL UPDATE BLOCK
+      // if (newlyAwardedBadges.isNotEmpty && _user != null) { ... }
+
     } catch (e) {
       debugPrint('Error tracking audio completion: $e');
     }
@@ -826,8 +831,14 @@ class UserProvider extends ChangeNotifier {
           name: data['name'] ?? '',
           description: data['description'] ?? '',
           imageUrl: data['imageUrl'] ?? 'assets/images/badges/default.png',
+          badgeImage: data['badgeImage'], // Add badgeImage if available
           earnedAt: null, // Not earned yet (now works since earnedAt is nullable)
           xpValue: data['xpValue'] ?? 0,
+          criteriaType: data['criteriaType'] ?? 'Unknown', // Add criteriaType
+          requiredCount: data['requiredCount'] ?? 1, // Add requiredCount
+          specificIds: data['specificIds'] != null 
+              ? List<String>.from(data['specificIds']) 
+              : null,
         ));
       }
       
@@ -842,8 +853,11 @@ class UserProvider extends ChangeNotifier {
               name: '',
               description: '',
               imageUrl: '',
+              badgeImage: '', // Add badgeImage
               earnedAt: null,
               xpValue: 0,
+              criteriaType: 'Unknown', // Add criteriaType
+              requiredCount: 1, // Add requiredCount
             ),
           );
           
@@ -864,10 +878,10 @@ class UserProvider extends ChangeNotifier {
   // Toggle lesson completion status
   Future<bool> toggleLessonCompletion(String lessonId, bool isCompleted, {required BuildContext context}) async {
     if (_user == null) return false;
-    
+
     try {
       final userId = _user!.id;
-      
+
       // <<< Refresh user data BEFORE checking completion status >>>
       debugPrint('[toggleLessonCompletion] Refreshing user data before processing lesson $lessonId');
       final docSnapshot = await _firestore.collection('users').doc(userId).get();
@@ -880,16 +894,16 @@ class UserProvider extends ChangeNotifier {
       _user = User.fromFirestore(docSnapshot);
       debugPrint('[toggleLessonCompletion] Refreshed user data. Current streak: ${_user?.streak}, Last Completion: ${_user?.lastCompletionDate}');
       // Notify listeners after refreshing data, before proceeding
-      notifyListeners(); 
+      notifyListeners();
       // <<< End Refresh >>>
-      
+
       List<String> updatedLessons = [..._user!.completedLessons];
-      
+
       // Only allow marking lessons as completed, not uncompleting them
       if (isCompleted && !updatedLessons.contains(lessonId)) {
         // Check if the lesson media has been completed
         final hasCompletedMedia = await _mediaCompletionService.isMediaCompleted(userId, lessonId);
-        
+
         if (!hasCompletedMedia) {
           debugPrint('[toggleLessonCompletion] Media for lesson $lessonId not completed yet.');
           // Show message that user needs to watch/listen to the content first
@@ -909,23 +923,23 @@ class UserProvider extends ChangeNotifier {
           }
           return false;
         }
-        
+
         debugPrint('[toggleLessonCompletion] Media completed. Proceeding to mark lesson $lessonId as complete.');
         // Add to completed lessons
         updatedLessons.add(lessonId);
-        
+
         // Add XP for completing a lesson
         await addXp(userId, 50, 'Lesson completion');
 
         // Get current date for lastCompletionDate (used if streak updates)
-        final now = DateTime.now();
+        // final now = DateTime.now(); // Moved to updateStreak
 
         // Update in Firestore (only completedLessons for now, streak/date handled later)
         await _firestore.collection('users').doc(userId).update({
           'completedLessons': updatedLessons,
           // 'lastCompletionDate': now, // Moved to updateStreak if needed
         });
-        
+
         // Log the completion
         await _firestore.collection('lesson_completions').add({
           'userId': userId,
@@ -933,18 +947,19 @@ class UserProvider extends ChangeNotifier {
           'action': 'completed',
           'timestamp': FieldValue.serverTimestamp(),
         });
-        
+
         // Update local user (only completedLessons initially)
         _user = _user!.copyWith(completedLessons: updatedLessons);
-        notifyListeners();
-        
+        // Notify listeners for lesson completion update before streak/badge checks
+        notifyListeners(); 
+
         // Check if this lesson completion completes an entire course
-        await checkAndAwardCourseCompletionXp(lessonId); // This might add more XP
-        
+        await checkAndAwardCourseCompletionXp(lessonId, context: context);
+
         // Update streak for lesson completion (now uses refreshed data)
         debugPrint('[toggleLessonCompletion] Calling updateStreak for lesson $lessonId');
         final bool streakIncremented = await updateStreak(userId, true);
-        
+
         // Optional: Add celebration logic here if streakIncremented is true
         if (streakIncremented && context.mounted) {
            final currentStreak = _user?.streak ?? 0;
@@ -956,11 +971,20 @@ class UserProvider extends ChangeNotifier {
            });
         }
         
+        // --> Check for badges after completing lesson and updating user state <--
+        debugPrint('[toggleLessonCompletion] Checking badges. Current streak: ${_user?.streak}');
+        // We still call checkForNewBadges to trigger the award and popup,
+        // but we no longer manually update the local state here.
+        await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); 
+        
+        // REMOVED MANUAL LOCAL UPDATE BLOCK
+        // if (newlyAwardedBadges.isNotEmpty && _user != null) { ... }
+        
         return true;
       } else if (updatedLessons.contains(lessonId)) {
         debugPrint('[toggleLessonCompletion] Lesson $lessonId already completed. Ignoring.');
         // Silently ignore attempts to uncheck completed lessons or mark already completed ones
-        return true; 
+        return true;
       } else {
          debugPrint('[toggleLessonCompletion] Attempting to mark lesson $lessonId as incomplete (isCompleted=false). Ignoring.');
          return true; // Ignore unchecking
@@ -972,7 +996,7 @@ class UserProvider extends ChangeNotifier {
   }
   
   // Track game completion
-  Future<bool> trackGameCompletion(String userId, String gameId, int score) async {
+  Future<bool> trackGameCompletion(String userId, String gameId, int score, {required BuildContext context}) async {
     if (_user == null) return false;
     
     try {
@@ -1009,10 +1033,13 @@ class UserProvider extends ChangeNotifier {
       // Update streak for game completion
       await updateStreak(userId, true);
       
-      // Check for badges
-      await _badgeService.checkForNewBadges(userId, _user!);
+      notifyListeners(); // Notify after local updates
+
+      // --> Check for badges after completing game and updating user state <--
+      debugPrint('[trackGameCompletion] Checking badges. Current streak: ${_user?.streak}');
+      // await checkAndAwardBadges(context); // Method doesn't exist
+      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); // Direct call
       
-      notifyListeners();
       return true;
     } catch (e) {
       debugPrint('Error tracking game completion: $e');
@@ -1021,7 +1048,7 @@ class UserProvider extends ChangeNotifier {
   }
   
   // Track journal entry completion
-  Future<bool> trackJournalEntryCompletion(String userId, Map<String, dynamic> journalData) async {
+  Future<bool> trackJournalEntryCompletion(String userId, Map<String, dynamic> journalData, {required BuildContext context}) async {
     if (_user == null) return false;
     
     try {
@@ -1056,10 +1083,13 @@ class UserProvider extends ChangeNotifier {
       // Update streak for journal completion
       await updateStreak(userId, true);
       
-      // Check for badges
-      await _badgeService.checkForNewBadges(userId, _user!);
+      notifyListeners(); // Notify after local updates
+
+      // --> Check for badges after completing journal entry and updating user state <--
+      debugPrint('[trackJournalEntryCompletion] Checking badges. Current streak: ${_user?.streak}');
+      // await checkAndAwardBadges(context); // Method doesn't exist
+      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); // Direct call
       
-      notifyListeners();
       return true;
     } catch (e) {
       debugPrint('Error tracking journal entry: $e');
@@ -1068,7 +1098,7 @@ class UserProvider extends ChangeNotifier {
   }
 
   // Check if a course is completed and award XP (only once per course)
-  Future<void> checkAndAwardCourseCompletionXp(String lessonId) async {
+  Future<void> checkAndAwardCourseCompletionXp(String lessonId, {required BuildContext context}) async {
     if (_user == null) return;
     
     try {
@@ -1154,10 +1184,13 @@ class UserProvider extends ChangeNotifier {
       // Show alert/notification
       debugPrint('🎉 Course $courseId completed! Awarded $xpReward XP');
       
-      // Check for badges
-      await _badgeService.checkForNewBadges(userId, _user!);
+      notifyListeners(); // Notify after local updates
       
-      notifyListeners();
+      // --> Check for badges after completing course and updating user state <--
+      debugPrint('[checkAndAwardCourseCompletionXp] Checking badges. Current streak: ${_user?.streak}');
+      // await checkAndAwardBadges(context); // Method doesn't exist
+      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); // Direct call
+      
     } catch (e) {
       debugPrint('Error checking course completion: $e');
     }
@@ -1257,6 +1290,7 @@ class UserProvider extends ChangeNotifier {
     _userSubscription?.cancel();
     _userSubscription = null;
     _user = null;
+    _allBadgeDefinitions = []; // Clear badge definitions
     _isLoading = false;
     _lessonProgress = {};
     _errorMessage = null;
@@ -1532,8 +1566,18 @@ class UserProvider extends ChangeNotifier {
       // Set last completion to yesterday to guarantee streak increase
       await setLastCompletionToYesterday(_user!.id);
       // Call updateStreak with increment=true
-      await updateStreak(_user!.id, true);
+      final bool streakUpdated = await updateStreak(_user!.id, true);
       print('[ADMIN] Streak increment attempted. New streak: ${_user?.streak}');
+      
+      // <<< ADD BADGE CHECK HERE >>>
+      if (streakUpdated && navigatorKey.currentContext != null) {
+        print('[ADMIN] Checking for badges after streak increment.');
+        await _badgeService.checkForNewBadges(_user!.id, _user!, context: navigatorKey.currentContext!);
+      } else if (navigatorKey.currentContext == null) {
+         print('[ADMIN] Cannot check for badges, navigator context is null.');
+      }
+      // <<< END BADGE CHECK >>>
+      
       return true;
     } catch (e) {
       print('[ADMIN] Error incrementing streak: $e');
@@ -1561,4 +1605,479 @@ class UserProvider extends ChangeNotifier {
   }
 
   // --- End Admin Methods ---
+
+  // Check and award badges based on current user state
+  Future<void> checkAndAwardBadges(BuildContext context) async {
+    if (_user == null || _allBadgeDefinitions.isEmpty) {
+      print('checkAndAwardBadges: User or badge definitions not loaded.');
+      if (_user != null && _allBadgeDefinitions.isEmpty) {
+        await loadAllBadgeDefinitions(); // Use the public method here
+        if (_allBadgeDefinitions.isEmpty) {
+          print('checkAndAwardBadges: Unable to load badge definitions, aborting.');
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    print('checkAndAwardBadges: Checking ${_allBadgeDefinitions.length} badges for user ${_user!.id}');
+    final currentUser = _user!;
+    final earnedBadgeIds = currentUser.badgesgranted.map((ref) => ref['id'] as String?).toSet();
+    List<AppBadge> newlyAwardedBadges = [];
+    int totalXpGained = 0;
+    bool userUpdated = false;
+
+    for (final badgeDef in _allBadgeDefinitions) {
+      if (earnedBadgeIds.contains(badgeDef.id)) {
+        continue; // Already earned
+      }
+
+      bool criteriaMet = false;
+      int currentCount = 0;
+
+      // Check criteria based on criteriaType
+      switch (badgeDef.criteriaType) {
+        case 'AudioModulesCompleted':
+          currentCount = currentUser.completedAudios.length;
+          criteriaMet = currentCount >= badgeDef.requiredCount;
+          break;
+        case 'CoursesCompleted':
+          currentCount = currentUser.completedCourses.length;
+          // TODO: Add specific course ID check if badgeDef.specificIds is not null
+          criteriaMet = currentCount >= badgeDef.requiredCount;
+          break;
+        case 'CourseLessonsCompleted':
+          currentCount = currentUser.completedLessons.length;
+          // TODO: Add specific lesson ID check if badgeDef.specificIds is not null
+          criteriaMet = currentCount >= badgeDef.requiredCount;
+          break;
+        case 'JournalEntriesWritten':
+          // TODO: Need to fetch/count journal entries if this feature exists
+          // currentCount = _journalEntries.length; 
+          // criteriaMet = currentCount >= badgeDef.requiredCount;
+          print('JournalEntriesWritten criteria not implemented yet.');
+          break;
+        case 'StreakLength':
+          currentCount = currentUser.streak;
+          criteriaMet = currentCount >= badgeDef.requiredCount;
+          break;
+        case 'TotalDaysInApp':
+          currentCount = currentUser.totalLoginDays;
+          criteriaMet = currentCount >= badgeDef.requiredCount;
+          break;
+        // Add cases for other criteria types as needed
+        default:
+          print('Unknown badge criteria type: ${badgeDef.criteriaType}');
+      }
+
+      if (criteriaMet) {
+        print('Criteria MET for badge: ${badgeDef.name} (${badgeDef.criteriaType} >= ${badgeDef.requiredCount}). Current: $currentCount');
+        newlyAwardedBadges.add(badgeDef);
+        // Explicitly cast to AppBadge if needed, assuming xpValue is int
+        totalXpGained += (badgeDef as AppBadge).xpValue; // Cast added
+        userUpdated = true;
+      }
+    }
+
+    if (userUpdated) {
+      print('Awarding ${newlyAwardedBadges.length} new badges. Total XP gain: $totalXpGained');
+      // Update user document in Firestore
+      final userRef = _firestore.collection('users').doc(currentUser.id);
+      final List<Map<String, dynamic>> newBadgeRefs = newlyAwardedBadges
+          .map((badge) => {
+                'id': (badge as AppBadge).id,
+                'path': 'badges' // Assuming collection name is 'badges'
+              })
+          .toList(); // Remove type argument
+
+      try {
+        await userRef.update({
+          'badgesgranted': FieldValue.arrayUnion(newBadgeRefs),
+          'xp': FieldValue.increment(totalXpGained),
+        });
+        print('Firestore updated successfully for new badges and XP.');
+
+        // Update local user object immediately for UI responsiveness
+        _user = currentUser.copyWith(
+          xp: currentUser.xp + totalXpGained,
+          badgesgranted: [...currentUser.badgesgranted, ...newBadgeRefs],
+          // Also update the detailed badges list locally
+          badges: [...currentUser.badges, ...newlyAwardedBadges.map((b) => (b as AppBadge).copyWith(earnedAt: DateTime.now()))]
+        );
+        notifyListeners(); // Notify UI about XP and potentially badge list changes
+
+        // Show pop-up for each newly awarded badge
+        for (final awardedBadge in newlyAwardedBadges) {
+           // Use a short delay between popups if multiple badges are awarded at once
+           await Future.delayed(const Duration(milliseconds: 500)); 
+           // Ensure context is still valid if delays are involved
+           if (context.mounted) { 
+              showDialog(
+                context: context,
+                barrierDismissible: false, // Prevent dismissing by tapping outside
+                builder: (dialogContext) => BadgeUnlockPopup(
+                  badge: awardedBadge,
+                ),
+              );
+           }
+        }
+
+        // Check for level up after awarding XP
+        _checkAndHandleLevelUp(context, currentUser.xp, _user!.xp);
+
+      } catch (e) {
+        print('Error updating user document for badges/XP: $e');
+        // Handle error - maybe revert local changes or show an error message
+      }
+    }
+  }
+
+  // --- Private Helper Methods ---
+
+  void _checkAndHandleLevelUp(BuildContext context, int oldXp, int newXp) {
+    if (_user == null) return;
+    int oldLevel = UserLevelService.getUserLevel(oldXp);
+    int newLevel = UserLevelService.getUserLevel(newXp);
+
+    if (newLevel > oldLevel) {
+      print('UserProvider: Level Up! $oldLevel -> $newLevel');
+      // Ensure navigation happens safely after build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+            // Use navigatorKey from main.dart to navigate
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (context) => LevelUpScreen(newLevel: newLevel),
+              ),
+            );
+        }
+      });
+    }
+  }
+
+  void _showStreakCelebration(BuildContext context, int streakCount) {
+    if (streakCount <= 0) return; // Don't show for 0 or negative streaks
+    // Ensure context is valid before showing popup
+    WidgetsBinding.instance.addPostFrameCallback((_) { 
+      if (context.mounted) {
+        print('UserProvider: Showing streak celebration for $streakCount days');
+        context.showStreakCelebration(streakCount: streakCount);
+      }
+    });
+  }
+
+  // Example integration point:
+  /* COMMENT OUT START
+  Future<void> recordActivityCompletion({
+    required BuildContext context, // Pass context here
+    String? courseId,
+    String? lessonId,
+    String? audioId,
+    String? articleId,
+    required int xpGained,
+  }) async {
+     if (_user == null) return;
+     final currentXp = _user!.xp;
+
+     // ... (existing logic to update completions, XP, streak)
+     Map<String, dynamic> updates = await _mediaCompletionService.recordCompletion(
+        userId: _user!.id,
+        courseId: courseId,
+        lessonId: lessonId,
+        audioId: audioId,
+        articleId: articleId,
+        xpGained: xpGained,
+        currentStreak: _user!.streak,
+        lastCompletionDate: _user!.lastCompletionDate,
+     );
+     
+     if (updates.isNotEmpty) {
+       try {
+          final userRef = _firestore.collection('users').doc(_user!.id);
+          await userRef.update(updates);
+          print('User stats updated successfully after activity completion.');
+          
+          // Update local user immediately
+          // NOTE: This might be superseded by the snapshot listener, but provides
+          // quicker UI feedback for the completion itself.
+          _user = _user!.copyWith(
+              xp: updates.containsKey('xp') ? updates['xp'] : _user!.xp,
+              streak: updates.containsKey('streak') ? updates['streak'] : _user!.streak,
+              longestStreak: updates.containsKey('longestStreak') 
+                  ? updates['longestStreak'] 
+                  : _user!.longestStreak,
+              lastCompletionDate: updates.containsKey('lastCompletionDate') 
+                  ? (updates['lastCompletionDate'] as Timestamp).toDate() 
+                  : _user!.lastCompletionDate,
+              // Update completion lists based on what was passed
+              completedCourses: courseId != null ? [..._user!.completedCourses, courseId] : _user!.completedCourses,
+              completedLessons: lessonId != null ? [..._user!.completedLessons, lessonId] : _user!.completedLessons,
+              completedAudios: audioId != null ? [..._user!.completedAudios, audioId] : _user!.completedAudios,
+              completedArticles: articleId != null ? [..._user!.completedArticles, articleId] : _user!.completedArticles,
+          );
+          notifyListeners(); 
+
+          // Show streak celebration if streak increased
+          if (updates.containsKey('streak') && updates['streak'] > currentXp) {
+             _showStreakCelebration(context, updates['streak']);
+          }
+          
+          // Check for level up
+          _checkAndHandleLevelUp(context, currentXp, _user!.xp);
+
+          // --> Check for badges AFTER updating user state
+          await checkAndAwardBadges(context);
+          
+       } catch (e) {
+          print('Error updating user stats after completion: $e');
+          // Handle error appropriately
+       }
+     }
+  }
+  COMMENT OUT END */
+
+  // Similar integration needed in updateStreakAndXP, updateLoginStats etc.
+  Future<void> updateStreakAndXP(BuildContext context, {required int xpGained}) async {
+     if (_user == null) return;
+     final currentXp = _user!.xp;
+     // ... logic to update streak and XP ...
+     try {
+        // ... Firestore update ...
+        await _firestore.collection('users').doc(_user!.id).update({
+           // ... fields to update ...
+           'xp': FieldValue.increment(xpGained), 
+        });
+        // Update local user
+        _user = _user!.copyWith(
+            xp: _user!.xp + xpGained,
+            // ... other fields
+        );
+        notifyListeners();
+        
+        // Check level up
+        _checkAndHandleLevelUp(context, currentXp, _user!.xp);
+        
+        // --> Check for badges
+        await checkAndAwardBadges(context);
+        
+     } catch (e) {
+        // ... error handling ...
+     }
+  }
+  
+  Future<void> updateLoginStats(BuildContext context) async {
+     if (_user == null) return;
+     // ... logic to calculate login streak, total days ...
+     int currentTotalDays = _user!.totalLoginDays;
+     bool shouldUpdate = false; // Determine if update is needed
+     Map<String, dynamic> updates = {};
+     // ... calculate updates map ...
+     
+     if (shouldUpdate) {
+        try {
+           await _firestore.collection('users').doc(_user!.id).update(updates);
+           // Update local user
+           _user = _user!.copyWith(
+              // ... updated fields ...
+              totalLoginDays: updates['totalLoginDays'], 
+              // ...
+           );
+           notifyListeners();
+           
+           // --> Check for badges (e.g., TotalDaysInApp)
+           await checkAndAwardBadges(context);
+           
+        } catch (e) {
+           // ... error handling ...
+        }
+     }
+  }
+
+  // Upload profile picture
+  // ... (existing upload logic)
+  
+  // Update user profile
+  // ... (existing update logic - should it check badges? Probably not needed here)
+
+  // Get all badges with earned status for the current user
+  Future<List<Map<String, dynamic>>> getAllBadgesWithEarnedStatus() async {
+    if (_allBadgeDefinitions.isEmpty) {
+      await loadAllBadgeDefinitions();
+    }
+    
+    if (_user == null) {
+      return _allBadgeDefinitions.map((badge) => {
+        'badge': badge,
+        'isEarned': false,
+      }).toList();
+    }
+    
+    // Create a set of earned badge IDs for quick lookup
+    final earnedBadgeIds = _user!.badgesgranted
+        .map((badgeRef) => badgeRef['id'] as String)
+        .toSet();
+    
+    return _allBadgeDefinitions.map((badge) => {
+      'badge': badge,
+      'isEarned': earnedBadgeIds.contains(badge.id),
+    }).toList();
+  }
+
+  // Check for new badges and show popups if any are earned
+  Future<List<AppBadge>> checkForNewBadgesWithContext(BuildContext context) async {
+    if (_user == null) return [];
+    return await _badgeService.checkForNewBadges(_user!.id, _user!, context: context);
+  }
+  
+  // Track content completion (audio, course, etc.) and check for badges
+  Future<void> trackCompletion(BuildContext context, String contentType, String contentId) async {
+    if (_user == null) return;
+    
+    try {
+      // Update appropriate completion list based on content type
+      switch (contentType) {
+        case 'audio':
+          if (!_user!.completedAudios.contains(contentId)) {
+            await _firestore.collection('users').doc(_user!.id).update({
+              'completedAudios': FieldValue.arrayUnion([contentId]),
+            });
+            _user = _user!.copyWith(
+              completedAudios: [..._user!.completedAudios, contentId],
+            );
+          }
+          break;
+        case 'course':
+          if (!_user!.completedCourses.contains(contentId)) {
+            await _firestore.collection('users').doc(_user!.id).update({
+              'completedCourses': FieldValue.arrayUnion([contentId]),
+            });
+            _user = _user!.copyWith(
+              completedCourses: [..._user!.completedCourses, contentId],
+            );
+          }
+          break;
+        case 'lesson':
+          if (!_user!.completedLessons.contains(contentId)) {
+            await _firestore.collection('users').doc(_user!.id).update({
+              'completedLessons': FieldValue.arrayUnion([contentId]),
+            });
+            _user = _user!.copyWith(
+              completedLessons: [..._user!.completedLessons, contentId],
+            );
+          }
+          break;
+        // Add more content types as needed
+      }
+      
+      // Update lastCompletionDate for streak tracking
+      await updateLastCompletionDate(_user!.id);
+      
+      // Update streak if needed
+      await updateStreak(_user!.id, true);
+      
+      // Add XP based on content type
+      int xpToAdd = 0;
+      switch (contentType) {
+        case 'audio':
+          xpToAdd = 50;
+          break;
+        case 'course':
+          xpToAdd = 200;
+          break;
+        case 'lesson':
+          xpToAdd = 100;
+          break;
+      }
+      
+      if (xpToAdd > 0) {
+        await addXp(_user!.id, xpToAdd, '$contentType completion');
+      }
+      
+      // Check for new badges with context for showing popups
+      await checkForNewBadgesWithContext(context);
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error tracking $contentType completion: $e');
+    }
+  }
+
+  // Update the user's last completion date to track streaks
+  Future<void> updateLastCompletionDate(String userId) async {
+    if (_user == null) return;
+    
+    try {
+      final now = DateTime.now();
+      await _firestore.collection('users').doc(userId).update({
+        'lastCompletionDate': Timestamp.fromDate(now),
+      });
+      
+      // Update local user
+      _user = _user!.copyWith(
+        lastCompletionDate: now,
+      );
+      
+      // No need to notify listeners here as this is usually called as part of a larger update
+      // that will notify listeners when done
+    } catch (e) {
+      print('Error updating last completion date: $e');
+    }
+  }
+
+  // Add method to load all badge definitions
+  Future<void> loadAllBadgeDefinitions() async {
+    try {
+      debugPrint('UserProvider: Loading all badge definitions');
+      final badges = await _badgeService.fetchAllBadgeDefinitions();
+      
+      if (badges.isNotEmpty) {
+        _allBadgeDefinitions = badges;
+        debugPrint('UserProvider: Loaded ${badges.length} badge definitions');
+        notifyListeners();
+      } else {
+        debugPrint('UserProvider: No badge definitions found');
+      }
+    } catch (e) {
+      debugPrint('Error loading badge definitions: $e');
+      // Keep previous definitions if we had any
+      if (_allBadgeDefinitions.isEmpty) {
+        // Create a fallback definition using the provided schema
+        _allBadgeDefinitions = [
+          AppBadge(
+            id: 'streak_7',
+            name: 'Write On!',
+            description: 'Write your first journal entry',
+            criteriaType: 'JournalEntriesWritten',
+            imageUrl: 'assets/images/badges/streak_7.png',
+            badgeImage: 'https://firebasestorage.googleapis.com/v0/b/focus-5-app.firebasestorage.app/o/ixbie_bronzebadgejournal.png?alt=media&token=f2a7f260-e877-44ac-a5ba-578fcf83bf80',
+            xpValue: 100,
+            requiredCount: 1,
+            specificIds: null,
+          )
+        ];
+      }
+    }
+  }
+  
+  // Update initUser to load badge definitions
+  Future<void> initUser(String userId) async {
+    try {
+      _isLoading = true; // Use private field
+      notifyListeners();
+      
+      await loadUserData(userId);
+      
+      // Load badge definitions when user is initialized
+      await loadAllBadgeDefinitions();
+      
+      _isLoading = false; // Use private field
+      _initialized = true;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false; // Use private field
+      notifyListeners();
+      debugPrint('Error initializing user: $e');
+    }
+  }
 } 

@@ -139,10 +139,12 @@ class _Focus5AppState extends State<Focus5App> {
         }
       });
       
-      // Also check on initial launch if user is already logged in
-      final userId = authProvider.currentUser?.id;
-      if (userId != null && userProvider.user != null) {
-        userProvider.checkAndUpdateStreakStatus(userId);
+      // Initial streak check if user is already logged in
+      if (authProvider.isLoggedIn && userProvider.user != null) {
+        print('_setupStreakTracking: User is logged in. Checking streak status.');
+        userProvider.checkAndUpdateStreakStatus(userProvider.user!.id);
+        // --> Check for badges after initial login checks <--
+        userProvider.checkAndAwardBadges(context);
       }
     });
   }
