@@ -9,6 +9,7 @@ class CustomTextField extends StatelessWidget {
   final bool obscureText;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
+  final void Function(String)? onSubmitted;
   final int? maxLength;
   final int maxLines;
   final bool autofocus;
@@ -18,7 +19,8 @@ class CustomTextField extends StatelessWidget {
   final Widget? suffix;
   final Widget? prefix;
   final IconData? prefixIcon;
-  final IconData? suffixIcon;
+  final IconData? suffixIconData;
+  final Widget? suffixIcon;
   final String? helpText;
 
   const CustomTextField({
@@ -30,6 +32,7 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.validator,
     this.onChanged,
+    this.onSubmitted,
     this.maxLength,
     this.maxLines = 1,
     this.autofocus = false,
@@ -39,6 +42,7 @@ class CustomTextField extends StatelessWidget {
     this.suffix,
     this.prefix,
     this.prefixIcon,
+    this.suffixIconData,
     this.suffixIcon,
     this.helpText,
   }) : super(key: key);
@@ -64,7 +68,7 @@ class CustomTextField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hintText,
             contentPadding: contentPadding,
-            suffixIcon: suffix ?? (suffixIcon != null ? Icon(suffixIcon) : null),
+            suffixIcon: suffixIcon ?? suffix ?? (suffixIconData != null ? Icon(suffixIconData) : null),
             prefixIcon: prefix ?? (prefixIcon != null ? Icon(prefixIcon) : null),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -110,6 +114,7 @@ class CustomTextField extends StatelessWidget {
           obscureText: obscureText,
           validator: validator,
           onChanged: onChanged,
+          onFieldSubmitted: onSubmitted,
           maxLength: maxLength,
           maxLines: maxLines,
           autofocus: autofocus,

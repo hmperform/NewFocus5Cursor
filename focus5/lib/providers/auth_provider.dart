@@ -179,17 +179,19 @@ class AuthProvider extends ChangeNotifier {
       if (_userProvider != null) {
         print('AuthProvider: register successful for $userId. Triggering UserProvider.loadUserData...');
         await _userProvider!.loadUserData(userId);
-        print('AuthProvider: register - Calling updateUserLoginInfo for $userId...');
-        await _userProvider!.updateUserLoginInfo();
       } else {
         print('AuthProvider: register - UserProvider is null.');
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_individual', isIndividual);
-      await prefs.setBool('is_first_launch', false);
+      await prefs.setBool('is_first_launch', true);
+      await prefs.setBool('profile_setup_complete', false);
 
+      // Keep the user authenticated during profile setup
       _status = AuthStatus.authenticated;
+      _lastLoadedUserId = userId;
+      notifyListeners();
+      
       return true;
     } on firebase_auth.FirebaseAuthException catch (e) {
       print('AuthProvider: register error - ${e.code}');
@@ -266,6 +268,7 @@ class AuthProvider extends ChangeNotifier {
     List<String>? focusAreas,
     File? imageFile,
     Uint8List? imageBytes,
+    String? imageUrl,
   }) async {
     try {
       return await _authService.updateUserProfile(
@@ -279,6 +282,7 @@ class AuthProvider extends ChangeNotifier {
         focusAreas: focusAreas,
         imageFile: imageFile,
         imageBytes: imageBytes,
+        profileImageUrl: imageUrl,
       );
     } catch (e) {
       print('Error in updateUserProfile: $e');

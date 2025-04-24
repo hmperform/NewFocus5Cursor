@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path/path.dart' as path;
 import '../models/user_model.dart';
 import '../models/content_models.dart';
 import '../services/firebase_storage_service.dart';
@@ -555,57 +556,73 @@ class UserProvider extends ChangeNotifier {
 
   Future<bool> updateUserProfile({
     String? fullName,
-    String? email,
-    String? profileImageUrl,
-    String? sport,
-    bool? isIndividual,
-    String? university,
+    DocumentReference? university,
     String? universityCode,
-    List<String>? focusAreas,
+    bool? isIndividual,
+    bool? isPartnerChampion,
+    bool? isPartnerCoach,
   }) async {
-    if (_user == null) return false;
-
-    _isLoading = true; // Use private field
-    notifyListeners();
-
     try {
-      final updates = <String, dynamic>{};
-      if (fullName != null) updates['fullName'] = fullName;
-      if (email != null) updates['email'] = email;
-      if (profileImageUrl != null) updates['profileImageUrl'] = profileImageUrl;
-      if (sport != null) updates['sport'] = sport;
-      if (isIndividual != null) updates['isIndividual'] = isIndividual;
-      if (university != null) updates['university'] = university;
-      if (universityCode != null) updates['universityCode'] = universityCode;
-      if (focusAreas != null) updates['focusAreas'] = focusAreas;
-      
-      // Handle profile image upload if provided
-      if (profileImageUrl != null) {
-        // Update local user object
-        _user = _user!.copyWith(
-          fullName: fullName ?? _user!.fullName,
-          email: email ?? _user!.email,
-          profileImageUrl: profileImageUrl,
-          sport: sport ?? _user!.sport,
-          isIndividual: isIndividual ?? _user!.isIndividual,
-          university: university ?? _user!.university,
-          universityCode: universityCode ?? _user!.universityCode,
-          focusAreas: focusAreas ?? _user!.focusAreas,
-        );
-      }
-      
-      // Update Firestore
-      if (updates.isNotEmpty) {
-        await _firestore.collection('users').doc(_user!.id).update(updates);
+      if (_user == null || _user?.id == null) {
+        print('UserProvider [updateUserProfile]: No user or user ID available');
+        return false;
       }
 
-      _isLoading = false; // Use private field
+      print('UserProvider [updateUserProfile]: Updating profile for user ${_user!.id}');
+      print('UserProvider [updateUserProfile]: fullName: $fullName');
+      print('UserProvider [updateUserProfile]: university reference: ${university?.path}');
+      print('UserProvider [updateUserProfile]: universityCode: $universityCode');
+      print('UserProvider [updateUserProfile]: isIndividual: $isIndividual');
+      print('UserProvider [updateUserProfile]: isPartnerChampion: $isPartnerChampion');
+      print('UserProvider [updateUserProfile]: isPartnerCoach: $isPartnerCoach');
+
+      Map<String, dynamic> updates = {};
+      
+      if (fullName != null && fullName.isNotEmpty) {
+        updates['fullName'] = fullName;
+      }
+      if (university != null) {
+        // Store university as a path string
+        updates['university'] = university.path;
+      }
+      if (universityCode != null) {
+        updates['universityCode'] = universityCode;
+      }
+      if (isIndividual != null) {
+        updates['isIndividual'] = isIndividual;
+      }
+      if (isPartnerChampion != null) {
+        updates['isPartnerChampion'] = isPartnerChampion;
+      }
+      if (isPartnerCoach != null) {
+        updates['isPartnerCoach'] = isPartnerCoach;
+      }
+
+      if (updates.isEmpty) {
+        print('UserProvider [updateUserProfile]: No updates to apply');
+        return true;
+      }
+
+      print('UserProvider [updateUserProfile]: Applying updates: $updates');
+      
+      await _firestore.collection('users').doc(_user!.id).update(updates);
+      
+      // Update local user object - make sure this is correct with proper string handling
+      _user = _user!.copyWith(
+        fullName: fullName ?? _user!.fullName,
+        university: university?.path ?? _user!.university,
+        universityCode: universityCode ?? _user!.universityCode,
+        isIndividual: isIndividual ?? _user!.isIndividual,
+        isPartnerChampion: isPartnerChampion ?? _user!.isPartnerChampion,
+        isPartnerCoach: isPartnerCoach ?? _user!.isPartnerCoach,
+      );
+      
       notifyListeners();
+      print('UserProvider [updateUserProfile]: Profile updated successfully');
       return true;
-    } catch (e) {
-      _isLoading = false; // Use private field
-      _errorMessage = 'Failed to update profile: ${e.toString()}';
-      notifyListeners();
+    } catch (e, stackTrace) {
+      print('UserProvider [updateUserProfile] Error: $e');
+      print('UserProvider [updateUserProfile] StackTrace: $stackTrace');
       return false;
     }
   }
@@ -797,14 +814,36 @@ class UserProvider extends ChangeNotifier {
       }
       
       final authProvider = Provider.of<AuthProvider>(navigatorKey.currentContext!, listen: false);
+      String? imageUrl;
+
+      // Handle image upload if provided
+      if (imageBytes != null || imageFile != null) {
+        final storageRef = FirebaseStorage.instance.ref();
+        final profileImageRef = storageRef.child('profile_images/${_user!.id}');
+        
+        if (kIsWeb && imageBytes != null) {
+          // Web upload using Uint8List
+          final uploadTask = profileImageRef.putData(
+            imageBytes,
+            SettableMetadata(contentType: 'image/jpeg'), // Adjust content type as needed
+          );
+          
+          final snapshot = await uploadTask;
+          imageUrl = await snapshot.ref.getDownloadURL();
+        } else if (imageFile != null) {
+          // Mobile upload using File
+          final uploadTask = profileImageRef.putFile(imageFile);
+          final snapshot = await uploadTask;
+          imageUrl = await snapshot.ref.getDownloadURL();
+        }
+      }
       
       // Call the auth service to update the profile
       final error = await authProvider.updateUserProfile(
         uid: _user!.id,
         fullName: name,
         university: university,
-        imageFile: imageFile,
-        imageBytes: imageBytes,
+        imageUrl: imageUrl, // Pass the uploaded image URL
       );
       
       if (error != null) {
@@ -2123,5 +2162,44 @@ class UserProvider extends ChangeNotifier {
       notifyListeners();
       debugPrint('Error initializing user: $e');
     }
+  }
+
+  // Add these methods after the existing methods in the class
+  
+  Future<void> updateUserPrivileges({
+    bool? isPartnerChampion,
+    bool? isPartnerCoach,
+  }) async {
+    if (_user == null || _user?.id == null) return;
+
+    final updates = <String, dynamic>{};
+    
+    if (isPartnerChampion != null) {
+      updates['isPartnerChampion'] = isPartnerChampion;
+    }
+    
+    if (isPartnerCoach != null) {
+      updates['isPartnerCoach'] = isPartnerCoach;
+    }
+    
+    if (updates.isNotEmpty) {
+      await _firestore.collection('users').doc(_user!.id).update(updates);
+      // The listener will automatically update the local user object
+    }
+  }
+
+  Future<void> setUniversityReference({
+    required String id,
+    required String path,
+  }) async {
+    if (_user == null || _user?.id == null) return;
+
+    await _firestore.collection('users').doc(_user!.id).update({
+      'university': {
+        'id': id,
+        'path': path,
+      },
+    });
+    // The listener will automatically update the local user object
   }
 } 

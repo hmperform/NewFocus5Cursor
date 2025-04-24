@@ -4,15 +4,19 @@ import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math' as math;
-import '../home/home_screen.dart';
+import '../main_navigation_screen.dart';
+import '../../providers/theme_provider.dart';
 
 class CommitmentScreen extends StatefulWidget {
   final String userName;
+  final bool isIndividual;
+  final String universityCode;
   
   const CommitmentScreen({
     Key? key,
     required this.userName,
+    required this.isIndividual,
+    required this.universityCode,
   }) : super(key: key);
 
   @override
@@ -22,10 +26,7 @@ class CommitmentScreen extends StatefulWidget {
 class _CommitmentScreenState extends State<CommitmentScreen> with SingleTickerProviderStateMixin {
   bool _isCommitting = false;
   bool _isCommitmentComplete = false;
-  double _commitmentProgress = 0.0;
   late AnimationController _progressController;
-  
-  // For confetti animation
   late ConfettiController _confettiController;
   
   @override
@@ -33,18 +34,15 @@ class _CommitmentScreenState extends State<CommitmentScreen> with SingleTickerPr
     super.initState();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(seconds: 5),
     )..addListener(() {
-      setState(() {
-        _commitmentProgress = _progressController.value;
-      });
       if (_progressController.value == 1.0 && !_isCommitmentComplete) {
         _completeCommitment();
       }
     });
     
     _confettiController = ConfettiController(
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 1),
     );
   }
   
@@ -56,324 +54,223 @@ class _CommitmentScreenState extends State<CommitmentScreen> with SingleTickerPr
   }
   
   void _startCommitment() {
-    if (_isCommitting) return;
+    if (_isCommitting || _isCommitmentComplete) return;
     
     HapticFeedback.mediumImpact();
     setState(() {
       _isCommitting = true;
     });
-    
     _progressController.forward(from: 0.0);
   }
   
   void _cancelCommitment() {
-    if (!_isCommitting) return;
+    if (!_isCommitting || _isCommitmentComplete) return;
     
     HapticFeedback.lightImpact();
     setState(() {
       _isCommitting = false;
     });
-    
     _progressController.stop();
     _progressController.reset();
   }
   
   void _completeCommitment() {
+    if (_isCommitmentComplete) return;
     HapticFeedback.heavyImpact();
     setState(() {
       _isCommitmentComplete = true;
+      _isCommitting = false;
     });
     
-    // Play confetti
     _confettiController.play();
     
-    // Navigate to home screen after a delay
-    Future.delayed(const Duration(seconds: 3), () {
-      _navigateToHome();
+    Future.delayed(const Duration(seconds: 2), () {
+      _navigateToMain();
     });
   }
   
-  void _navigateToHome() async {
-    // Mark onboarding as complete
+  void _navigateToMain() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_first_launch', false);
+    await prefs.setBool('onboarding_complete', true);
     
     if (!mounted) return;
     
-    // Navigate to home screen
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (context) => const HomeScreen(),
+        builder: (context) => const MainNavigationScreen(),
       ),
-      (route) => false, // Remove all previous routes
+      (route) => false,
     );
+  }
+
+  void _skipCommitment() {
+    _navigateToMain();
   }
   
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+    final screenSize = MediaQuery.of(context).size;
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: Stack(
         children: [
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Animate(
-                    effects: [
-                      FadeEffect(duration: 800.ms),
-                      SlideEffect(
-                        begin: const Offset(0, -50),
-                        end: const Offset(0, 0),
-                        duration: 800.ms,
-                      ),
-                    ],
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hey ${widget.userName}!',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Are you ready to commit to improving your mental game?',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.white,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const Spacer(),
-                  
-                  // Commitment Button
-                  Animate(
-                    effects: [
-                      FadeEffect(duration: 800.ms, delay: 400.ms),
-                      SlideEffect(
-                        begin: const Offset(0, 50),
-                        end: const Offset(0, 0),
-                        duration: 800.ms,
-                        delay: 400.ms,
-                      ),
-                    ],
-                    child: Center(
-                      child: Column(
-                        children: [
-                          // Commitment Button
-                          if (!_isCommitmentComplete)
-                            GestureDetector(
-                              onLongPress: _isCommitting ? null : _startCommitment,
-                              onLongPressEnd: (_) => _cancelCommitment(),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                width: 200,
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _isCommitting
-                                      ? const Color(0xFFB4FF00).withOpacity(0.3)
-                                      : const Color(0xFF2A2A2A),
-                                  border: Border.all(
-                                    color: _isCommitting
-                                        ? const Color(0xFFB4FF00)
-                                        : Colors.white24,
-                                    width: 3,
-                                  ),
-                                  boxShadow: _isCommitting
-                                      ? [
-                                          BoxShadow(
-                                            color: const Color(0xFFB4FF00).withOpacity(0.5),
-                                            blurRadius: 20,
-                                            spreadRadius: 5,
-                                          )
-                                        ]
-                                      : [],
-                                ),
-                                child: Center(
-                                  child: _isCommitting
-                                      ? const Text(
-                                          'Hold...',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      : const Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.touch_app,
-                                              color: Colors.white70,
-                                              size: 40,
-                                            ),
-                                            SizedBox(height: 12),
-                                            Text(
-                                              'HOLD TO\nCOMMIT',
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                height: 1.2,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                ),
-                              ),
-                            )
-                          else
-                            // Success message when commitment is complete
-                            Animate(
-                              effects: const [
-                                ScaleEffect(
-                                  begin: Offset(0.5, 0.5),
-                                  end: Offset(1, 1),
-                                  duration: Duration(milliseconds: 600),
-                                  curve: Curves.elasticOut,
-                                ),
-                              ],
-                              child: Container(
-                                width: 200,
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFFB4FF00),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFB4FF00).withOpacity(0.5),
-                                      blurRadius: 20,
-                                      spreadRadius: 5,
-                                    )
-                                  ],
-                                ),
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.check,
-                                        color: Colors.black,
-                                        size: 60,
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'COMMITTED!',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          
-                          const SizedBox(height: 24),
-                          
-                          // Progress indicator
-                          if (_isCommitting && !_isCommitmentComplete)
-                            SizedBox(
-                              width: 240,
-                              child: LinearProgressIndicator(
-                                value: _commitmentProgress,
-                                backgroundColor: Colors.white10,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFFB4FF00),
-                                ),
-                                minHeight: 8,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          
-                          if (_isCommitmentComplete)
-                            Animate(
-                              effects: const [
-                                FadeEffect(duration: Duration(milliseconds: 800), delay: Duration(milliseconds: 500)),
-                              ],
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 32.0),
-                                child: Text(
-                                  'Congratulations! You\'re ready to start your mental performance journey.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const Spacer(),
-                  
-                  // Instructions
-                  if (!_isCommitmentComplete)
-                    Animate(
-                      effects: const [
-                        FadeEffect(duration: Duration(milliseconds: 800), delay: Duration(milliseconds: 800)),
-                      ],
-                      child: const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 32.0),
-                          child: Text(
-                            'Hold the button to commit to your mental training program.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
+          // Progress overlay
+          AnimatedBuilder(
+            animation: _progressController,
+            builder: (context, child) {
+              return Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: screenSize.height * _progressController.value,
+                child: Container(
+                  color: accentColor.withOpacity(0.1),
+                ),
+              );
+            },
           ),
           
-          // Confetti overlay
+          // Confetti
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
               confettiController: _confettiController,
-              blastDirection: math.pi / 2, // straight down
-              emissionFrequency: 0.05,
-              numberOfParticles: 20,
-              maxBlastForce: 20,
-              minBlastForce: 10,
-              gravity: 0.2,
-              particleDrag: 0.05,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
               colors: const [
-                Colors.green,
-                Colors.blue,
-                Colors.pink,
-                Colors.orange,
-                Colors.purple,
-                Color(0xFFB4FF00),
+                Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple
               ],
+              gravity: 0.1,
+            ),
+          ),
+
+          // Main content
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  if (!_isCommitmentComplete)
+                    Animate(
+                      effects: const [
+                        FadeEffect(duration: Duration(milliseconds: 800)),
+                        SlideEffect(begin: Offset(0, -0.2), end: Offset.zero),
+                      ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Make a commitment to your\nmental training',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Hold the thumbprint below for 5 seconds to\ncommit to your transformation',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  
+                  const Spacer(),
+                  
+                  // Fingerprint button
+                  if (!_isCommitmentComplete)
+                    GestureDetector(
+                      onTapDown: (_) => _startCommitment(),
+                      onTapUp: (_) => _cancelCommitment(),
+                      onTapCancel: () => _cancelCommitment(),
+                      child: Container(
+                        width: double.infinity,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E1E1E),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _isCommitting ? accentColor.withOpacity(0.2) : Colors.grey[800],
+                            ),
+                            child: Icon(
+                              Icons.fingerprint,
+                              size: 50,
+                              color: _isCommitting ? accentColor : Colors.white54,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  
+                  if (!_isCommitmentComplete) ...[
+                    const SizedBox(height: 24),
+                    // Skip button
+                    TextButton(
+                      onPressed: _skipCommitment,
+                      child: Text(
+                        'Skip',
+                        style: TextStyle(
+                          color: accentColor,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                  
+                  if (_isCommitmentComplete)
+                    Animate(
+                      effects: const [
+                        FadeEffect(duration: Duration(milliseconds: 500)),
+                        ScaleEffect(begin: Offset(0.8, 0.8), end: Offset(1,1)),
+                      ],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            color: accentColor,
+                            size: 100,
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'COMMITMENT COMPLETE!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Get ready to level up.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],

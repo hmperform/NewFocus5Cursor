@@ -12,6 +12,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/main_navigation_screen.dart';
+import 'champion_setup_screen.dart';
+import 'coach_setup_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   static const routeName = '/profile_setup';
@@ -27,13 +29,10 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTickerProviderStateMixin {
-  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _universityController = TextEditingController();
   final TextEditingController _universityCodeController = TextEditingController();
-  final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _universityFocusNode = FocusNode();
   final FocusNode _universityCodeFocusNode = FocusNode();
-  bool _isNameValid = false;
   bool _isUniversityValid = false;
   String? _selectedSport;
   String? _selectedUniversity;
@@ -72,6 +71,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     super.initState();
     _loadPreSelectedSport();
     _loadUniversityCodes();
+    _checkAuthStatus();
     
     // Initialize the animation controller
     _animationController = AnimationController(
@@ -79,7 +79,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
       duration: const Duration(milliseconds: 300),
     );
     
-    _nameController.addListener(_validateInputs);
     _universityController.addListener(_validateInputs);
   }
   
@@ -119,19 +118,40 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     }
   }
   
+  Future<void> _checkAuthStatus() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    
+    await authProvider.checkAuthStatus();
+    
+    // Get profile setup status
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstLaunch = prefs.getBool('is_first_launch') ?? true;
+    
+    // Only redirect to login if we're not in the initial profile setup flow
+    if (authProvider.status != AuthStatus.authenticated && widget.fromOnboarding && !isFirstLaunch) {
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      }
+      return;
+    }
+    
+    // Ensure user data is loaded
+    if (userProvider.user == null) {
+      await userProvider.loadUserData(authProvider.currentUser?.id);
+    }
+  }
+  
   void _validateInputs() {
     setState(() {
-      _isNameValid = _nameController.text.trim().length >= 2;
       _isUniversityValid = _universityController.text.trim().isNotEmpty;
     });
   }
   
   @override
   void dispose() {
-    _nameController.dispose();
     _universityController.dispose();
     _universityCodeController.dispose();
-    _nameFocusNode.dispose();
     _universityFocusNode.dispose();
     _universityCodeFocusNode.dispose();
     _animationController.dispose();
@@ -160,130 +180,316 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     });
   }
   
-  Future<bool> _verifyUniversityCode(String code) async {
-    if (_selectedUniversity == 'Other') return true;
-    
+  Future<bool> _handleCodeVerification(DocumentSnapshot doc, String code, bool isChampion, bool isCoach) async {
     try {
-      // Check if the university exists with this code
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('universities')
-          .doc(code)
-          .get();
+      final universityData = doc.data() as Map<String, dynamic>;
       
-      return docSnapshot.exists;
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      
+      // Ensure we have a valid authenticated user
+      if (authProvider.status != AuthStatus.authenticated || authProvider.currentUser == null) {
+        print('User not properly authenticated');
+        _showError('Please log in again');
+        return false;
+      }
+
+      print('Verifying university code: $code - Is champion: $isChampion, Is coach: $isCoach');
+      print('University document reference: ${doc.reference.path}');
+
+      // Create profile update data with university as a document reference
+      final success = await userProvider.updateUserProfile(
+        isIndividual: false,
+        university: doc.reference, // Pass the document reference
+        universityCode: code.toUpperCase(),
+        isPartnerChampion: isChampion,
+        isPartnerCoach: isCoach,
+      );
+
+      if (!success) {
+        print('Failed to update user profile with university data');
+        _showError('Failed to update profile with university information');
+        return false;
+      }
+
+      // Save to shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('profile_setup_complete', true);
+      await prefs.setString('university_code', code.toUpperCase());
+
+      // Navigate based on role if verification was successful
+      if (!mounted) return true;
+
+      final user = userProvider.user;
+      if (user == null) {
+        _showError('User data not found');
+        return false;
+      }
+
+      if (isChampion) {
+        print('Navigating to ChampionSetupScreen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => ChampionSetupScreen(
+              userName: user.fullName,
+              universityCode: code.toUpperCase(),
+            ),
+          ),
+        );
+      } else if (isCoach) {
+        print('Navigating to CoachSetupScreen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => CoachSetupScreen(
+              userName: user.fullName,
+              universityCode: code.toUpperCase(),
+            ),
+          ),
+        );
+      } else {
+        print('Navigating to CommitmentScreen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => CommitmentScreen(
+              userName: user.fullName,
+              isIndividual: false,
+              universityCode: code.toUpperCase(),
+            ),
+          ),
+        );
+      }
+
+      return true;
     } catch (e) {
-      print('Error verifying university code: $e');
+      print('Error in _handleCodeVerification: $e');
+      _showError('An error occurred while verifying the code');
+      setState(() => _isLoading = false); // Ensure loading state is reset on error
       return false;
     }
   }
 
-  void _handleContinue() async {
-    HapticFeedback.mediumImpact();
-    
-    if (!_isNameValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name')),
-      );
+  Future<bool> _verifyUniversityCode(String code) async {
+    if (code.isEmpty) {
+      _showError('Please enter a university code');
+      return false;
+    }
+
+    try {
+      print('Verifying university code: $code');
+      
+      // Check if the code is "MIACHAMP" (special champion code)
+      if (code.toUpperCase() == "MIACHAMP") {
+        print('Special MIACHAMP code detected');
+        // Look for the matching university
+        final universityQuery = await FirebaseFirestore.instance
+            .collection('universities')
+            .where('championCode', isEqualTo: code.toUpperCase())
+            .get();
+            
+        if (universityQuery.docs.isNotEmpty) {
+          print('Found university with champion code: ${universityQuery.docs.first.id}');
+          return await _handleCodeVerification(universityQuery.docs.first, code, true, false);
+        }
+      }
+      
+      // Regular check for normal university code
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('universities')
+          .where('code', isEqualTo: code.toUpperCase())
+          .get();
+
+      // Also check for champion and coach codes
+      if (querySnapshot.docs.isEmpty) {
+        print('No direct match found, checking champion codes');
+        // Try finding by champion code
+        final championQuery = await FirebaseFirestore.instance
+            .collection('universities')
+            .where('championCode', isEqualTo: code.toUpperCase())
+            .get();
+
+        if (championQuery.docs.isNotEmpty) {
+          print('Found match with champion code');
+          return await _handleCodeVerification(championQuery.docs.first, code, true, false);
+        }
+
+        print('No champion match, checking coach codes');
+        // Try finding by coach code
+        final coachQuery = await FirebaseFirestore.instance
+            .collection('universities')
+            .where('codeToJoinAsCoach', isEqualTo: code.toUpperCase())
+            .get();
+
+        if (coachQuery.docs.isNotEmpty) {
+          print('Found match with coach code');
+          return await _handleCodeVerification(coachQuery.docs.first, code, false, true);
+        }
+
+        print('No university found with code: $code');
+        _showError('Invalid university code');
+        return false;
+      }
+
+      // Handle regular university code
+      print('Found regular university match');
+      return await _handleCodeVerification(querySnapshot.docs.first, code, false, false);
+
+    } catch (e) {
+      print('Error verifying university code: $e');
+      _showError('Error verifying code: $e');
+      setState(() => _isLoading = false); // Ensure loading state is reset on error
+      return false;
+    }
+  }
+
+  // Add validation method for the university code field
+  void _validateUniversityCode() async {
+    final code = _universityCodeController.text.trim();
+    if (code.isEmpty) {
+      _showError('Please enter an organization code');
       return;
     }
-    
-    if (_selectedFocusAreas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one focus area')),
-      );
-      return;
-    }
-    
-    if (!_isIndividual && _selectedUniversity == null) {
-      setState(() {
-        _hasError = true;
-        _errorMessage = 'Please select your university';
-      });
-      return;
-    }
-    
-    if (!_isIndividual && _selectedUniversity != 'Other' && _universityCodeController.text.trim().isEmpty) {
-      setState(() {
-        _hasError = true;
-        _errorMessage = 'Please enter your university code';
-      });
-      return;
-    }
-    
+
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _errorMessage = '';
     });
+
+    final isValid = await _verifyUniversityCode(code);
     
-    // Verify university code if not individual
-    if (!_isIndividual && _selectedUniversity != 'Other') {
-      final code = _universityCodeController.text.trim();
-      final isValidCode = await _verifyUniversityCode(code);
-      
-      if (!isValidCode) {
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-          _errorMessage = 'Invalid university code';
-        });
-        return;
-      }
+    if (!isValid) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = 'Invalid organization code. Please check and try again.';
+      });
     }
-    
-    _provideHapticFeedback();
-    
-    // Save profile to shared preferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_name', _nameController.text.trim());
-    
-    if (_universityController.text.isNotEmpty) {
-      await prefs.setString('university', _universityController.text.trim());
-    }
-    
-    if (_universityCodeController.text.isNotEmpty) {
-      await prefs.setString('university_code', _universityCodeController.text.trim());
-    }
-    
-    await prefs.setStringList('focus_areas', _selectedFocusAreas);
-    
-    // If we came from onboarding, clear the flag as we're done with the flow
-    if (widget.fromOnboarding) {
-      await prefs.remove('from_onboarding_flow');
-    }
-    
-    // Save to user provider if logged in
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    
-    if (authProvider.status == AuthStatus.authenticated) {
-      try {
-        await userProvider.updateUserProfile(
-          fullName: _nameController.text.trim(),
-          sport: _selectedSport,
-          isIndividual: _isIndividual,
-          university: !_isIndividual ? _selectedUniversity : null,
-          universityCode: (!_isIndividual && _selectedUniversity != 'Other') 
-              ? _universityCodeController.text.trim() 
-              : null,
-        );
-      } catch (e) {
-        print('Error updating user profile: $e');
-        // Continue anyway since we saved to shared preferences
-      }
-    }
-    
+    // Note: We don't set _isLoading = false here if validation succeeded,
+    // as the navigation in _handleCodeVerification will replace this screen
+  }
+
+  void _showError(String message) {
     setState(() {
-      _isLoading = false;
+      _hasError = true;
+      _errorMessage = message;
     });
     
-    if (!mounted) return;
-    
-    // Always navigate to main screen after profile setup is complete
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const MainNavigationScreen(),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  void _showSportSelectionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Your Sport'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: sports.map((sport) => 
+              ListTile(
+                title: Text(sport),
+                onTap: () async {
+                  setState(() {
+                    _selectedSport = sport;
+                  });
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('selected_sport', sport);
+                  Navigator.of(context).pop();
+                },
+              )
+            ).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleContinue() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      print("_handleContinue: Starting with isIndividual = $_isIndividual");
+      
+      // For individual users, update profile
+      if (_isIndividual) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        print("_handleContinue: Updating user profile for individual user");
+        
+        final success = await userProvider.updateUserProfile(
+          isIndividual: true,
+          isPartnerChampion: false,
+          isPartnerCoach: false,
+          university: null,
+          universityCode: null,
+        );
+
+        if (!success) {
+          print("_handleContinue: Failed to update profile");
+          _showError('Failed to update profile');
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        // Mark profile setup as complete
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('profile_setup_complete', true);
+
+        if (!mounted) return;
+
+        final user = userProvider.user;
+        if (user == null) {
+          print("_handleContinue: User data not found");
+          _showError('User data not found');
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        print("_handleContinue: Navigating to commitment screen");
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => CommitmentScreen(
+              userName: user.fullName,
+              isIndividual: true,
+              universityCode: '',
+            ),
+          ),
+        );
+      } else {
+        // For organization users, verify code
+        final code = _universityCodeController.text.trim();
+        print("_handleContinue: Verifying university code: $code");
+        
+        if (code.isEmpty) {
+          print("_handleContinue: Empty university code");
+          _showError('Please enter an organization code');
+          setState(() => _isLoading = false);
+          return;
+        }
+        
+        final codeVerified = await _verifyUniversityCode(code);
+        if (!codeVerified) {
+          print("_handleContinue: Code verification failed");
+          setState(() => _isLoading = false);
+        }
+        // Note: _verifyUniversityCode will handle setting _isLoading = false if needed
+      }
+    } catch (e) {
+      print('Error in _handleContinue: $e');
+      _showError('An error occurred. Please try again.');
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -378,51 +584,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                     ),
                     const SizedBox(height: 40),
                     
-                    // Name input field
-                    const Text(
-                      'Your Name',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      focusNode: _nameFocusNode,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Enter your name',
-                        hintStyle: const TextStyle(color: Colors.white38),
-                        filled: true,
-                        fillColor: const Color(0xFF1E1E1E),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFB4FF00), width: 2),
-                        ),
-                        suffixIcon: _nameController.text.isNotEmpty
-                            ? IconButton(
-                                onPressed: () {
-                                  _nameController.clear();
-                                  _validateInputs();
-                                },
-                                icon: const Icon(Icons.clear, color: Colors.white38),
-                              )
-                            : null,
-                      ),
-                      onChanged: (value) {
-                        _validateInputs();
-                      },
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Individual or team selection
+                    // Organization Type Selection
                     Text(
                       'I am a:',
                       style: TextStyle(
@@ -439,23 +601,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                             onTap: () {
                               setState(() {
                                 _isIndividual = true;
+                                _selectedUniversity = null;
+                                _universityCodeController.clear();
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: _isIndividual
-                                    ? themeProvider.accentColor
-                                    : (isDark ? Colors.grey[800] : Colors.grey[200]),
+                                    ? const Color(0xFFB4FF00)
+                                    : Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _isIndividual
+                                      ? const Color(0xFFB4FF00)
+                                      : Colors.grey.withOpacity(0.3),
+                                ),
                               ),
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.person,
                                     color: _isIndividual
-                                        ? Colors.white
+                                        ? Colors.black
                                         : textColor.withOpacity(0.7),
                                   ),
                                   const SizedBox(height: 8),
@@ -464,7 +632,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: _isIndividual
-                                          ? Colors.white
+                                          ? Colors.black
                                           : textColor.withOpacity(0.7),
                                     ),
                                   ),
@@ -482,29 +650,33 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: !_isIndividual
-                                    ? themeProvider.accentColor
-                                    : (isDark ? Colors.grey[800] : Colors.grey[200]),
+                                    ? const Color(0xFFB4FF00)
+                                    : Theme.of(context).colorScheme.surface,
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: !_isIndividual
+                                      ? const Color(0xFFB4FF00)
+                                      : Colors.grey.withOpacity(0.3),
+                                ),
                               ),
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.school,
                                     color: !_isIndividual
-                                        ? Colors.white
+                                        ? Colors.black
                                         : textColor.withOpacity(0.7),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'University',
+                                    'Partner/University',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: !_isIndividual
-                                          ? Colors.white
+                                          ? Colors.black
                                           : textColor.withOpacity(0.7),
                                     ),
                                   ),
@@ -516,69 +688,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                       ],
                     ),
                     
-                    // University selection (conditional)
+                    // Organization code field (if Partner/University is selected)
                     if (!_isIndividual) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        'Select your university:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.3),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: _selectedUniversity,
-                            hint: Text(
-                              'Select University',
-                              style: TextStyle(
-                                color: textColor.withOpacity(0.5),
-                              ),
-                            ),
-                            icon: Icon(
-                              Icons.arrow_drop_down,
-                              color: textColor.withOpacity(0.7),
-                            ),
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 16,
-                            ),
-                            dropdownColor: Theme.of(context).colorScheme.surface,
-                            items: _universities.map((String university) {
-                              return DropdownMenuItem<String>(
-                                value: university,
-                                child: Text(university),
-                              );
-                            }).toList(),
-                            onChanged: (String? newValue) {
-                              setState(() {
-                                _selectedUniversity = newValue;
-                                
-                                // Clear university code if changing universities
-                                _universityCodeController.clear();
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      
-                      // University code field (if university is selected and not "Other")
-                      if (_selectedUniversity != null && _selectedUniversity != 'Other') ...[
                         const SizedBox(height: 24),
                         Text(
-                          'Enter your university code:',
+                          'Enter your organization code:',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -588,14 +702,27 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
                         const SizedBox(height: 12),
                         CustomTextField(
                           controller: _universityCodeController,
-                          hintText: 'University Code',
+                          hintText: 'Organization Code',
                           prefixIcon: Icons.vpn_key_outlined,
                           textCapitalization: TextCapitalization.characters,
                           helpText: _isLoadingCodes 
-                              ? 'Loading university codes...' 
-                              : 'Enter the code provided by your university',
+                              ? 'Loading organization codes...' 
+                              : 'Enter the code provided by your organization',
+                          onChanged: (value) {
+                            if (_hasError) {
+                              setState(() {
+                                _hasError = false;
+                                _errorMessage = '';
+                              });
+                            }
+                          },
+                          onSubmitted: (value) => _validateUniversityCode(),
+                          suffix: IconButton(
+                            icon: const Icon(Icons.check_circle_outline),
+                            onPressed: _validateUniversityCode,
+                            color: _selectedUniversity != null ? Colors.green : Colors.grey,
+                          ),
                         ),
-                      ],
                     ],
                     
                     // Show error message if any

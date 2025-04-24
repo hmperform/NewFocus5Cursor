@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../providers/user_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/user_model.dart';
@@ -34,6 +36,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   List<String> _selectedFocusAreas = [];
   File? _profileImage;
+  Uint8List? _webImageBytes;
+  String? _webImageName;
   bool _isLoading = false;
 
   @override
@@ -64,12 +68,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         source: ImageSource.gallery,
         maxWidth: 500,
         maxHeight: 500,
+        imageQuality: 85,
       );
 
       if (pickedFile != null) {
-        setState(() {
-          _profileImage = File(pickedFile.path);
-        });
+        if (kIsWeb) {
+          // Web platform - use bytes
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _webImageBytes = bytes;
+            _webImageName = pickedFile.name;
+            _profileImage = null; // Clear mobile image
+          });
+        } else {
+          // Mobile platform - use File
+          setState(() {
+            _profileImage = File(pickedFile.path);
+            _webImageBytes = null; // Clear web image
+            _webImageName = null;
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,25 +111,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         throw Exception('User not logged in');
       }
 
-      final success = await userProvider.updateUserProfile(
-        fullName: _fullNameController.text.trim(),
-        profileImageUrl: _profileImage != null ? _profileImage!.path : null,
-        focusAreas: _selectedFocusAreas,
+      await userProvider.updateProfile(
+        name: _fullNameController.text.trim(),
+        imageFile: !kIsWeb ? _profileImage : null,
+        imageBytes: kIsWeb ? _webImageBytes : null,
       );
 
       if (!mounted) return;
 
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
-        );
-        Navigator.of(context).pop();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userProvider.errorMessage ?? 'Failed to update profile')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+      Navigator.of(context).pop();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error updating profile: $e')),
       );
@@ -184,152 +197,151 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              // Profile Image
-              Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: themeProvider.isDarkMode 
-                              ? Colors.white30
-                              : Colors.black26,
-                          width: 2,
-                        ),
-                      ),
-                      child: ClipOval(
-                        child: _profileImage != null
-                            ? Image.file(
-                                _profileImage!,
-                                fit: BoxFit.cover,
-                              )
-                            : ImageUtils.avatarWithFallback(
-                                imageUrl: user.profileImageUrl,
-                                radius: 60,
-                                name: user.fullName,
-                                backgroundColor: themeProvider.isDarkMode 
-                                    ? Colors.grey[800]!
-                                    : Colors.grey[300]!,
-                                textColor: themeProvider.isDarkMode 
-                                    ? Colors.white54
-                                    : Colors.black38,
-                              ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            // Profile Image
+            Center(
+              child: Stack(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: themeProvider.isDarkMode 
+                            ? Colors.white30
+                            : Colors.black26,
+                        width: 2,
                       ),
                     ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: GestureDetector(
-                        onTap: _pickImage,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.camera_alt,
-                            color: themeProvider.isDarkMode ? Colors.black : Colors.white,
-                            size: 20,
-                          ),
+                    child: ClipOval(
+                      child: _buildProfileImage(user, themeProvider),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.camera_alt,
+                          color: themeProvider.isDarkMode ? Colors.black : Colors.white,
+                          size: 20,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              
-              const SizedBox(height: 32),
-              
-              // Full Name
-              TextFormField(
-                controller: _fullNameController,
-                decoration: InputDecoration(
-                  labelText: 'Full Name',
-                  labelStyle: TextStyle(color: secondaryTextColor),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white30
-                          : Colors.black26,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: accentColor),
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Full Name
+            TextFormField(
+              controller: _fullNameController,
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                labelStyle: TextStyle(color: secondaryTextColor),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: themeProvider.isDarkMode 
+                        ? Colors.white24
+                        : Colors.black12,
                   ),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter your name';
-                  }
-                  return null;
-                },
               ),
-              
-              const SizedBox(height: 32),
-              
-              // Focus Areas
-              Text(
-                'Focus Areas (select up to 5)',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter your name';
+                }
+                return null;
+              },
+            ),
+            
+            const SizedBox(height: 32),
+            
+            // Focus Areas
+            Text(
+              'Focus Areas',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
-              const SizedBox(height: 16),
-              
-              Wrap(
-                spacing: 8,
-                runSpacing: 12,
-                children: _availableFocusAreas.map((area) {
-                  final isSelected = _selectedFocusAreas.contains(area);
-                  return FilterChip(
-                    label: Text(area),
-                    selected: isSelected,
-                    onSelected: (_) {
-                      if (!isSelected && _selectedFocusAreas.length >= 5) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('You can select up to 5 focus areas')),
-                        );
-                        return;
-                      }
-                      _toggleFocusArea(area);
-                    },
-                    backgroundColor: themeProvider.isDarkMode
-                        ? Colors.grey[800]
-                        : Colors.grey[200],
-                    selectedColor: accentColor.withOpacity(0.3),
-                    checkmarkColor: accentColor,
-                    showCheckmark: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    labelStyle: TextStyle(
-                      color: isSelected ? accentColor : textColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  );
-                }).toList(),
-              ),
-              
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _availableFocusAreas.map((area) {
+                final isSelected = _selectedFocusAreas.contains(area);
+                return FilterChip(
+                  label: Text(area),
+                  selected: isSelected,
+                  onSelected: (_) => _toggleFocusArea(area),
+                  backgroundColor: themeProvider.isDarkMode 
+                      ? Colors.grey[800]
+                      : Colors.grey[200],
+                  selectedColor: accentColor,
+                  checkmarkColor: themeProvider.isDarkMode 
+                      ? Colors.black
+                      : Colors.white,
+                  labelStyle: TextStyle(
+                    color: isSelected
+                        ? (themeProvider.isDarkMode ? Colors.black : Colors.white)
+                        : textColor,
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildProfileImage(User user, ThemeProvider themeProvider) {
+    if (kIsWeb && _webImageBytes != null) {
+      return Image.memory(
+        _webImageBytes!,
+        width: 120,
+        height: 120,
+        fit: BoxFit.cover,
+      );
+    } else if (!kIsWeb && _profileImage != null) {
+      return Image.file(
+        _profileImage!,
+        width: 120,
+        height: 120,
+        fit: BoxFit.cover,
+      );
+    } else {
+      return ImageUtils.avatarWithFallback(
+        imageUrl: user.profileImageUrl,
+        radius: 60,
+        name: user.fullName,
+        backgroundColor: themeProvider.isDarkMode 
+            ? Colors.grey[800]!
+            : Colors.grey[300]!,
+        textColor: themeProvider.isDarkMode 
+            ? Colors.white54
+            : Colors.black38,
+      );
+    }
   }
 } 

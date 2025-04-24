@@ -13,6 +13,8 @@ class User {
   final String? universityCode;
   final bool isIndividual;
   final bool isAdmin;
+  final bool isPartnerChampion;
+  final bool isPartnerCoach;
   final int xp;
   final int focusPoints;
   final int streak;
@@ -47,6 +49,8 @@ class User {
     this.universityCode,
     this.isIndividual = false,
     this.isAdmin = false,
+    this.isPartnerChampion = false,
+    this.isPartnerCoach = false,
     this.xp = 0,
     this.focusPoints = 0,
     this.streak = 0,
@@ -172,6 +176,8 @@ class User {
       universityCode: data['universityCode'],
       isIndividual: data['isIndividual'] ?? false,
       isAdmin: data['isAdmin'] ?? false,
+      isPartnerChampion: data['isPartnerChampion'] ?? false,
+      isPartnerCoach: data['isPartnerCoach'] ?? false,
       xp: data['xp'] ?? 0,
       focusPoints: data['focusPoints'] ?? 0,
       streak: data['streak'] ?? 0,
@@ -222,6 +228,8 @@ class User {
       if (universityCode != null) 'universityCode': universityCode,
       'isIndividual': isIndividual,
       'isAdmin': isAdmin,
+      'isPartnerChampion': isPartnerChampion,
+      'isPartnerCoach': isPartnerCoach,
       'xp': xp,
       'focusPoints': focusPoints,
       'streak': streak,
@@ -257,6 +265,8 @@ class User {
     String? universityCode,
     bool? isIndividual,
     bool? isAdmin,
+    bool? isPartnerChampion,
+    bool? isPartnerCoach,
     int? xp,
     int? focusPoints,
     int? streak,
@@ -291,6 +301,8 @@ class User {
       universityCode: universityCode ?? this.universityCode,
       isIndividual: isIndividual ?? this.isIndividual,
       isAdmin: isAdmin ?? this.isAdmin,
+      isPartnerChampion: isPartnerChampion ?? this.isPartnerChampion,
+      isPartnerCoach: isPartnerCoach ?? this.isPartnerCoach,
       xp: xp ?? this.xp,
       focusPoints: focusPoints ?? this.focusPoints,
       streak: streak ?? this.streak,
