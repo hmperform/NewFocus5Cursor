@@ -630,7 +630,7 @@ class _ProfileTabState extends State<ProfileTab> {
                           final displayedBadges = displayBadges.take(3).toList();
 
                           return SizedBox(
-                            height: 120, // Adjust height if needed
+                            height: 115, // Reduced from 120
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
                               itemCount: displayedBadges.length,
@@ -640,8 +640,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                 final isEarned = badgeData['isEarned'] as bool;
 
                                 return Padding(
-                                  padding: const EdgeInsets.only(right: 16),
-                                  // Make sure _buildBadgeItemWithStatus exists or adapt _buildBadgeItem
+                                  padding: const EdgeInsets.only(right: 12), // Reduced from 16
                                   child: _buildBadgeItemWithStatus(context, badge, isEarned),
                                 );
                               },
@@ -884,35 +883,32 @@ class _ProfileTabState extends State<ProfileTab> {
 
     return GestureDetector(
       onTap: () {
-        // Navigate to detail screen, passing earned status
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => BadgeDetailScreen(
               badge: badge,
-              isEarned: isEarned, // Pass earned status
+              isEarned: isEarned,
             ),
           ),
         );
       },
       child: Opacity(
-        // Opacity handled by ColorFiltered now
-        // opacity: isEarned ? 1.0 : 0.5, 
-        opacity: 1.0, 
+        opacity: 1.0,
         child: Container(
-          margin: const EdgeInsets.only(right: 12),
-          width: 100,
+          margin: const EdgeInsets.only(right: 8), // Reduced from 12
+          width: 90, // Reduced from 100
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Added to prevent stretching
+            mainAxisSize: MainAxisSize.min,
             children: [
               Hero(
-                tag: 'badge_${badge.id}', // Keep Hero tag
-                child: Stack( // Wrap in Stack for overlay
+                tag: 'badge_${badge.id}',
+                child: Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      height: 85,
-                      width: 85,
+                      height: 80, // Reduced from 85
+                      width: 80, // Reduced from 85
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
@@ -968,8 +964,8 @@ class _ProfileTabState extends State<ProfileTab> {
                     // Lock Icon Overlay if not earned
                     if (!isEarned)
                       Container(
-                        height: 85,
-                        width: 85,
+                        height: 80,
+                        width: 80,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.black.withOpacity(0.4), // Semi-transparent overlay

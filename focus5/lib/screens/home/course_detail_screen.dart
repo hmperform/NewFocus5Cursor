@@ -237,469 +237,227 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
     }
 
-    // Add completion button if all lessons are completed
-    if (_isCourseCompleted() && !userProvider.completedCourses.contains(_course.id)) {
-      return Stack(
-        children: [
-          DefaultTabController(
-            length: _tabs.length,
-            child: Scaffold(
-              backgroundColor: backgroundColor,
-              floatingActionButton: _buildActionButton(),
-              floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-              body: NestedScrollView(
-                headerSliverBuilder: (context, innerBoxIsScrolled) {
-                  return [
-                    // App Bar with course image and back button
-                    SliverAppBar(
-                      backgroundColor: surfaceColor,
-                      expandedHeight: 400,
-                      pinned: true,
-                      stretch: true,
-                      actions: [
-                        // Debug button for forcing course purchase
-                        if (_course.id == 'course-001')
-                          IconButton(
-                            icon: Icon(
-                              Icons.build,
-                              color: Colors.white,
-                            ),
-                            onPressed: () async {
-                              final userProvider = Provider.of<UserProvider>(context, listen: false);
-                              final result = await userProvider.forceAddConfidence101Course();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(result 
-                                    ? 'Force added Confidence 101 course!' 
-                                    : 'Failed to force add course'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            tooltip: 'Force Add Course (Debug)',
+    return DefaultTabController(
+      length: _tabs.length,
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: Stack(
+          children: [
+            NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  // App Bar with course image and back button
+                  SliverAppBar(
+                    backgroundColor: surfaceColor,
+                    expandedHeight: 400,
+                    pinned: true,
+                    stretch: true,
+                    actions: [
+                      // Debug button for forcing course purchase
+                      if (_course.id == 'course-001')
+                        IconButton(
+                          icon: Icon(
+                            Icons.build,
+                            color: Colors.white,
                           ),
-                        // Bookmark button
-                        Container(
-                          margin: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.bookmark_border, color: Colors.white),
-                            onPressed: () {
-                              // TODO: Save course to bookmarks
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Course saved!'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                          ),
+                          onPressed: () async {
+                            final userProvider = Provider.of<UserProvider>(context, listen: false);
+                            final result = await userProvider.forceAddConfidence101Course();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(result 
+                                  ? 'Force added Confidence 101 course!' 
+                                  : 'Failed to force add course'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          tooltip: 'Force Add Course (Debug)',
                         ),
-                      ],
-                      flexibleSpace: FlexibleSpaceBar(
-                        background: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // Course image
-                            Hero(
-                              tag: 'course-image-${_course.id}',
-                              child: ImageUtils.networkImageWithFallback(
-                                imageUrl: _course.thumbnailUrl,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                              ),
-                            ),
-                            
-                            // Gradient overlay for text visibility
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withOpacity(0.1),
-                                    Colors.black.withOpacity(0.5),
-                                    Colors.black.withOpacity(0.8),
-                                  ],
-                                  stops: const [0.3, 0.65, 1.0],
-                                ),
-                              ),
-                            ),
-                            
-                            // Course info at the bottom
-                            Positioned(
-                              left: 20,
-                              right: 20,
-                              bottom: 80,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Course tags
-                                  Wrap(
-                                    spacing: 8,
-                                    children: _course.tags.take(3).map((tag) {
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: accentColor.withOpacity(0.8),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          tag,
-                                          style: TextStyle(
-                                            color: themeProvider.accentTextColor,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                  
-                                  const SizedBox(height: 16),
-                                  
-                                  // Course title
-                                  Text(
-                                    _course.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  
-                                  const SizedBox(height: 8),
-                                  
-                                  // Creator info
-                                  Row(
-                                    children: [
-                                      ImageUtils.avatarWithFallback(
-                                        imageUrl: _course.creatorImageUrl,
-                                        radius: 14,
-                                        name: _course.creatorName,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _course.creatorName,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      leading: Container(
+                      // Bookmark button
+                      Container(
                         margin: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.3),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                          onPressed: () {
+                            // TODO: Save course to bookmarks
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Course saved!'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    ),
-                    
-                    // Course stats row
-                    SliverToBoxAdapter(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
-                            _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
-                            _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
-                            _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
-                          ],
-                        ),
-                      ),
-                    ),
-                    
-                    // Tab bar
-                    SliverPersistentHeader(
-                      delegate: _SliverAppBarDelegate(
-                        TabBar(
-                          tabs: _tabs.map((String name) => Tab(text: name)).toList(),
-                          labelColor: accentColor,
-                          unselectedLabelColor: secondaryTextColor,
-                          indicatorColor: accentColor,
-                          indicatorWeight: 3,
-                          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-                        ),
-                      ),
-                      pinned: true,
-                    ),
-                  ];
-                },
-                // Use TabBarView with scrollable tabs for each tab's content
-                body: TabBarView(
-                  children: [
-                    _buildScrollableTab(_buildLessonsTab()),
-                    _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
-                    _buildScrollableTab(_buildResourcesTab()),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Completion button overlay
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              color: Theme.of(context).colorScheme.surface,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: themeProvider.accentColor,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                ),
-                onPressed: () async {
-                  // Mark course as completed
-                  await userProvider.trackCourseCompletion(userProvider.user!.id, _course.id);
-                  _showCourseCompletionDialog();
-                },
-                child: const Text('Complete Course'),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return DefaultTabController(
-      length: _tabs.length,
-      child: Scaffold(
-        backgroundColor: backgroundColor,
-        floatingActionButton: _buildActionButton(),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-        body: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              // App Bar with course image and back button
-              SliverAppBar(
-                backgroundColor: surfaceColor,
-                expandedHeight: 400,
-                pinned: true,
-                stretch: true,
-                actions: [
-                  // Debug button for forcing course purchase
-                  if (_course.id == 'course-001')
-                    IconButton(
-                      icon: Icon(
-                        Icons.build,
-                        color: Colors.white,
-                      ),
-                      onPressed: () async {
-                        final userProvider = Provider.of<UserProvider>(context, listen: false);
-                        final result = await userProvider.forceAddConfidence101Course();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(result 
-                              ? 'Force added Confidence 101 course!' 
-                              : 'Failed to force add course'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      tooltip: 'Force Add Course (Debug)',
-                    ),
-                  // Bookmark button
-                  Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.bookmark_border, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Save course to bookmarks
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Course saved!'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Course image
-                      Hero(
-                        tag: 'course-image-${_course.id}',
-                        child: ImageUtils.networkImageWithFallback(
-                          imageUrl: _course.thumbnailUrl,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        ),
-                      ),
-                      
-                      // Gradient overlay for text visibility
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withOpacity(0.1),
-                              Colors.black.withOpacity(0.5),
-                              Colors.black.withOpacity(0.8),
-                            ],
-                            stops: const [0.3, 0.65, 1.0],
-                          ),
-                        ),
-                      ),
-                      
-                      // Course info at the bottom
-                      Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 80,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Course tags
-                            Wrap(
-                              spacing: 8,
-                              children: _course.tags.take(3).map((tag) {
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    tag,
-                                    style: TextStyle(
-                                      color: themeProvider.accentTextColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
+                    ],
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // Course image
+                          Hero(
+                            tag: 'course-image-${_course.id}',
+                            child: ImageUtils.networkImageWithFallback(
+                              imageUrl: _course.thumbnailUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
                             ),
-                            
-                            const SizedBox(height: 16),
-                            
-                            // Course title
-                            Text(
-                              _course.title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
+                          ),
+                          
+                          // Gradient overlay for text visibility
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.1),
+                                  Colors.black.withOpacity(0.5),
+                                  Colors.black.withOpacity(0.8),
+                                ],
+                                stops: const [0.3, 0.65, 1.0],
                               ),
                             ),
-                            
-                            const SizedBox(height: 8),
-                            
-                            // Creator info
-                            Row(
+                          ),
+                          
+                          // Course info at the bottom
+                          Positioned(
+                            left: 20,
+                            right: 20,
+                            bottom: 80,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ImageUtils.avatarWithFallback(
-                                  imageUrl: _course.creatorImageUrl,
-                                  radius: 14,
-                                  name: _course.creatorName,
+                                // Course tags
+                                Wrap(
+                                  spacing: 8,
+                                  children: _course.tags.take(3).map((tag) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: accentColor.withOpacity(0.8),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: TextStyle(
+                                          color: themeProvider.accentTextColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
-                                const SizedBox(width: 8),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Course title
                                 Text(
-                                  _course.creatorName,
+                                  _course.title,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
                                   ),
+                                ),
+                                
+                                const SizedBox(height: 8),
+                                
+                                // Creator info
+                                Row(
+                                  children: [
+                                    ImageUtils.avatarWithFallback(
+                                      imageUrl: _course.creatorImageUrl,
+                                      radius: 14,
+                                      name: _course.creatorName,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _course.creatorName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    leading: Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ),
                   ),
-                ),
-                leading: Container(
-                  margin: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    shape: BoxShape.circle,
+                  
+                  // Course stats row
+                  SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
+                          _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
+                          _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
+                          _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
+                  
+                  // Tab bar
+                  SliverPersistentHeader(
+                    delegate: _SliverAppBarDelegate(
+                      TabBar(
+                        tabs: _tabs.map((String name) => Tab(text: name)).toList(),
+                        labelColor: accentColor,
+                        unselectedLabelColor: secondaryTextColor,
+                        indicatorColor: accentColor,
+                        indicatorWeight: 3,
+                        labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+                      ),
+                    ),
+                    pinned: true,
                   ),
-                ),
+                ];
+              },
+              body: TabBarView(
+                children: [
+                  _buildScrollableTab(_buildLessonsTab()),
+                  _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
+                  _buildScrollableTab(_buildResourcesTab()),
+                ],
               ),
-              
-              // Course stats row
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
-                      _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
-                      _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
-                      _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
-                    ],
-                  ),
-                ),
-              ),
-              
-              // Tab bar
-              SliverPersistentHeader(
-                delegate: _SliverAppBarDelegate(
-                  TabBar(
-                    tabs: _tabs.map((String name) => Tab(text: name)).toList(),
-                    labelColor: accentColor,
-                    unselectedLabelColor: secondaryTextColor,
-                    indicatorColor: accentColor,
-                    indicatorWeight: 3,
-                    labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-                  ),
-                ),
-                pinned: true,
-              ),
-            ];
-          },
-          // Use TabBarView with scrollable tabs for each tab's content
-          body: TabBarView(
-            children: [
-              _buildScrollableTab(_buildLessonsTab()),
-              _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
-              _buildScrollableTab(_buildResourcesTab()),
-            ],
-          ),
+            ),
+            // Action buttons at the bottom
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildActionButtons(),
+            ),
+          ],
         ),
       ),
     );
@@ -1433,7 +1191,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
 
-  Widget _buildActionButton() {
+  Widget _buildActionButtons() {
     final userProvider = Provider.of<UserProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final accentColor = themeProvider.accentColor;
@@ -1442,74 +1200,217 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final isPremium = _course.premium;
     final hasLessons = _course.modules.isNotEmpty;
     final alreadyPurchased = userProvider.isCoursePurchased(_course.id);
+    final allLessonsCompleted = _isCourseCompleted();
+    final courseCompleted = userProvider.completedCourses.contains(_course.id);
     
-    // Debug information
-    debugPrint('CourseDetailScreen [_buildActionButton]: Current course ID: "${_course.id}"');
-    debugPrint('CourseDetailScreen [_buildActionButton]: Course title: "${_course.title}"');
-    debugPrint('CourseDetailScreen [_buildActionButton]: Already purchased: $alreadyPurchased');
-    debugPrint('CourseDetailScreen [_buildActionButton]: Is premium: $isPremium');
-    debugPrint('CourseDetailScreen [_buildActionButton]: Has enough points: $hasEnoughPoints ($userFocusPoints >= ${_course.focusPointsCost})');
-    
-    // If course is already purchased or premium, show Start Course button
-    if (alreadyPurchased || isPremium) {
-      debugPrint('CourseDetailScreen [_buildActionButton]: Showing START COURSE button');
-      return FloatingActionButton.extended(
-        onPressed: () {
-          if (hasLessons) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VideoPlayerScreen(
-                  lesson: _course.modules[0],
-                  courseId: widget.courseId,
-                  courseTitle: _course.title,
+    Widget button;
+
+    // Course Completed button
+    if (courseCompleted) {
+      button = Container(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text(
+                'Course Completed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            );
-          } else {
+            ],
+          ),
+        ),
+      );
+    }
+    // Complete Course button
+    else if (allLessonsCompleted && !courseCompleted) {
+      button = Container(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () async {
+            // Mark course as completed
+            await userProvider.trackCourseCompletion(userProvider.user!.id, _course.id);
+            _showCourseCompletionDialog();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.emoji_events, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text(
+                'Complete Course',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // Start Course button
+    else if (alreadyPurchased || isPremium) {
+      if (hasLessons) {
+        button = Container(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => VideoPlayerScreen(
+                    lesson: _course.modules[0],
+                    courseId: widget.courseId,
+                    courseTitle: _course.title,
+                  ),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.play_arrow, color: Colors.white),
+                const SizedBox(width: 8),
+                const Text(
+                  'Start Course',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        button = Container(); // Empty container if no lessons
+      }
+    }
+    // Redeem Course button
+    else if (hasEnoughPoints) {
+      button = Container(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () {
+            _showRedeemConfirmationDialog();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AppIcons.getFocusPointIcon(
+                width: 24,
+                height: 24,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Redeem for ${_course.focusPointsCost} Points',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    // Get More Points button
+    else {
+      button = Container(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () {
+            // Navigate to focus points store or show info dialog
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('This course has no lessons yet.'),
-                duration: Duration(seconds: 2),
+              SnackBar(
+                content: Text('You need ${_course.focusPointsCost} Focus Points to unlock this course'),
+                duration: const Duration(seconds: 2),
               ),
             );
-          }
-        },
-        backgroundColor: accentColor,
-        foregroundColor: themeProvider.accentTextColor,
-        icon: const Icon(Icons.play_arrow),
-        label: const Text('Start Course'),
-      );
-    }
-    
-    // If user has enough focus points, show Redeem button
-    if (hasEnoughPoints) {
-      debugPrint('CourseDetailScreen [_buildActionButton]: Showing REDEEM button');
-      return FloatingActionButton.extended(
-        onPressed: () {
-          _showRedeemConfirmationDialog();
-        },
-        backgroundColor: accentColor,
-        foregroundColor: themeProvider.accentTextColor,
-        icon: AppIcons.getFocusPointIcon(
-          width: 24,
-          height: 24,
-          // Don't provide color to preserve the original image colors
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AppIcons.getFocusPointIcon(
+                width: 24,
+                height: 24,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Get More Points',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
-        label: Text('Redeem for ${_course.focusPointsCost} Points'),
       );
     }
-    
-    // If user doesn't have enough points, show "Get More Points" button
-    debugPrint('CourseDetailScreen [_buildActionButton]: Showing GET MORE POINTS button');
-    return FloatingActionButton.extended(
-      onPressed: () {
-        _showFocusPointsPaywall();
-      },
-      backgroundColor: Colors.amber,
-      foregroundColor: Colors.black,
-      icon: const Icon(Icons.shopping_cart),
-      label: Text('Get More Points (Need ${_course.focusPointsCost - userFocusPoints} more)'),
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: button,
     );
   }
 
@@ -1651,236 +1552,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         ),
       ),
     );
-  }
-  
-  void _showFocusPointsPaywall() {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Get Focus Points',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onBackground,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Use Focus Points to unlock premium courses',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Focus Points packages
-            _buildFocusPointPackage(
-              points: 5,
-              price: '\$30',
-              isPopular: false,
-              onTap: () => _handleFocusPointPurchase(5),
-            ),
-            const SizedBox(height: 12),
-            _buildFocusPointPackage(
-              points: 10,
-              price: '\$50',
-              isPopular: true,
-              onTap: () => _handleFocusPointPurchase(10),
-            ),
-            const SizedBox(height: 12),
-            _buildFocusPointPackage(
-              points: 20,
-              price: '\$75',
-              isPopular: false,
-              onTap: () => _handleFocusPointPurchase(20),
-            ),
-            
-            const SizedBox(height: 32),
-            Text(
-              'Current Balance: ${userProvider.focusPoints} Points',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onBackground,
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildFocusPointPackage({
-    required int points,
-    required String price,
-    required bool isPopular,
-    required VoidCallback onTap,
-  }) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final accentColor = themeProvider.accentColor;
-    
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isPopular 
-            ? accentColor 
-            : Theme.of(context).colorScheme.onBackground.withOpacity(0.1),
-          width: isPopular ? 2 : 1,
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Focus Points Icon and count
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: isPopular 
-                      ? accentColor.withOpacity(0.15)
-                      : Theme.of(context).colorScheme.onBackground.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Points count
-                      Text(
-                        '$points',
-                        style: TextStyle(
-                          color: isPopular ? accentColor : Colors.blue,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      
-                      // Focus points icon (top right)
-                      Positioned(
-                        top: 2,
-                        right: 2,
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isPopular 
-                              ? Colors.black.withOpacity(0.7)
-                              : Colors.grey[800],
-                          ),
-                          padding: const EdgeInsets.all(2),
-                          child: Image.asset(
-                            'assets/icons/focuspointicon-removebg-preview.png',
-                            width: 18,
-                            height: 18,
-                          ),
-                        ),
-                      ),
-                      
-                      if (isPopular)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'BEST',
-                              style: TextStyle(
-                                color: themeProvider.accentTextColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                
-                // Points and Price Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        price,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isPopular ? accentColor : Theme.of(context).colorScheme.onBackground,
-                          fontWeight: isPopular ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // Purchase Button
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isPopular ? accentColor : Colors.grey.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Text(
-                    'Purchase',
-                    style: TextStyle(
-                      color: isPopular ? themeProvider.accentTextColor : Theme.of(context).colorScheme.onBackground,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-  
-  void _handleFocusPointPurchase(int points) {
-    // Here you would implement the in-app purchase flow
-    // For now, just show a placeholder message
-    Navigator.of(context).pop(); // Close the bottom sheet
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Processing purchase of $points Focus Points...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    
-    // TODO: Implement actual in-app purchase flow
-    // This would connect to RevenueCat or the appropriate payment processor
   }
 }
 
