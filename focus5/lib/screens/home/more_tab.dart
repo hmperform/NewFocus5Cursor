@@ -3,7 +3,7 @@ import 'package:transparent_image/transparent_image.dart';
 import 'package:provider/provider.dart';
 import '../more/games_screen.dart';
 import '../more/journal_screen.dart';
-import 'media_tab.dart';
+import '../media/media_library_screen.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/theme.dart';
 
@@ -86,13 +86,13 @@ class MoreTab extends StatelessWidget {
                   _buildMenuItem(
                     context,
                     'Media Library',
-                    Icons.headphones,
+                    Icons.library_music,
                     Colors.green.shade300,
                     () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MediaTab(),
+                          builder: (context) => const MediaLibraryScreen(),
                         ),
                       );
                     },
@@ -154,72 +154,6 @@ class MoreTab extends StatelessWidget {
               ),
 
               const SizedBox(height: 32),
-
-              // Content Database section
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MediaTab(),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  height: 100,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.green[500],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: 16,
-                        top: 20,
-                        child: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.headphones,
-                            size: 30,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Media Library',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Browse audio and video content',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
               // Bottom spacing
               const SizedBox(height: 40),

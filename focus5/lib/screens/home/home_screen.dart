@@ -16,7 +16,6 @@ import 'explore_tab.dart';
 import '../chat/chat_list_screen.dart';
 import 'profile_tab.dart';
 import 'more_tab.dart';
-import 'media_tab.dart';
 import 'journal_search_screen.dart';
 import '../../widgets/basic_mini_player.dart';
 
