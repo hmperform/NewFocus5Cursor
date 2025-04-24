@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../models/badge_model.dart';
 import '../../models/content_models.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/badge_provider.dart';
@@ -12,7 +11,7 @@ import '../../screens/badges/badge_detail_screen.dart';
 import '../../constants/theme.dart';
 
 class AllBadgesScreen extends StatefulWidget {
-  const AllBadgesScreen({Key? key}) : super(key: key);
+  const AllBadgesScreen({super.key});
 
   @override
   State<AllBadgesScreen> createState() => _AllBadgesScreenState();
@@ -165,9 +164,8 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
             itemCount: allBadges.length,
             itemBuilder: (context, index) {
               final badge = allBadges[index];
-              final isEarned = badgeProvider.earnedBadges.contains(badge);
-              
-              return _buildBadgeCard(badge, isEarned, textColor, themeProvider);
+              // Show all badges, including course-specific ones
+              return _buildBadgeCard(badge, badgeProvider.earnedBadges.any((earned) => earned.id == badge.id), textColor, themeProvider);
             },
           ),
         );
@@ -175,137 +173,116 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
     );
   }
   
-  Widget _buildBadgeCard(BadgeModel badge, bool isEarned, Color textColor, ThemeProvider themeProvider) {
-    final accentColor = themeProvider.isDarkMode 
-        ? AppColors.accentDark 
-        : AppColors.accentLight;
-        
-    return GestureDetector(
-      onTap: () {
-        // Show badge details or unlock requirements when tapped
-        if (isEarned) {
-          // Navigate to badge details if earned
-          // Convert BadgeModel to AppBadge for navigation
-          final appBadge = AppBadge(
-            id: badge.id,
-            name: badge.name,
-            description: badge.description,
-            imageUrl: badge.imageUrl ?? '',
-            badgeImage: badge.imageUrl,
-            earnedAt: badge.earnedDate,
-            xpValue: badge.xpValue,
-            criteriaType: badge.criteriaType.name,
-            requiredCount: badge.requiredCount,
-          );
-          
-          Navigator.push(
-            context, 
-            MaterialPageRoute(
-              builder: (context) => BadgeDetailScreen(badge: appBadge, isEarned: true),
-            ),
-          );
-        } else {
-          // Show requirements to unlock
-          _showBadgeRequirements(badge);
-        }
-      },
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+  Widget _buildBadgeCard(AppBadge badge, bool isEarned, Color textColor, ThemeProvider themeProvider) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BadgeDetailScreen(badge: badge, isEarned: isEarned),
+          ),
         ),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Badge Icon with circular design like in profile tab
-              Hero(
-                tag: 'badge_${badge.id}',
-                child: Opacity(
-                  opacity: isEarned ? 1.0 : 0.4,
-                  child: Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                      boxShadow: isEarned ? [
-                        BoxShadow(
-                          color: accentColor.withOpacity(0.2),
-                          blurRadius: 10,
-                          spreadRadius: 1,
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Image.network(
+                    badge.imageUrl ?? 'https://example.com/default_badge.png',
+                    width: 80,
+                    height: 80,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: themeProvider.accentColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
-                      ] : null,
-                    ),
-                    child: ClipOval(
-                      child: badge.imageUrl != null && badge.imageUrl!.isNotEmpty
-                          ? Image.network(
-                              badge.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    _getBadgeIcon(badge.criteriaType),
-                                    color: isEarned ? accentColor : Colors.grey,
-                                    size: 40,
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                _getBadgeIcon(badge.criteriaType),
-                                color: isEarned ? accentColor : Colors.grey,
-                                size: 40,
-                              ),
-                            ),
-                    ),
+                        child: Icon(
+                          Icons.emoji_events,
+                          size: 40,
+                          color: themeProvider.accentColor,
+                        ),
+                      );
+                    },
                   ),
-                ),
+                  if (!isEarned)
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 16),
-              // Badge Name
               Text(
                 badge.name,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
                   color: textColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              // Badge Description
-              Text(
-                badge.description,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: textColor.withOpacity(0.7),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              // Badge Status
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isEarned 
-                      ? accentColor.withOpacity(0.2)
-                      : Colors.grey.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+              Text(
+                isEarned
+                    ? 'Earned!'
+                    : _getRequirementText(badge),
+                style: TextStyle(
+                  color: isEarned ? Colors.green : textColor.withOpacity(0.7),
+                  fontSize: 12,
                 ),
-                child: Text(
-                  isEarned ? 'EARNED' : 'LOCKED',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isEarned ? accentColor : Colors.grey,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (isEarned) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '+${badge.xpValue} XP',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -314,7 +291,7 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
   }
   
   // Show badge requirements in a bottom sheet
-  void _showBadgeRequirements(BadgeModel badge) {
+  void _showBadgeRequirements(AppBadge badge) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final accentColor = themeProvider.isDarkMode 
         ? AppColors.accentDark 
@@ -388,34 +365,34 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
     );
   }
   
-  Widget _buildRequirementsList(BadgeModel badge, ThemeProvider themeProvider, Color accentColor) {
+  Widget _buildRequirementsList(AppBadge badge, ThemeProvider themeProvider, Color accentColor) {
     // Example requirements based on badge criteria type
     final List<String> requirements = [];
     
     switch (badge.criteriaType) {
-      case BadgeCriteriaType.streak:
+      case 'StreakLength':
         requirements.add('Log in for consecutive ${badge.requiredCount} days');
         requirements.add('Don\'t miss a day to maintain your streak');
         break;
-      case BadgeCriteriaType.completion:
-        requirements.add('Complete ${badge.requiredCount} sessions');
-        requirements.add('Each session must be played to completion');
+      case 'CoursesCompleted':
+        requirements.add('Complete ${badge.requiredCount} courses');
+        requirements.add('Each course must be completed fully');
         break;
-      case BadgeCriteriaType.performance:
-        requirements.add('Achieve a score of ${badge.requiredCount}');
-        requirements.add('Keep practicing to improve your performance');
+      case 'AudioModulesCompleted':
+        requirements.add('Complete ${badge.requiredCount} audio sessions');
+        requirements.add('Listen to each session fully');
         break;
-      case BadgeCriteriaType.milestone:
-        requirements.add('Earn a total of ${badge.requiredCount} XP');
-        requirements.add('XP is earned by completing activities');
+      case 'CourseLessonsCompleted':
+        requirements.add('Complete ${badge.requiredCount} lessons');
+        requirements.add('Watch or listen to each lesson fully');
         break;
-      case BadgeCriteriaType.achievement:
-        requirements.add('Complete specific achievements (${badge.requiredCount} required)');
-        requirements.add('Check the achievements tab for details');
+      case 'JournalEntriesWritten':
+        requirements.add('Write ${badge.requiredCount} journal entries');
+        requirements.add('Express your thoughts and reflections');
         break;
-      case BadgeCriteriaType.social:
-        requirements.add('Connect with ${badge.requiredCount} other users');
-        requirements.add('Participate in community discussions');
+      case 'TotalDaysInApp':
+        requirements.add('Use the app for ${badge.requiredCount} days total');
+        requirements.add('Keep engaging with the content');
         break;
       default:
         requirements.add('Complete specific activities to earn this badge');
@@ -450,22 +427,45 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
     );
   }
   
-  IconData _getBadgeIcon(BadgeCriteriaType criteriaType) {
+  IconData _getBadgeIcon(String criteriaType) {
     switch (criteriaType) {
-      case BadgeCriteriaType.streak:
+      case 'StreakLength':
         return Icons.local_fire_department;
-      case BadgeCriteriaType.completion:
+      case 'CoursesCompleted':
         return Icons.check_circle;
-      case BadgeCriteriaType.performance:
-        return Icons.trending_up;
-      case BadgeCriteriaType.achievement:
-        return Icons.emoji_events;
-      case BadgeCriteriaType.social:
-        return Icons.people;
-      case BadgeCriteriaType.milestone:
-        return Icons.flag;
+      case 'AudioModulesCompleted':
+        return Icons.headphones;
+      case 'CourseLessonsCompleted':
+        return Icons.school;
+      case 'JournalEntriesWritten':
+        return Icons.edit_note;
+      case 'TotalDaysInApp':
+        return Icons.calendar_today;
       default:
         return Icons.star;
+    }
+  }
+
+  // Helper method to get requirement text based on badge criteria
+  String _getRequirementText(AppBadge badge) {
+    switch (badge.criteriaType) {
+      case 'AudioModulesCompleted':
+        return 'Complete ${badge.requiredCount} audio sessions';
+      case 'CoursesCompleted':
+        if (badge.specificCourses != null && badge.specificCourses!.isNotEmpty) {
+          return badge.description;
+        }
+        return 'Complete ${badge.requiredCount} courses';
+      case 'CourseLessonsCompleted':
+        return 'Complete ${badge.requiredCount} lessons';
+      case 'JournalEntriesWritten':
+        return 'Write ${badge.requiredCount} journal entries';
+      case 'StreakLength':
+        return 'Maintain a ${badge.requiredCount}-day streak';
+      case 'TotalDaysInApp':
+        return 'Use the app for ${badge.requiredCount} days';
+      default:
+        return badge.description;
     }
   }
 } 

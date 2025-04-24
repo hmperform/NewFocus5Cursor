@@ -57,7 +57,10 @@ class UserProvider extends ChangeNotifier {
   int get xpForNextLevel => UserLevelService.getXpForNextLevel(_user?.xp ?? 0);
   double get levelProgress => UserLevelService.getLevelProgress(_user?.xp ?? 0);
   Map<String, int> get lessonProgress => _lessonProgress;
-
+  
+  // Get list of completed course IDs
+  List<String> get completedCourses => _user?.completedCourses ?? [];
+  
   // Refresh current user data from Firestore
   Future<void> refreshUser() async {
     if (_user != null) {
@@ -268,6 +271,10 @@ class UserProvider extends ChangeNotifier {
               specificIds: badgeData['specificIds'] != null 
                   ? List<String>.from(badgeData['specificIds']) 
                   : null,
+              specificCourses: badgeData['specificCourses'] != null
+                  ? List<Map<String, dynamic>>.from(badgeData['specificCourses'])
+                  : null,
+              mustCompleteAllCourses: badgeData['mustCompleteAllCourses'] as bool?,
             );
             
             print('UserProvider [_fetchBadgeDetails]: Successfully loaded badge from Firestore: ${badge.name}');
@@ -826,6 +833,15 @@ class UserProvider extends ChangeNotifier {
       
       for (var doc in querySnapshot.docs) {
         final data = doc.data();
+        
+        // Handle specificCourses field
+        List<Map<String, dynamic>>? specificCourses;
+        if (data['specificCourses'] != null) {
+          specificCourses = (data['specificCourses'] as List)
+              .map((course) => Map<String, dynamic>.from(course))
+              .toList();
+        }
+        
         allBadges.add(AppBadge(
           id: doc.id,
           name: data['name'] ?? '',
@@ -839,6 +855,8 @@ class UserProvider extends ChangeNotifier {
           specificIds: data['specificIds'] != null 
               ? List<String>.from(data['specificIds']) 
               : null,
+          specificCourses: specificCourses,
+          mustCompleteAllCourses: data['mustCompleteAllCourses'] as bool?,
         ));
       }
       

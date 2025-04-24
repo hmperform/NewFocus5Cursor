@@ -28,6 +28,8 @@ class BadgeService {
             criteriaType: badge.criteriaType,
             requiredCount: badge.requiredCount,
             specificIds: badge.specificIds,
+            specificCourses: badge.specificCourses,
+            mustCompleteAllCourses: badge.mustCompleteAllCourses,
           ));
         } catch (e) {
           debugPrint('Error parsing badge definition for ${doc.id}: $e');
@@ -82,6 +84,8 @@ class BadgeService {
             criteriaType: definition.criteriaType,
             requiredCount: definition.requiredCount,
             specificIds: definition.specificIds,
+            specificCourses: definition.specificCourses,
+            mustCompleteAllCourses: definition.mustCompleteAllCourses,
           );
           
           // Add badge to user's collection
@@ -119,6 +123,37 @@ class BadgeService {
     try {
       // Check the badge criteria
       switch (badge.criteriaType) {
+        case 'CoursesCompleted':
+          if (badge.specificCourses != null && badge.specificCourses!.isNotEmpty) {
+            // Handle specific course completion requirements
+            if (badge.specificCourses!.length == 1) {
+              // Single course case - must complete it requiredCount times
+              final courseId = badge.specificCourses![0]['id'] as String;
+              final completionCount = user.completedCourses.where((id) => id == courseId).length;
+              return completionCount >= badge.requiredCount;
+            } else {
+              // Multiple courses case
+              if (badge.mustCompleteAllCourses == true) {
+                // Must complete all courses requiredCount times
+                return badge.specificCourses!.every((course) {
+                  final courseId = course['id'] as String;
+                  final completionCount = user.completedCourses.where((id) => id == courseId).length;
+                  return completionCount >= badge.requiredCount;
+                });
+              } else {
+                // Can complete any of the courses requiredCount times
+                return badge.specificCourses!.any((course) {
+                  final courseId = course['id'] as String;
+                  final completionCount = user.completedCourses.where((id) => id == courseId).length;
+                  return completionCount >= badge.requiredCount;
+                });
+              }
+            }
+          } else {
+            // Generic course completion - just count total completed courses
+            return user.completedCourses.length >= badge.requiredCount;
+          }
+          
         case 'xp_milestone':
           final int requiredXp = badge.requiredCount;
           return user.xp >= requiredXp;
@@ -390,6 +425,10 @@ class BadgeService {
         specificIds: badgeData['specificIds'] != null 
             ? List<String>.from(badgeData['specificIds']) 
             : null,
+        specificCourses: badgeData['specificCourses'] != null
+            ? List<Map<String, dynamic>>.from(badgeData['specificCourses'])
+            : null,
+        mustCompleteAllCourses: badgeData['mustCompleteAllCourses'] as bool?,
       );
       
       // Award the badge
@@ -517,7 +556,9 @@ class BadgeDefinition {
   final String criteriaType; // 'xp_milestone', 'streak', 'course_completion', 'audio_completion', etc.
   final int requiredCount;
   final List<String>? specificIds; // Optional specific course/audio IDs required
-  final Map<String, dynamic>? additionalCriteria; // Additional custom criteria
+  final List<Map<String, dynamic>>? specificCourses; // Add this field
+  final bool? mustCompleteAllCourses; // Add this field
+  final Map<String, dynamic>? additionalCriteria;
 
   BadgeDefinition({
     required this.id,
@@ -529,6 +570,8 @@ class BadgeDefinition {
     required this.criteriaType,
     required this.requiredCount,
     this.specificIds,
+    this.specificCourses, // Add to constructor
+    this.mustCompleteAllCourses, // Add to constructor
     this.additionalCriteria,
   });
 
@@ -545,6 +588,10 @@ class BadgeDefinition {
       specificIds: json['specificIds'] != null
           ? List<String>.from(json['specificIds'])
           : null,
+      specificCourses: json['specificCourses'] != null
+          ? List<Map<String, dynamic>>.from(json['specificCourses'])
+          : null,
+      mustCompleteAllCourses: json['mustCompleteAllCourses'] as bool?,
       additionalCriteria: json['additionalCriteria'] as Map<String, dynamic>?,
     );
   }
@@ -564,10 +611,31 @@ class BadgeDefinition {
       data['specificIds'] = specificIds;
     }
     
+    if (specificCourses != null) {
+      data['specificCourses'] = specificCourses;
+    }
+    
+    if (mustCompleteAllCourses != null) {
+      data['mustCompleteAllCourses'] = mustCompleteAllCourses;
+    }
+    
     if (additionalCriteria != null) {
       data['additionalCriteria'] = additionalCriteria;
     }
     
     return data;
+  }
+}
+
+// Add method to get badge description based on criteria
+String getBadgeDescription(BadgeDefinition badge) {
+  if (badge.criteriaType == 'CoursesCompleted' && 
+      badge.specificCourses != null && 
+      badge.specificCourses!.isNotEmpty) {
+    // Use the badge's description field for specific course badges
+    return badge.description;
+  } else {
+    // For generic badges, use the standard format
+    return 'Complete ${badge.requiredCount} ${badge.criteriaType == 'CoursesCompleted' ? 'courses' : 'items'} to get this badge';
   }
 } 

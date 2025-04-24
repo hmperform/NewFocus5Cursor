@@ -67,11 +67,6 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
     // Get all available badge definitions
     final allBadgeDefinitions = userProvider.allBadgeDefinitions;
     
-    // Filter badges with valid badgeImage URLs
-    final displayableBadges = allBadgeDefinitions
-        .where((badge) => badge.badgeImage != null && badge.badgeImage!.isNotEmpty)
-        .toList();
-    
     // Create a set of earned badge IDs for quick lookup
     final earnedBadgeIds = user.badgesgranted
         .map((badgeRef) => badgeRef['id'] as String)
@@ -85,7 +80,7 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: displayableBadges.isEmpty
+        child: allBadgeDefinitions.isEmpty
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32.0),
@@ -127,9 +122,9 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: displayableBadges.length,
+                itemCount: allBadgeDefinitions.length,
                 itemBuilder: (context, index) {
-                  final badge = displayableBadges[index];
+                  final badge = allBadgeDefinitions[index];
                   final isEarned = earnedBadgeIds.contains(badge.id);
                   
                   return _buildBadgeGridItem(
@@ -153,6 +148,17 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final isDarkMode = themeProvider.isDarkMode;
     final textColor = Theme.of(context).colorScheme.onBackground;
+    
+    // Helper function to get appropriate icon based on criteria type
+    IconData getBadgeTypeIcon() {
+      final criteriaType = badge.criteriaType.toLowerCase();
+      if (criteriaType.contains('streak')) return Icons.calendar_month;
+      if (criteriaType.contains('audio')) return Icons.headphones;
+      if (criteriaType.contains('course')) return Icons.school;
+      if (criteriaType.contains('total')) return Icons.access_time_filled;
+      if (criteriaType.contains('journal')) return Icons.edit_note;
+      return Icons.emoji_events;
+    }
     
     return GestureDetector(
       onTap: () {
@@ -198,33 +204,46 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
                       child: ClipOval(
                         child: ColorFiltered(
                           // Apply grayscale filter if not earned
-                          colorFilter: isEarned
-                              ? const ColorFilter.mode(
-                                  Colors.transparent,
-                                  BlendMode.saturation,
-                                )
-                              : const ColorFilter.matrix([
+                          colorFilter: !isEarned
+                              ? const ColorFilter.matrix([
                                   0.2126, 0.7152, 0.0722, 0, 0,
                                   0.2126, 0.7152, 0.0722, 0, 0,
                                   0.2126, 0.7152, 0.0722, 0, 0,
                                   0, 0, 0, 1, 0,
-                                ]),
-                          child: CachedNetworkImage(
-                            imageUrl: badge.badgeImage ?? '',
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                              child: const Center(child: CircularProgressIndicator()),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                              child: Icon(
-                                Icons.emoji_events,
-                                color: accentColor,
-                                size: 40,
-                              ),
-                            ),
-                          ),
+                                ])
+                              : const ColorFilter.mode(
+                                  Colors.transparent,
+                                  BlendMode.saturation,
+                                ),
+                          child: badge.badgeImage != null && badge.badgeImage!.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: badge.badgeImage!,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                                    child: Icon(
+                                      getBadgeTypeIcon(),
+                                      color: accentColor,
+                                      size: 40,
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                                    child: Icon(
+                                      getBadgeTypeIcon(),
+                                      color: accentColor,
+                                      size: 40,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                                  child: Icon(
+                                    getBadgeTypeIcon(),
+                                    color: accentColor,
+                                    size: 40,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -232,17 +251,24 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
                   
                   // Lock overlay for unearned badges
                   if (!isEarned)
-                    Container(
-                      height: 90,
-                      width: 90,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withOpacity(0.5),
-                      ),
-                      child: const Icon(
-                        Icons.lock,
-                        color: Colors.white,
-                        size: 32,
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.lock,
+                          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                          size: 16,
+                        ),
                       ),
                     ),
                 ],
@@ -253,7 +279,7 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: textColor.withOpacity(isEarned ? 1.0 : 0.7),
+                  color: textColor,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
@@ -261,36 +287,12 @@ class _AllBadgesScreenState extends State<AllBadgesScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                isEarned
-                  ? "Earned"
-                  : "${badge.requiredCount} ${badge.criteriaType.split('C')[0]}",
+                isEarned ? 'Earned' : 'Locked',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  color: isEarned ? accentColor : Colors.grey,
                 ),
-                textAlign: TextAlign.center,
               ),
-              if (badge.xpValue > 0) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (isEarned ? accentColor : Colors.grey).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    "+${badge.xpValue} XP",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isEarned ? accentColor : Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),

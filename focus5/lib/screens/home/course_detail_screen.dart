@@ -13,6 +13,7 @@ import '../../utils/app_icons.dart';
 import '../../services/media_completion_service.dart';
 import '../../services/firebase_content_service.dart';
 import '../lessons/lesson_audio_player_screen.dart';
+import '../../providers/badge_provider.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -79,6 +80,98 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
+  bool _isCourseCompleted() {
+    if (_course == null) return false;
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    return _course!.lessonsList.every((lesson) => userProvider.completedLessonIds.contains(lesson.id));
+  }
+
+  void _showCourseCompletionDialog() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final userProvider = Provider.of<UserProvider>(context);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 24),
+            const Icon(
+              Icons.emoji_events,
+              color: Colors.amber,
+              size: 72,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Course Completed!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onBackground,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'Congratulations on completing "${_course!.title}"!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'You earned ${_course!.xpReward} XP!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              height: 120,
+              width: 200,
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                image: DecorationImage(
+                  image: NetworkImage(_course!.thumbnailUrl),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(200, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Continue'),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -141,6 +234,256 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             ],
           ),
         ),
+      );
+    }
+
+    // Add completion button if all lessons are completed
+    if (_isCourseCompleted() && !userProvider.completedCourses.contains(_course.id)) {
+      return Stack(
+        children: [
+          DefaultTabController(
+            length: _tabs.length,
+            child: Scaffold(
+              backgroundColor: backgroundColor,
+              floatingActionButton: _buildActionButton(),
+              floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+              body: NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    // App Bar with course image and back button
+                    SliverAppBar(
+                      backgroundColor: surfaceColor,
+                      expandedHeight: 400,
+                      pinned: true,
+                      stretch: true,
+                      actions: [
+                        // Debug button for forcing course purchase
+                        if (_course.id == 'course-001')
+                          IconButton(
+                            icon: Icon(
+                              Icons.build,
+                              color: Colors.white,
+                            ),
+                            onPressed: () async {
+                              final userProvider = Provider.of<UserProvider>(context, listen: false);
+                              final result = await userProvider.forceAddConfidence101Course();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result 
+                                    ? 'Force added Confidence 101 course!' 
+                                    : 'Failed to force add course'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            tooltip: 'Force Add Course (Debug)',
+                          ),
+                        // Bookmark button
+                        Container(
+                          margin: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.bookmark_border, color: Colors.white),
+                            onPressed: () {
+                              // TODO: Save course to bookmarks
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Course saved!'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                      flexibleSpace: FlexibleSpaceBar(
+                        background: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Course image
+                            Hero(
+                              tag: 'course-image-${_course.id}',
+                              child: ImageUtils.networkImageWithFallback(
+                                imageUrl: _course.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            ),
+                            
+                            // Gradient overlay for text visibility
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withOpacity(0.1),
+                                    Colors.black.withOpacity(0.5),
+                                    Colors.black.withOpacity(0.8),
+                                  ],
+                                  stops: const [0.3, 0.65, 1.0],
+                                ),
+                              ),
+                            ),
+                            
+                            // Course info at the bottom
+                            Positioned(
+                              left: 20,
+                              right: 20,
+                              bottom: 80,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Course tags
+                                  Wrap(
+                                    spacing: 8,
+                                    children: _course.tags.take(3).map((tag) {
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: accentColor.withOpacity(0.8),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: TextStyle(
+                                            color: themeProvider.accentTextColor,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                  
+                                  const SizedBox(height: 16),
+                                  
+                                  // Course title
+                                  Text(
+                                    _course.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  
+                                  const SizedBox(height: 8),
+                                  
+                                  // Creator info
+                                  Row(
+                                    children: [
+                                      ImageUtils.avatarWithFallback(
+                                        imageUrl: _course.creatorImageUrl,
+                                        radius: 14,
+                                        name: _course.creatorName,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _course.creatorName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      leading: Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                    ),
+                    
+                    // Course stats row
+                    SliverToBoxAdapter(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
+                            _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
+                            _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
+                            _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    // Tab bar
+                    SliverPersistentHeader(
+                      delegate: _SliverAppBarDelegate(
+                        TabBar(
+                          tabs: _tabs.map((String name) => Tab(text: name)).toList(),
+                          labelColor: accentColor,
+                          unselectedLabelColor: secondaryTextColor,
+                          indicatorColor: accentColor,
+                          indicatorWeight: 3,
+                          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+                        ),
+                      ),
+                      pinned: true,
+                    ),
+                  ];
+                },
+                // Use TabBarView with scrollable tabs for each tab's content
+                body: TabBarView(
+                  children: [
+                    _buildScrollableTab(_buildLessonsTab()),
+                    _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
+                    _buildScrollableTab(_buildResourcesTab()),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Completion button overlay
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).colorScheme.surface,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: themeProvider.accentColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                onPressed: () async {
+                  // Mark course as completed
+                  await userProvider.trackCourseCompletion(userProvider.user!.id, _course.id);
+                  _showCourseCompletionDialog();
+                },
+                child: const Text('Complete Course'),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -353,7 +696,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           body: TabBarView(
             children: [
               _buildScrollableTab(_buildLessonsTab()),
-              _buildScrollableTab(_buildOverviewTab()),
+              _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
               _buildScrollableTab(_buildResourcesTab()),
             ],
           ),
@@ -710,186 +1053,231 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
-  Widget _buildOverviewTab() {
+  Widget _buildOverviewTab(BuildContext context, Color textColor, Color secondaryTextColor) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    final accentColor = themeProvider.accentColor;
+    final badgeProvider = Provider.of<BadgeProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    return Container(
-      color: backgroundColor,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+    // Find badges associated with this course
+    final courseBadges = badgeProvider.allBadges.where((badge) {
+      if (badge.specificCourses == null) return false;
+      return badge.specificCourses!.any((course) => course['id'] == _course!.id);
+    }).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // About this course section
+          Text('About this course', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 12),
           Text(
-            'About this course',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
+            _course!.description,
+            style: TextStyle(color: secondaryTextColor, fontSize: 15, height: 1.5),
           ),
-          const SizedBox(height: 16),
-          Text(
-            _course.description,
-            style: TextStyle(
-              color: secondaryTextColor,
-              fontSize: 16,
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           
-          // What you'll learn section
-          Text(
-            'What you\'ll learn',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+          // Course Badges Section - Moved to top for visibility
+          if (courseBadges.isNotEmpty) ...[
+            Text('Course Badges', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+            const SizedBox(height: 12),
+            Text(
+              'Complete this course to earn these badges:',
+              style: TextStyle(color: secondaryTextColor, fontSize: 14),
             ),
-          ),
-          const SizedBox(height: 16),
-          // Dynamically build learning points from the course data
-          if (_course.learningPoints.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _course.learningPoints
-                  .map((point) => _buildLearningPoint(point))
-                  .toList(),
-            )
-          else
-            // Optional: Show a message if no learning points are available
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                'No learning points specified for this course.',
-                style: TextStyle(color: secondaryTextColor),
+            const SizedBox(height: 16),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.5,
               ),
-            ),
-          const SizedBox(height: 32),
-          
-          // Focus areas
-          Text(
-            'Focus Areas',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _course.focusAreas.map((area) {
-              return Chip(
-                label: Text(area),
-                backgroundColor: surfaceColor,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                labelStyle: TextStyle(color: secondaryTextColor),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 32),
-          
-          // Instructor info with card
-          Text(
-            'Your Instructor',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    ImageUtils.avatarWithFallback(
-                      imageUrl: _course.creatorImageUrl,
-                      radius: 36,
-                      name: _course.creatorName,
+              itemCount: courseBadges.length,
+              itemBuilder: (context, index) {
+                final badge = courseBadges[index];
+                final isEarned = userProvider.user?.badgesgranted
+                    .any((badgeRef) => badgeRef['id'] == badge.id) ?? false;
+                
+                return Container(
+                  decoration: BoxDecoration(
+                    color: themeProvider.isDarkMode ? Colors.grey[850] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isEarned 
+                        ? themeProvider.accentColor 
+                        : themeProvider.accentColor.withOpacity(0.2),
+                      width: 1,
                     ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      // Badge Icon with earned/locked state
+                      Stack(
                         children: [
-                          Text(
-                            _course.creatorName,
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: themeProvider.isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isEarned 
+                                    ? themeProvider.accentColor.withOpacity(0.3)
+                                    : Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: ColorFiltered(
+                                colorFilter: ColorFilter.matrix(
+                                  isEarned ? [
+                                    1, 0, 0, 0, 0,
+                                    0, 1, 0, 0, 0,
+                                    0, 0, 1, 0, 0,
+                                    0, 0, 0, 1, 0,
+                                  ] : [
+                                    0.2, 0.2, 0.2, 0, 0,
+                                    0.2, 0.2, 0.2, 0, 0,
+                                    0.2, 0.2, 0.2, 0, 0,
+                                    0, 0, 0, 1, 0,
+                                  ],
+                                ),
+                                child: badge.imageUrl != null && badge.imageUrl!.isNotEmpty
+                                  ? Image.network(
+                                      badge.imageUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(
+                                          child: Icon(
+                                            Icons.emoji_events,
+                                            color: isEarned 
+                                              ? themeProvider.accentColor
+                                              : themeProvider.accentColor.withOpacity(0.5),
+                                            size: 24,
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Center(
+                                      child: Icon(
+                                        Icons.emoji_events,
+                                        color: isEarned 
+                                          ? themeProvider.accentColor
+                                          : themeProvider.accentColor.withOpacity(0.5),
+                                        size: 24,
+                                      ),
+                                    ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.verified, size: 16, color: accentColor),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Mental Performance Coach',
-                                style: TextStyle(
-                                  color: secondaryTextColor,
-                                  fontSize: 14,
+                          if (!isEarned)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.lock,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      // Badge Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              badge.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (isEarned) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: themeProvider.accentColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Earned',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: themeProvider.accentColor,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Expert in mental resilience and high-performance mindset. Helping individuals break barriers and achieve their full potential for over a decade.',
-                  style: TextStyle(
-                    color: secondaryTextColor,
-                    fontSize: 14,
-                    height: 1.6,
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildInstructorStat('10+', 'Years Experience'),
-                    _buildInstructorStat('5', 'Courses'),
-                    _buildInstructorStat('4.9', 'Rating'),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
+            const SizedBox(height: 24),
+          ],
+          
+          // Learning Points Section
+          if (_course!.learningPoints.isNotEmpty) ...[
+            Text('What you\'ll learn', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _course!.learningPoints
+                  .map((point) => _buildLearningPoint(point, textColor))
+                  .toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+          
+          // Focus Areas Section
+          Text('Focus Areas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _course!.focusAreas.map((area) {
+              return Chip(
+                label: Text(area),
+                backgroundColor: themeProvider.accentColor.withOpacity(0.1),
+                labelStyle: TextStyle(color: themeProvider.accentColor, fontWeight: FontWeight.w500),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                side: BorderSide.none,
+              );
+            }).toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLearningPoint(String text) {
+  Widget _buildLearningPoint(String text, Color textColor) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
     final accentColor = themeProvider.accentColor;
     
     return Padding(
@@ -911,33 +1299,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildInstructorStat(String value, String label) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-    
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: secondaryTextColor,
-            fontSize: 12,
-          ),
-        ),
-      ],
     );
   }
 

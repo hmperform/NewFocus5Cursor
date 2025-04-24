@@ -535,7 +535,12 @@ class _BadgeDetailScreenState extends State<BadgeDetailScreen> with SingleTicker
       case 'AudioModulesCompleted':
         return 'Complete ${widget.badge.requiredCount} audio sessions';
       case 'CoursesCompleted':
-        return 'Complete ${widget.badge.requiredCount} courses';
+        if (widget.badge.specificCourses != null && widget.badge.specificCourses!.isNotEmpty) {
+          // Use the badge's description for specific course badges
+          return widget.badge.description;
+        } else {
+          return 'Complete ${widget.badge.requiredCount} courses';
+        }
       case 'CourseLessonsCompleted':
         return 'Complete ${widget.badge.requiredCount} course lessons';
       case 'JournalEntriesWritten':

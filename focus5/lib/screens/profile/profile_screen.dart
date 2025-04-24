@@ -14,6 +14,7 @@ import '../../utils/app_icons.dart';
 import '../../widgets/daily_streak_widget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/content_models.dart';
+import '../badges/all_badges_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -661,39 +662,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
     
-    return Container(
-      height: 120,
-      padding: const EdgeInsets.only(left: 24.0),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: user.badges.length,
-        itemBuilder: (context, index) {
-          final badge = user.badges[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 16.0),
+    // Sort badges by earned date, most recent first
+    final sortedBadges = List<AppBadge>.from(user.badges)
+      ..sort((a, b) => (b.earnedAt ?? DateTime(0)).compareTo(a.earnedAt ?? DateTime(0)));
+    
+    // Take only the first 10 badges
+    final displayBadges = sortedBadges.take(10).toList();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (sortedBadges.length > 10)
+          Padding(
+            padding: const EdgeInsets.only(left: 24.0, bottom: 8.0),
             child: GestureDetector(
               onTap: () {
-                _showBadgeDetails(context, badge);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AllBadgesScreen()),
+                );
               },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildBadgeImage(badge: badge, radius: 35),
-                  const SizedBox(height: 6),
-                  Text(
-                    badge.name,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+              child: Text(
+                'Showing ${displayBadges.length} of ${sortedBadges.length} badges',
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontSize: 12,
+                ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        Container(
+          height: 120,
+          padding: const EdgeInsets.only(left: 24.0),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: displayBadges.length,
+            itemBuilder: (context, index) {
+              final badge = displayBadges[index];
+              return Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: GestureDetector(
+                  onTap: () {
+                    _showBadgeDetails(context, badge);
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildBadgeImage(badge: badge, radius: 35),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: 70,
+                        child: Text(
+                          badge.name,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
   

@@ -1,21 +1,21 @@
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/badge_model.dart';
+import '../models/content_models.dart';
 
 class BadgeProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  List<BadgeModel> _allBadges = [];
-  List<BadgeModel> _earnedBadges = [];
+  List<AppBadge> _allBadges = [];
+  List<AppBadge> _earnedBadges = [];
   
   bool _isLoading = false;
   String? _errorMessage;
   
   // Getters
-  List<BadgeModel> get allBadges => _allBadges;
-  List<BadgeModel> get earnedBadges => _earnedBadges;
+  List<AppBadge> get allBadges => _allBadges;
+  List<AppBadge> get earnedBadges => _earnedBadges;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   
@@ -34,7 +34,11 @@ class BadgeProvider extends ChangeNotifier {
       // Load all available badges
       final QuerySnapshot badgesSnapshot = await _firestore.collection('badges').get();
       
-      _allBadges = badgesSnapshot.docs.map((doc) => BadgeModel.fromFirestore(doc)).toList();
+      debugPrint('Found ${badgesSnapshot.docs.length} badges in Firestore');
+      
+      _allBadges = badgesSnapshot.docs.map((doc) => AppBadge.fromFirestore(doc)).toList();
+      
+      debugPrint('Loaded ${_allBadges.length} badges total');
       
       // Load earned badges for the current user
       final DocumentSnapshot userDoc = await _firestore
@@ -167,48 +171,17 @@ class BadgeProvider extends ChangeNotifier {
         throw Exception('User not authenticated');
       }
       
-      final userRef = _firestore.collection('users').doc(currentUser.uid);
-      
-      await _firestore.runTransaction((transaction) async {
-        final userDoc = await transaction.get(userRef);
-        
-        if (!userDoc.exists) {
-          throw Exception('User document does not exist');
-        }
-        
-        final userData = userDoc.data() as Map<String, dynamic>;
-        final List<dynamic> badges = userData['badges'] as List<dynamic>? ?? [];
-        
-        if (!badges.contains(badgeId)) {
-          badges.add(badgeId);
-          
-          transaction.update(userRef, {
-            'badges': badges,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-          
-          // Get badge XP value and update user's XP
-          final badgeDoc = await transaction.get(
-            _firestore.collection('badges').doc(badgeId)
-          );
-          
-          if (badgeDoc.exists) {
-            final badgeData = badgeDoc.data() as Map<String, dynamic>;
-            final int xpValue = badgeData['xpValue'] ?? 0;
-            
-            final int currentXp = userData['xp'] as int? ?? 0;
-            transaction.update(userRef, {'xp': currentXp + xpValue});
-          }
-        }
+      // Add the badge to the user's earned badges
+      await _firestore.collection('users').doc(currentUser.uid).update({
+        'badgesgranted': FieldValue.arrayUnion([
+          {'id': badgeId, 'earnedAt': FieldValue.serverTimestamp()}
+        ])
       });
       
-      // Refresh badges after awarding
+      // Refresh the badges list
       await loadBadges();
-      
     } catch (e) {
       debugPrint('Error awarding badge: $e');
-      _errorMessage = e.toString();
-      notifyListeners();
       rethrow;
     }
   }

@@ -7,6 +7,11 @@ enum BadgeCriteriaType {
   achievement,
   social,
   milestone,
+  coursesCompleted,
+  audioModulesCompleted,
+  courseLessonsCompleted,
+  journalEntriesWritten,
+  totalDaysInApp,
   other
 }
 
@@ -19,6 +24,9 @@ class BadgeModel {
   final int xpValue;
   final String? imageUrl;
   final DateTime? earnedDate;
+  final List<String>? specificIds;
+  final List<Map<String, dynamic>>? specificCourses;
+  final bool? mustCompleteAllCourses;
 
   BadgeModel({
     required this.id,
@@ -29,6 +37,9 @@ class BadgeModel {
     required this.xpValue,
     this.imageUrl,
     this.earnedDate,
+    this.specificIds,
+    this.specificCourses,
+    this.mustCompleteAllCourses,
   });
 
   factory BadgeModel.fromFirestore(DocumentSnapshot doc) {
@@ -44,6 +55,9 @@ class BadgeModel {
       earnedDate: data['earnedDate'] != null 
           ? (data['earnedDate'] as Timestamp).toDate() 
           : null,
+      specificIds: data['specificIds'] as List<String>?,
+      specificCourses: data['specificCourses'] as List<Map<String, dynamic>>?,
+      mustCompleteAllCourses: data['mustCompleteAllCourses'] as bool?,
     );
   }
 
@@ -59,6 +73,9 @@ class BadgeModel {
       earnedDate: map['earnedDate'] != null 
           ? (map['earnedDate'] as Timestamp).toDate() 
           : null,
+      specificIds: map['specificIds'] as List<String>?,
+      specificCourses: map['specificCourses'] as List<Map<String, dynamic>>?,
+      mustCompleteAllCourses: map['mustCompleteAllCourses'] as bool?,
     );
   }
 
@@ -71,6 +88,9 @@ class BadgeModel {
       'xpValue': xpValue,
       'imageUrl': imageUrl,
       'earnedDate': earnedDate,
+      'specificIds': specificIds,
+      'specificCourses': specificCourses,
+      'mustCompleteAllCourses': mustCompleteAllCourses,
     };
   }
 
@@ -88,6 +108,21 @@ class BadgeModel {
         return BadgeCriteriaType.social;
       case 'milestone':
         return BadgeCriteriaType.milestone;
+      case 'coursescompleted':
+      case 'coursesCompleted':
+        return BadgeCriteriaType.coursesCompleted;
+      case 'audiomodulescompleted':
+      case 'audioModulesCompleted':
+        return BadgeCriteriaType.audioModulesCompleted;
+      case 'courselessonscompleted':
+      case 'courseLessonsCompleted':
+        return BadgeCriteriaType.courseLessonsCompleted;
+      case 'journalentrieswritten':
+      case 'journalEntriesWritten':
+        return BadgeCriteriaType.journalEntriesWritten;
+      case 'totaldaysinapp':
+      case 'totalDaysInApp':
+        return BadgeCriteriaType.totalDaysInApp;
       default:
         return BadgeCriteriaType.other;
     }
@@ -107,6 +142,16 @@ class BadgeModel {
         return 'social';
       case BadgeCriteriaType.milestone:
         return 'milestone';
+      case BadgeCriteriaType.coursesCompleted:
+        return 'CoursesCompleted';
+      case BadgeCriteriaType.audioModulesCompleted:
+        return 'AudioModulesCompleted';
+      case BadgeCriteriaType.courseLessonsCompleted:
+        return 'CourseLessonsCompleted';
+      case BadgeCriteriaType.journalEntriesWritten:
+        return 'JournalEntriesWritten';
+      case BadgeCriteriaType.totalDaysInApp:
+        return 'TotalDaysInApp';
       case BadgeCriteriaType.other:
         return 'other';
     }

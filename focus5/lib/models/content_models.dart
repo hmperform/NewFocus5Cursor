@@ -819,6 +819,8 @@ class AppBadge {
   final String criteriaType;
   final int requiredCount;
   final List<String>? specificIds;
+  final List<Map<String, dynamic>>? specificCourses; // Add this field
+  final bool? mustCompleteAllCourses; // Add this field
 
   AppBadge({
     required this.id,
@@ -831,6 +833,8 @@ class AppBadge {
     required this.criteriaType,
     required this.requiredCount,
     this.specificIds,
+    this.specificCourses, // Add to constructor
+    this.mustCompleteAllCourses, // Add to constructor
   }) : this.earnedAt = earnedAt ?? DateTime.now(); // Default if needed
 
   factory AppBadge.fromFirestore(DocumentSnapshot doc) {
@@ -840,10 +844,39 @@ class AppBadge {
     List<String>? specificIds;
     if (data['specificIds'] != null) {
       try {
-        specificIds = (data['specificIds'] as List).map((e) => e.toString()).toList();
+        if (data['specificIds'] is List) {
+          specificIds = (data['specificIds'] as List).map((e) {
+            // Handle both string and reference types
+            if (e is String) return e;
+            if (e is DocumentReference) return e.id;
+            if (e is Map) return e['id']?.toString();
+            return e.toString();
+          }).where((e) => e != null).cast<String>().toList();
+        }
       } catch (e) {
         debugPrint('Error parsing specificIds for badge ${doc.id}: $e');
         specificIds = null;
+      }
+    }
+
+    // Handle specificCourses field
+    List<Map<String, dynamic>>? specificCourses;
+    if (data['specificCourses'] != null) {
+      try {
+        if (data['specificCourses'] is List) {
+          specificCourses = (data['specificCourses'] as List).map((course) {
+            if (course is DocumentReference) {
+              return {'id': course.id, 'path': course.path};
+            }
+            if (course is Map) {
+              return Map<String, dynamic>.from(course);
+            }
+            return {'id': course.toString()};
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint('Error parsing specificCourses for badge ${doc.id}: $e');
+        specificCourses = null;
       }
     }
     
@@ -857,6 +890,8 @@ class AppBadge {
       criteriaType: data['criteriaType']?.toString() ?? '',
       requiredCount: (data['requiredCount'] as num?)?.toInt() ?? 0,
       specificIds: specificIds,
+      specificCourses: specificCourses,
+      mustCompleteAllCourses: data['mustCompleteAllCourses'] as bool?,
     );
   }
 
@@ -872,6 +907,8 @@ class AppBadge {
     String? criteriaType,
     int? requiredCount,
     List<String>? specificIds,
+    List<Map<String, dynamic>>? specificCourses,
+    bool? mustCompleteAllCourses,
   }) {
     return AppBadge(
       id: id ?? this.id,
@@ -884,6 +921,8 @@ class AppBadge {
       criteriaType: criteriaType ?? this.criteriaType,
       requiredCount: requiredCount ?? this.requiredCount,
       specificIds: specificIds ?? this.specificIds,
+      specificCourses: specificCourses ?? this.specificCourses,
+      mustCompleteAllCourses: mustCompleteAllCourses ?? this.mustCompleteAllCourses,
     );
   }
 
@@ -898,5 +937,7 @@ class AppBadge {
         'criteriaType': criteriaType,
         'requiredCount': requiredCount,
         'specificIds': specificIds,
+        'specificCourses': specificCourses,
+        'mustCompleteAllCourses': mustCompleteAllCourses,
       };
 } 
