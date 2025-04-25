@@ -630,7 +630,7 @@ class _ProfileTabState extends State<ProfileTab> {
                           final displayedBadges = displayBadges.take(3).toList();
 
                           return SizedBox(
-                            height: 115, // Reduced from 120
+                            height: 125, // Increased from 115 to accommodate the content
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
                               itemCount: displayedBadges.length,
@@ -640,7 +640,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                 final isEarned = badgeData['isEarned'] as bool;
 
                                 return Padding(
-                                  padding: const EdgeInsets.only(right: 12), // Reduced from 16
+                                  padding: const EdgeInsets.only(right: 10), // Reduced from 12 to save space
                                   child: _buildBadgeItemWithStatus(context, badge, isEarned),
                                 );
                               },
