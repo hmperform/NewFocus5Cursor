@@ -727,7 +727,27 @@ class UserProvider extends ChangeNotifier {
         return true;
       }
       
-      // Proceed if lastCompletionDate is not null
+      // If current streak is 0, set it to 1 regardless of lastActive date
+      if (_user!.streak == 0) {
+        debugPrint('[UserProvider UpdateStreak] Current streak is 0. Setting to 1.');
+        int newStreak = 1;
+        int newLongestStreak = (_user!.longestStreak < 1) ? 1 : _user!.longestStreak;
+        
+        await _firestore.collection('users').doc(userId).update({
+          'streak': newStreak,
+          'longestStreak': newLongestStreak,
+          'lastCompletionDate': now,
+        });
+        _user = _user!.copyWith(
+          streak: newStreak,
+          longestStreak: newLongestStreak,
+          lastCompletionDate: now,
+        );
+        notifyListeners();
+        return true;
+      }
+      
+      // Proceed if lastCompletionDate is not null and streak is not 0
       final lastCompletionDay = DateTime(
         lastCompletionDate.year, 
         lastCompletionDate.month, 
