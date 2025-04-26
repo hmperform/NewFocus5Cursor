@@ -242,23 +242,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (isAdmin)
               _buildAdminManagementSection(),
             
-            // Sign Out Option
+            // --- Sign Out Button --- 
             Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
+              child: Center(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.redAccent, // Use a distinct color for sign out
+                    minimumSize: const Size(double.infinity, 50), // Make button wider
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12), // Rounded corners
+                    ),
+                  ),
+                  onPressed: () async {
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    final userProvider = Provider.of<UserProvider>(context, listen: false);
+                    final navigator = Navigator.of(context); // Capture navigator before async gap
+                    try {
+                      // Sign out using the correct logout() method
+                      await authProvider.logout(); 
+                      
+                      // Clear local user data immediately (already done in logout, but good practice)
+                      // userProvider.clearUserData(); 
+                      
+                      // Navigate to login screen and remove all previous routes
+                      navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+                    } catch (e) {
+                      // Show error message if sign out fails
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error signing out: $e')),
+                        );
+                      }
+                    }
+                  },
                 ),
-                onPressed: () async {
-                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                  await authProvider.logout();
-                  // Navigator back to login or home page happens automatically
-                },
-                child: const Text('Sign Out'),
               ),
             ),
+            // --- End Sign Out Button ---
             
             // App Info
             Padding(
@@ -574,7 +598,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               if (userId.isNotEmpty) {
                 final success = await userProvider.adminIncrementStreak();
-                 ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(success ? 'Streak incremented' : 'Failed to increment streak')),
                 );
               }

@@ -93,4 +93,78 @@ class MediaCompletionService {
       }
     }
   }
+
+  /// Record completion of any content type and return updates for user document
+  Future<Map<String, dynamic>> recordCompletion({
+    required String userId,
+    String? courseId,
+    String? lessonId,
+    String? audioId,
+    String? articleId,
+    required int xpGained,
+    required int currentStreak,
+    required DateTime? lastCompletionDate,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final updates = <String, dynamic>{};
+      
+      // Update XP
+      updates['xp'] = FieldValue.increment(xpGained);
+      
+      // Handle streak logic
+      if (lastCompletionDate == null) {
+        // First completion ever
+        updates['streak'] = 1;
+        updates['lastCompletionDate'] = now;
+      } else {
+        final lastCompletionDay = DateTime(
+          lastCompletionDate.year,
+          lastCompletionDate.month,
+          lastCompletionDate.day,
+        );
+        
+        if (lastCompletionDay.isAtSameMomentAs(today)) {
+          // Already completed today, no streak change
+          updates['lastCompletionDate'] = now;
+        } else {
+          final yesterday = today.subtract(const Duration(days: 1));
+          if (lastCompletionDay.isAtSameMomentAs(yesterday)) {
+            // Consecutive day
+            updates['streak'] = currentStreak + 1;
+            updates['lastCompletionDate'] = now;
+          } else {
+            // Not consecutive, reset streak
+            updates['streak'] = 1;
+            updates['lastCompletionDate'] = now;
+          }
+        }
+      }
+      
+      // Update longest streak if needed
+      if (updates.containsKey('streak') && updates['streak'] > currentStreak) {
+        updates['longestStreak'] = updates['streak'];
+      }
+      
+      // Update completion lists based on content type
+      if (courseId != null) {
+        updates['completedCourses'] = FieldValue.arrayUnion([courseId]);
+      }
+      if (lessonId != null) {
+        updates['completedLessons'] = FieldValue.arrayUnion([lessonId]);
+      }
+      if (audioId != null) {
+        updates['completedAudios'] = FieldValue.arrayUnion([audioId]);
+      }
+      if (articleId != null) {
+        updates['completedArticles'] = FieldValue.arrayUnion([articleId]);
+      }
+      
+      return updates;
+    } catch (e) {
+      debugPrint('Error recording completion: $e');
+      return {};
+    }
+  }
 } 

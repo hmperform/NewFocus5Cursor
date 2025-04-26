@@ -6,12 +6,12 @@ import 'package:focus5/models/content_models.dart';
 import 'package:focus5/providers/user_provider.dart';
 import 'dart:math' as math;
 import 'package:focus5/providers/audio_provider.dart';
-import '../post_completion_screen.dart';
 import 'package:focus5/providers/auth_provider.dart';
 import '../../widgets/streak_celebration_popup.dart';
 import 'package:focus5/utils/level_utils.dart';
 import '../level_up_screen.dart';
 import '../../services/user_level_service.dart';
+import '../post_completion_screen.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final DailyAudio audio;
@@ -130,19 +130,16 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         return;
       }
       
-      // --- Capture state BEFORE completion ---
-      final userBeforeCompletion = userProvider.user;
-      final initialStreak = userBeforeCompletion?.streak ?? 0;
-      final initialLevel = UserLevelService.getUserLevel(userBeforeCompletion?.xp ?? 0);
-      final lastCompletionDate = userBeforeCompletion?.lastCompletionDate;
+      // --- Capture initial level for level up check ---
+      final initialLevel = UserLevelService.getUserLevel(userProvider.user?.xp ?? 0);
 
-      // --- Track completion ---
+      // --- Track completion and get streak increment result ---
       debugPrint('[AudioPlayerScreen] Calling userProvider.trackAudioCompletion...');
       await userProvider.trackAudioCompletion(userId, widget.audio.id, context: context);
-      debugPrint('[AudioPlayerScreen] userProvider.trackAudioCompletion finished.');
+      debugPrint('[AudioPlayerScreen] trackAudioCompletion finished.');
 
       // --- Check for level up AFTER completion ---
-      final userAfterCompletion = userProvider.user; // Get potentially updated user data
+      final userAfterCompletion = userProvider.user;
       if (userAfterCompletion != null) {
         final currentLevel = UserLevelService.getUserLevel(userAfterCompletion.xp);
         debugPrint('[AudioPlayerScreen] Level Check: Initial=$initialLevel, Current=$currentLevel');
@@ -151,67 +148,17 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
           // Use a Future.delayed to avoid navigation during build/state update
           Future.delayed(const Duration(milliseconds: 100), () {
             if (mounted && context.mounted) {
-               Navigator.of(context).pushReplacement( // Use pushReplacement to avoid back button issues
+               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (context) => LevelUpScreen(newLevel: currentLevel),
                 ),
               );
-              // Return here to prevent showing streak popup if level up happened
-              _isTrackingCompletion = false; 
-              return; 
+              _isTrackingCompletion = false;
+              return;
             }
           });
-           // If we're navigating to level up, don't show streak immediately
-           _isTrackingCompletion = false;
-           return;
-        }
-      } else {
-         debugPrint('[AudioPlayerScreen] Warning: Could not get user data after completion for level check.');
-      }
-
-      // --- Check for streak celebration AFTER completion (only if no level up) ---
-      final currentStreak = userAfterCompletion?.streak ?? 0;
-      debugPrint('[AudioPlayerScreen] Streak Check: Initial=$initialStreak, Current=$currentStreak');
-      
-      bool shouldShowStreakPopup = false;
-      if (currentStreak > initialStreak) {
-        // Streak increased, now check if it's the first completion today
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        
-        if (lastCompletionDate == null) {
-          shouldShowStreakPopup = true; // First completion ever
-          debugPrint('[AudioPlayerScreen] Streak increased, first completion ever. Should show popup.');
-        } else {
-          final lastCompletionDay = DateTime(lastCompletionDate.year, lastCompletionDate.month, lastCompletionDate.day);
-           if (lastCompletionDay.isBefore(today)) {
-             shouldShowStreakPopup = true; // First completion for today
-             debugPrint('[AudioPlayerScreen] Streak increased, first completion today. Should show popup.');
-           } else {
-             debugPrint('[AudioPlayerScreen] Streak increased, but already completed today. Not showing popup.');
-           }
-        }
-      } else {
-         debugPrint('[AudioPlayerScreen] Streak did not increase ($initialStreak -> $currentStreak). Not showing popup.');
-      }
-
-      // Show streak celebration if conditions met AND no post-completion screens
-      if (shouldShowStreakPopup &&
-          (widget.audio.postCompletionScreens == null ||
-           widget.audio.postCompletionScreens!['screenschosen'] == null ||
-           (widget.audio.postCompletionScreens!['screenschosen'] as List).isEmpty)) {
-        
-        debugPrint('[AudioPlayerScreen] Checking conditions for streak celebration: currentStreak=$currentStreak, mounted=$mounted');
-
-        if (mounted && context.mounted) {
-          debugPrint('[AudioPlayerScreen] Conditions met. Scheduling streak celebration popup.');
-          // Show streak celebration with slight delay
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted && context.mounted) {
-              debugPrint('[AudioPlayerScreen] Showing streak celebration popup with count: $currentStreak');
-              context.showStreakCelebration(streakCount: currentStreak);
-            }
-          });
+          _isTrackingCompletion = false;
+          return;
         }
       }
       
@@ -386,7 +333,10 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
             Future.delayed(Duration.zero, () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => PostCompletionScreen(module: widget.audio),
+                  builder: (context) => PostCompletionScreen(
+                    module: widget.audio,
+                    xpGained: widget.audio.xpReward ?? 50, // Use xpReward field
+                  ),
                 ),
               );
             });

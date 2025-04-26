@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Import for DateFormat
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart'; // Import UserProvider
+import '../models/user_model.dart';
 
 class DailyStreakWidget extends StatelessWidget {
   // Remove direct streak properties, will get from provider
@@ -20,12 +21,13 @@ class DailyStreakWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Get user data from UserProvider
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
-    final currentStreak = user?.streak ?? 0;
-    final longestStreak = user?.longestStreak ?? currentStreak;
-    final lastCompletionDate = user?.lastCompletionDate;
+    if (user == null) return const SizedBox.shrink();
+
+    final currentStreak = user.streak;
+    final longestStreak = user.longestStreak;
+    final lastCompletionDate = user.lastCompletionDate;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

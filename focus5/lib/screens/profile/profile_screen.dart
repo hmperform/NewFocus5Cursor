@@ -145,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               )
-            : _buildUserProfile(userProvider.user!),
+            : _buildUserProfile(_userData!),
     );
   }
   

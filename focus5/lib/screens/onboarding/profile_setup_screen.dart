@@ -197,8 +197,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
       print('Verifying university code: $code - Is champion: $isChampion, Is coach: $isCoach');
       print('University document reference: ${doc.reference.path}');
 
+      // Get current full name and ensure it's not empty
+      final currentFullName = userProvider.user?.fullName ?? '';
+      if (currentFullName.isEmpty) {
+        _showError('Could not retrieve user name. Please try again.');
+        setState(() => _isLoading = false);
+        return false;
+      }
+
       // Create profile update data with university as a document reference
       final success = await userProvider.updateUserProfile(
+        fullName: currentFullName, // Ensure fullName is always passed
         isIndividual: false,
         university: doc.reference, // Pass the document reference
         universityCode: code.toUpperCase(),
@@ -217,53 +226,31 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
       await prefs.setBool('profile_setup_complete', true);
       await prefs.setString('university_code', code.toUpperCase());
 
-      // Navigate based on role if verification was successful
-      if (!mounted) return true;
-
-      final user = userProvider.user;
-      if (user == null) {
-        _showError('User data not found');
-        return false;
+      // Navigate to home screen if verification was successful
+      if (!mounted) {
+        setState(() => _isLoading = false);
+        return true;
       }
 
-      if (isChampion) {
-        print('Navigating to ChampionSetupScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => ChampionSetupScreen(
-              userName: user.fullName,
-              universityCode: code.toUpperCase(),
-            ),
-          ),
-        );
-      } else if (isCoach) {
-        print('Navigating to CoachSetupScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => CoachSetupScreen(
-              userName: user.fullName,
-              universityCode: code.toUpperCase(),
-            ),
-          ),
-        );
-      } else {
-        print('Navigating to CommitmentScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => CommitmentScreen(
-              userName: user.fullName,
-              isIndividual: false,
-              universityCode: code.toUpperCase(),
-            ),
-          ),
-        );
+      try {
+        print('Navigating to home screen');
+        await Navigator.of(context).pushReplacementNamed('/home');
+      } catch (e) {
+        print('Navigation error: $e');
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showError('Error navigating to home screen');
+        }
+        return false;
       }
 
       return true;
     } catch (e) {
       print('Error in _handleCodeVerification: $e');
       _showError('An error occurred while verifying the code');
-      setState(() => _isLoading = false); // Ensure loading state is reset on error
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
       return false;
     }
   }
@@ -336,7 +323,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     } catch (e) {
       print('Error verifying university code: $e');
       _showError('Error verifying code: $e');
-      setState(() => _isLoading = false); // Ensure loading state is reset on error
+      // Ensure loading is stopped even if mount check fails before setState
+      if (mounted) {
+        setState(() => _isLoading = false); // Ensure loading state is reset on error
+      }
       return false;
     }
   }
@@ -488,7 +478,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
     } catch (e) {
       print('Error in _handleContinue: $e');
       _showError('An error occurred. Please try again.');
-      setState(() => _isLoading = false);
+      // Ensure loading is stopped even if mount check fails before setState
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
