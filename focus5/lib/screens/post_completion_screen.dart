@@ -318,7 +318,7 @@ class _PostCompletionScreenState extends State<PostCompletionScreen> with Ticker
               
               SizedBox(height: 30),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false),
                 child: Text("Continue"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
