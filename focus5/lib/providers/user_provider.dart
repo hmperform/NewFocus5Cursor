@@ -673,22 +673,35 @@ class UserProvider extends ChangeNotifier {
     if (_user == null) return;
 
     try {
+      // Capture previous streak BEFORE any updates
+      final previousStreak = _user?.streak ?? 0;
+      final now = DateTime.now();
+
       // Check and update streak for daily audio completion
       if (audioId.startsWith('audio-') || audioId.startsWith('daily-')) {
-        await updateStreak(userId, true);
+        debugPrint('[trackAudioCompletion] Calling updateStreak for audio $audioId');
+        final bool streakIncremented = await updateStreak(userId, true);
+
+        // Show celebration if streak incremented
+        if (streakIncremented && context.mounted) {
+          final currentStreak = _user?.streak ?? 0;
+          debugPrint('[trackAudioCompletion] Streak incremented from $previousStreak to $currentStreak. Showing celebration.');
+          
+          // Use a short delay to ensure state updates propagate before showing screen
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (context.mounted) {
+              context.showStreakCelebration(streakCount: currentStreak);
+            }
+          });
+        }
       }
 
       // Notify listeners after updating user state but before badge check potentially modifies it again
       notifyListeners();
 
-      // --> Check for badges after completing audio and updating user state <--
+      // Check for badges after completing audio and updating user state
       debugPrint('[trackAudioCompletion] Checking badges. Current streak: ${_user?.streak}');
-      // We still call checkForNewBadges to trigger the award and popup,
-      // but we no longer manually update the local state here.
-      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); 
-
-      // REMOVED MANUAL LOCAL UPDATE BLOCK
-      // if (newlyAwardedBadges.isNotEmpty && _user != null) { ... }
+      await _badgeService.checkForNewBadges(_user!.id, _user!, context: context);
 
     } catch (e) {
       debugPrint('Error tracking audio completion: $e');
@@ -969,7 +982,7 @@ class UserProvider extends ChangeNotifier {
       }
       // Update local user state immediately with latest data
       _user = User.fromFirestore(docSnapshot);
-      debugPrint('[toggleLessonCompletion] Refreshed user data. Current streak: ${_user?.streak}, Last Completion: ${_user?.lastCompletionDate}');
+      debugPrint('[toggleLessonCompletion] Refreshed user data. Current streak: ${_user?.streak}');
       // Notify listeners after refreshing data, before proceeding
       notifyListeners();
       // <<< End Refresh >>>
@@ -1008,13 +1021,9 @@ class UserProvider extends ChangeNotifier {
         // Add XP for completing a lesson
         await addXp(userId, 50, 'Lesson completion');
 
-        // Get current date for lastCompletionDate (used if streak updates)
-        // final now = DateTime.now(); // Moved to updateStreak
-
         // Update in Firestore (only completedLessons for now, streak/date handled later)
         await _firestore.collection('users').doc(userId).update({
           'completedLessons': updatedLessons,
-          // 'lastCompletionDate': now, // Moved to updateStreak if needed
         });
 
         // Log the completion
@@ -1034,55 +1043,30 @@ class UserProvider extends ChangeNotifier {
         await checkAndAwardCourseCompletionXp(lessonId, context: context);
 
         // --- Update Streak and Check for Celebration --- 
-        final previousLastCompletionDate = _user?.lastCompletionDate; // Capture before update
+        // Capture previous streak BEFORE any updates
+        final previousStreak = _user?.streak ?? 0;
 
         // Update streak for lesson completion (now uses refreshed data)
         debugPrint('[toggleLessonCompletion] Calling updateStreak for lesson $lessonId');
         final bool streakIncremented = await updateStreak(userId, true);
 
-        // Only show celebration if streak updated AND it's the first completion today
+        // Show celebration if streak incremented
         if (streakIncremented && context.mounted) {
           final currentStreak = _user?.streak ?? 0;
-          final now = DateTime.now();
-          final today = DateTime(now.year, now.month, now.day);
-          bool isFirstCompletionToday = false;
-
-          if (previousLastCompletionDate == null) {
-            isFirstCompletionToday = true; // First ever completion
-          } else {
-            final previousCompletionDay = DateTime(
-              previousLastCompletionDate.year, 
-              previousLastCompletionDate.month, 
-              previousLastCompletionDate.day
-            );
-            if (previousCompletionDay.isBefore(today)) {
-              isFirstCompletionToday = true; // First completion FOR today
+          debugPrint('[toggleLessonCompletion] Streak incremented from $previousStreak to $currentStreak. Showing celebration.');
+          
+          // Use a short delay to ensure state updates propagate before showing screen
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (context.mounted) {
+              context.showStreakCelebration(streakCount: currentStreak);
             }
-          }
-
-          // Check if conditions met
-          if (isFirstCompletionToday) {
-            debugPrint('[toggleLessonCompletion] Streak updated ($currentStreak) and first completion today. Showing celebration.');
-            // Use a short delay to ensure state updates propagate before showing screen
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (context.mounted) {
-                context.showStreakCelebration(streakCount: currentStreak);
-              }
-            });
-          } else {
-            debugPrint('[toggleLessonCompletion] Streak updated ($currentStreak) but NOT the first completion today. Skipping celebration.');
-          }
+          });
         }
         // --- End Streak Celebration Check ---
         
         // --> Check for badges after completing lesson and updating user state <--
         debugPrint('[toggleLessonCompletion] Checking badges. Current streak: ${_user?.streak}');
-        // We still call checkForNewBadges to trigger the award and popup,
-        // but we no longer manually update the local state here.
         await _badgeService.checkForNewBadges(_user!.id, _user!, context: context); 
-        
-        // REMOVED MANUAL LOCAL UPDATE BLOCK
-        // if (newlyAwardedBadges.isNotEmpty && _user != null) { ... }
         
         return true;
       } else if (updatedLessons.contains(lessonId)) {
@@ -1159,8 +1143,8 @@ class UserProvider extends ChangeNotifier {
       debugPrint('[trackJournalEntryCompletion] Starting journal entry tracking for user $userId');
       debugPrint('[trackJournalEntryCompletion] Current lifetime entries (before): ${_user?.lifetimeJournalEntries ?? 0}');
       
-      // Capture previous completion date BEFORE any updates
-      final previousLastCompletionDate = _user?.lastCompletionDate;
+      // Capture previous streak BEFORE any updates
+      final previousStreak = _user?.streak ?? 0;
       
       // Get current date for potential lastCompletionDate update in transaction
       final now = DateTime.now(); 
@@ -1175,9 +1159,8 @@ class UserProvider extends ChangeNotifier {
         debugPrint('[trackJournalEntryCompletion] Latest lifetime entries from Firestore: $currentLifetimeEntries');
         debugPrint('[trackJournalEntryCompletion] Will update to: ${currentLifetimeEntries + 1}');
         
-        // Update user document atomically (lastCompletionDate will be handled by updateStreak later if needed)
+        // Update user document atomically
         transaction.update(userDocRef, {
-          // 'lastCompletionDate': now, // Let updateStreak handle this
           'lifetimeJournalEntries': currentLifetimeEntries + 1,
         });
         
@@ -1188,7 +1171,7 @@ class UserProvider extends ChangeNotifier {
           'content': journalData['content'],
           'mood': journalData['mood'],
           'tags': journalData['tags'] ?? [],
-          'createdAt': FieldValue.serverTimestamp(), // Use server timestamp for journal entry
+          'createdAt': FieldValue.serverTimestamp(),
         });
       });
       
@@ -1198,52 +1181,32 @@ class UserProvider extends ChangeNotifier {
       await addXp(userId, 30, 'Journal entry');
       
       // Refetch user data to ensure local state reflects the transaction result BEFORE streak logic
-      // This might be redundant due to the listener, but ensures immediate consistency for streak calc
       debugPrint('[trackJournalEntryCompletion] Reloading user data after transaction & XP...');
       final docSnapshot = await _firestore.collection('users').doc(userId).get();
       if (docSnapshot.exists) {
         _user = User.fromFirestore(docSnapshot);
-        notifyListeners(); // Notify about potential XP/lifetime changes
+        notifyListeners();
         debugPrint('[trackJournalEntryCompletion] User data reloaded. New lifetime entries: ${_user?.lifetimeJournalEntries ?? 0}');
       } else {
         debugPrint('[trackJournalEntryCompletion] User doc not found after transaction!?');
-        return false; // Should not happen
+        return false;
       }
 
       // --- Update Streak and Check for Celebration --- 
       debugPrint('[trackJournalEntryCompletion] Calling updateStreak...');
       final bool streakIncremented = await updateStreak(userId, true);
 
-      // Only show celebration if streak updated AND it's the first completion today
+      // Show celebration if streak incremented
       if (streakIncremented && context.mounted) {
         final currentStreak = _user?.streak ?? 0;
-        final today = DateTime(now.year, now.month, now.day); // Use the 'now' from earlier
-        bool isFirstCompletionToday = false;
-
-        if (previousLastCompletionDate == null) {
-          isFirstCompletionToday = true; // First ever completion
-        } else {
-          final previousCompletionDay = DateTime(
-            previousLastCompletionDate.year, 
-            previousLastCompletionDate.month, 
-            previousLastCompletionDate.day
-          );
-          if (previousCompletionDay.isBefore(today)) {
-            isFirstCompletionToday = true; // First completion FOR today
+        debugPrint('[trackJournalEntryCompletion] Streak incremented from $previousStreak to $currentStreak. Showing celebration.');
+        
+        // Use a short delay to ensure state updates propagate before showing screen
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (context.mounted) {
+            context.showStreakCelebration(streakCount: currentStreak);
           }
-        }
-
-        // Check if conditions met
-        if (isFirstCompletionToday) {
-          debugPrint('[trackJournalEntryCompletion] Streak updated ($currentStreak) and first completion today. Showing celebration.');
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (context.mounted) {
-              context.showStreakCelebration(streakCount: currentStreak);
-            }
-          });
-        } else {
-          debugPrint('[trackJournalEntryCompletion] Streak updated ($currentStreak) but NOT the first completion today. Skipping celebration.');
-        }
+        });
       }
       // --- End Streak Celebration Check ---
       
@@ -1321,15 +1284,14 @@ class UserProvider extends ChangeNotifier {
       final xpReward = (courseData['xpReward'] as num?)?.toInt() ?? 100;
       final userId = _user!.id;
       
-      // Capture previous completion date BEFORE updates
-      final previousLastCompletionDate = _user?.lastCompletionDate;
-      final now = DateTime.now(); // Capture current time
+      // Capture previous streak BEFORE updates
+      final previousStreak = _user?.streak ?? 0;
+      final now = DateTime.now();
 
       // Update user document
       final updatedCompletedCourses = [..._user!.completedCourses, courseId];
       await _firestore.collection('users').doc(userId).update({
         'completedCourses': updatedCompletedCourses,
-        // Let updateStreak handle lastCompletionDate
       });
       
       // Log the completion
@@ -1358,36 +1320,17 @@ class UserProvider extends ChangeNotifier {
       debugPrint('[checkAndAwardCourseCompletionXp] Calling updateStreak for course $courseId completion...');
       final bool streakIncremented = await updateStreak(userId, true);
 
-      // Only show celebration if streak updated AND it's the first completion today
+      // Show celebration if streak incremented
       if (streakIncremented && context.mounted) {
         final currentStreak = _user?.streak ?? 0;
-        final today = DateTime(now.year, now.month, now.day); // Use the 'now' from earlier
-        bool isFirstCompletionToday = false;
-
-        if (previousLastCompletionDate == null) {
-          isFirstCompletionToday = true; // First ever completion
-        } else {
-          final previousCompletionDay = DateTime(
-            previousLastCompletionDate.year, 
-            previousLastCompletionDate.month, 
-            previousLastCompletionDate.day
-          );
-          if (previousCompletionDay.isBefore(today)) {
-            isFirstCompletionToday = true; // First completion FOR today
+        debugPrint('[checkAndAwardCourseCompletionXp] Streak incremented from $previousStreak to $currentStreak. Showing celebration.');
+        
+        // Use a short delay to ensure state updates propagate before showing screen
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (context.mounted) {
+            context.showStreakCelebration(streakCount: currentStreak);
           }
-        }
-
-        // Check if conditions met
-        if (isFirstCompletionToday) {
-          debugPrint('[checkAndAwardCourseCompletionXp] Streak updated ($currentStreak) and first completion today. Showing celebration.');
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (context.mounted) {
-              context.showStreakCelebration(streakCount: currentStreak);
-            }
-          });
-        } else {
-          debugPrint('[checkAndAwardCourseCompletionXp] Streak updated ($currentStreak) but NOT the first completion today. Skipping celebration.');
-        }
+        });
       }
       // --- End Streak Celebration Check ---
       
