@@ -85,7 +85,6 @@ class _SignupScreenState extends State<SignupScreen> {
       });
 
       try {
-        // Use the actual Firebase authentication
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         
         // Save sport selection to prevent asking twice
@@ -444,38 +443,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
                     ],
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Info card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2A2A),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFB4FF00).withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Demo Application',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Color(0xFFB4FF00),
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Registration is not yet available in this demo. Click "Sign Up" to proceed with a demo account.',
-                            style: TextStyle(
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     
                     const SizedBox(height: 32),
                     

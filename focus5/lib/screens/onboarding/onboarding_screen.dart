@@ -27,18 +27,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   
   final List<Map<String, dynamic>> _onboardingSteps = [
     {
-      'title': 'Choose from 80+ weekly options',
-      'description': 'Daily training exercises to build your mental game',
+      'title': 'Train with Elite Coaches',
+      'description': 'Access daily audio, courses, and insights from top mental performance coaches.',
       'image': 'assets/images/onboarding/welcome.png',
     },
     {
-      'title': 'Audio sessions from pro coaches',
-      'description': 'Train with elite mental performance coaches every day',
+      'title': 'Personalized Coaching Access',
+      'description': 'Connect directly with certified mental coaches to accelerate your growth.',
       'image': 'assets/images/onboarding/audio.png',
     },
     {
-      'title': 'Master your mindset',
-      'description': 'Build confidence, reduce anxiety, and perform at your peak',
+      'title': 'Level Up Your Performance',
+      'description': 'Engage in challenges, earn badges, and track your progress towards peak mental fitness.',
       'image': 'assets/images/onboarding/courses.png',
     },
   ];
