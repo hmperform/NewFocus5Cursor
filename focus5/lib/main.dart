@@ -97,8 +97,15 @@ void main() async {
         ChangeNotifierProvider(create: (context) => BadgeProvider()),
         ChangeNotifierProxyProvider<UserProvider, AudioModuleProvider>(
           create: (context) => AudioModuleProvider(Provider.of<UserProvider>(context, listen: false)),
-          update: (context, userProvider, previousAudioProvider) => 
-              AudioModuleProvider(userProvider),
+          update: (context, userProvider, previousAudioProvider) {
+            if (previousAudioProvider == null) {
+              // Should not happen with ChangeNotifierProxyProvider but handle defensively
+              return AudioModuleProvider(userProvider);
+            }
+            // Update the existing provider with the latest UserProvider
+            previousAudioProvider.updateUserProvider(userProvider);
+            return previousAudioProvider; // Return the updated existing instance
+          },
         ),
         ChangeNotifierProvider(create: (_) => AudioProvider()),
       ],

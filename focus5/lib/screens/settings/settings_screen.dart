@@ -7,6 +7,15 @@ import 'package:flutter/services.dart'; // For TextInputFormatter
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Firestore access
 import 'admin_management_screen.dart'; // Import the admin management screen
 import '../../services/user_permissions_service.dart'; // For checking user permissions
+import 'admin_tools_screen.dart';
+// Removed lines 11-16 which were causing import errors
+// import 'account_settings_screen.dart';
+// import 'notification_settings_screen.dart';
+// import 'appearance_settings_screen.dart';
+// import 'privacy_policy_screen.dart';
+// import 'terms_of_service_screen.dart';
+// import '../../widgets/common/custom_app_bar.dart'; // <<< Potential issue still
+import '../../services/firebase_auth_service.dart'; // Correct path for auth service
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -63,11 +72,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final accentColor = themeProvider.accentColor;
     final userProvider = Provider.of<UserProvider>(context); // Listen for user changes
     final bool isAdmin = userProvider.user?.isAdmin ?? false;
+    final isDarkMode = themeProvider.isDarkMode;
     
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        elevation: 0,
+        elevation: 0, // Optional: match previous style if needed
+        // automaticallyImplyLeading: false, // Set based on navigation needs
       ),
       body: _isLoading 
         ? Center(
@@ -196,44 +207,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             
             const Divider(),
             
-            // Account Section
-            _buildSectionHeader('Account'),
-            Consumer<AuthProvider>(
+            // Account Section - REMOVED ListTiles for missing screens
+            _buildSectionHeader('Account & Legal'), // Renamed slightly
+            Consumer<AuthProvider>( // Kept Email display
               builder: (context, authProvider, _) {
                 final user = authProvider.currentUser;
-                
-                // Get the user's email from UserProvider instead of AuthProvider
                 final userProvider = Provider.of<UserProvider>(context, listen: false);
                 final email = userProvider.user?.email ?? user?.email ?? 'user@example.com';
                 
                 return ListTile(
                   title: const Text('Email Address'),
                   subtitle: Text(email),
-                  trailing: const Icon(Icons.edit),
-                  onTap: () {
-                    // Open email edit dialog
-                  },
+                  // Remove edit icon/onTap if AccountSettingsScreen is missing
+                  // trailing: const Icon(Icons.edit),
+                  // onTap: () { ... },
                 );
               },
             ),
-            ListTile(
-              title: const Text('Change Password'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                // Navigate to password change screen
-              },
-            ),
-            ListTile(
+            // Removed Change Password ListTile - Add back if screen exists
+            // ListTile(
+            //   title: const Text('Change Password'),
+            //   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            //   onTap: () { ... },
+            // ),
+            ListTile( // Kept Delete Account
               title: const Text('Delete Account'),
               textColor: Colors.red,
               onTap: () {
-                // Show confirmation dialog
                 _showDeleteAccountDialog();
               },
             ),
+            // Removed Privacy Policy ListTile - Add back if screen exists
+            // ListTile(... Privacy Policy ...),
+            // Removed Terms of Service ListTile - Add back if screen exists
+            // ListTile(... Terms of Service ...),
             
             const Divider(),
-            
+
+            // ---- ADDED: Debug Button (Conditionally shown) ----
+            if (userProvider.user?.isAdmin ?? false) ...[ 
+              const Divider(),
+               ListTile(
+                leading: Icon(Icons.bug_report, color: Colors.orange),
+                title: const Text('Debug: Test Daily Login Increment'),
+                subtitle: const Text('Sets last active to yesterday & runs check'),
+                onTap: () => _runLoginDayTest(context),
+              ),
+            ],
+            // --------------------------
+  
             // --- Admin Tools Section (conditionally shown) ---
             if (isAdmin)
               _buildAdminToolsSection(context, userProvider),
@@ -241,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // --- Admin Management Section (conditionally shown) ---
             if (isAdmin)
               _buildAdminManagementSection(),
-            
+
             // --- Sign Out Button --- 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 40.0),
@@ -280,9 +302,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                 ),
-              ),
+              ),            
             ),
-            // --- End Sign Out Button ---
+            // --- End Sign Out Button ---            
             
             // App Info
             Padding(
@@ -291,7 +313,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Version 1.0.0',
+                      'Version 1.0.0', // Consider making this dynamic
                       style: TextStyle(
                         color: Colors.grey[500],
                         fontSize: 12,
@@ -299,7 +321,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '© 2023 Focus 5. All rights reserved.',
+                      '© 2024 Focus 5. All rights reserved.', // Update year maybe?
                       style: TextStyle(
                         color: Colors.grey[500],
                         fontSize: 12,
@@ -673,5 +695,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  // Helper function for the debug button action
+  Future<void> _runLoginDayTest(BuildContext context) async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    if (userProvider.user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: User not loaded.')),
+      );
+      return;
+    }
+
+    final userId = userProvider.user!.id;
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    final firestore = FirebaseFirestore.instance;
+
+    try {
+      print('DEBUG: Setting lastActive to yesterday for user $userId');
+      // Update Firestore directly
+      await firestore.collection('users').doc(userId).update({
+        'lastActive': Timestamp.fromDate(yesterday),
+      });
+
+      // Optionally update local state if needed immediately, though updateUserLoginInfo should refresh it
+      // userProvider.updateLocalUser(userProvider.user!.copyWith(lastActive: yesterday));
+
+      print('DEBUG: Triggering updateUserLoginInfo manually...');
+      // Trigger the logic that should increment totalLoginDays
+      await userProvider.updateUserLoginInfo();
+
+      print('DEBUG: Refreshing user data...');
+      // Refetch user data to confirm the update - REMOVED forceRefresh
+      await userProvider.loadUserData(userId);
+
+      // Check if widget is still mounted before showing SnackBar
+      if (!context.mounted) return; 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Debug Test Ran. New Total Days: ${userProvider.user?.totalLoginDays ?? 'N/A'}')),
+      );
+       print('DEBUG: Test finished. New Total Days: ${userProvider.user?.totalLoginDays}');
+
+    } catch (e) {
+      print('DEBUG: Error running login day test: $e');
+       // Check if widget is still mounted before showing SnackBar
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Debug Test Error: $e')),
+      );
+    }
   }
 } 

@@ -63,6 +63,7 @@ class AuthProvider extends ChangeNotifier {
             dataLoadSuccess = true;
             _lastLoadedUserId = firebaseUser.uid; // Track successfully loaded user
             print('AuthProvider: checkAuthStatus - UserProvider successfully loaded data for ${firebaseUser.uid}.');
+            await _userProvider!.updateUserLoginInfo();
           } else {
             print('AuthProvider: checkAuthStatus - UserProvider FAILED to load data for ${firebaseUser.uid} (Document likely missing).');
           }
