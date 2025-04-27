@@ -7,7 +7,7 @@ import 'package:focus5/providers/coach_provider.dart';
 import 'package:focus5/providers/content_provider.dart';
 import 'package:focus5/providers/theme_provider.dart';
 import '../../screens/home/article_detail_screen.dart';
-import '../../screens/coach/coach_profile_screen.dart';
+import 'coach_profile_screen.dart';
 import 'package:focus5/screens/explore/focus_area_courses_screen.dart';
 import 'package:focus5/screens/home/course_detail_screen.dart';
 import 'package:focus5/services/firebase_config_service.dart';
