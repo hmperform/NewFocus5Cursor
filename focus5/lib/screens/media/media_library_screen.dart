@@ -11,6 +11,7 @@ import '../../providers/audio_provider.dart'; // <<< Import AudioProvider
 // import '../articles/article_reader_screen.dart'; // TODO: Uncomment and adjust path if needed
 import '../home/course_detail_screen.dart'; // <<< ADD Import for CourseDetailScreen
 import '../article/article_detail_screen.dart'; // <<< ADD Import for ArticleDetailScreen (assumed)
+import '../../utils/image_utils.dart';
 
 class MediaLibraryScreen extends StatefulWidget {
   const MediaLibraryScreen({Key? key}) : super(key: key);
@@ -386,31 +387,26 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
         final article = _filteredArticles[index];
         return _buildMediaCard(
           title: article.title,
-          description: article.content.substring(0, (article.content.length > 100) ? 100 : article.content.length) + '...',
+          description: article.content,
           duration: article.readTimeMinutes,
-          xpReward: 0, 
-          instructor: article.authorName, 
-          categories: article.focusAreas, 
-          imageUrl: article.thumbnailUrl,
+          xpReward: 0,
+          instructor: article.authorName ?? 'Unknown Author',
+          categories: article.focusAreas,
+          imageUrl: article.thumbnail,
           item: article,
           onTap: () {
-            print('Tapped Article: ${article.title}');
-            // Navigate to Article Reader Screen 
+            debugPrint('Tapped Article: ${article.title}');
             Navigator.push(
               context,
               MaterialPageRoute(
-                // Pass individual fields required by ArticleDetailScreen constructor
+                // Pass parameters required by article/article_detail_screen.dart
                 builder: (context) => ArticleDetailScreen(
-                  title: article.title, 
-                  imageUrl: article.thumbnailUrl, 
-                  content: article.content,
-                  // Pass other needed fields if the screen requires them
+                  title: article.title,
+                  imageUrl: article.thumbnail, // Use thumbnail
+                  content: article.content, // Pass content
                 ),
               ),
             );
-            // ScaffoldMessenger.of(context).showSnackBar(
-            //     SnackBar(content: Text('Navigate to Article: ${article.title} (Not Implemented)'))
-            // ); 
           },
         );
       },

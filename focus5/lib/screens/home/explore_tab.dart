@@ -352,7 +352,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                coach.title,
+                                coach.title ?? '',
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: textColor.withOpacity(0.7),
@@ -551,7 +551,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                               topRight: Radius.circular(12),
                             ),
                             child: ImageUtils.networkImageWithFallback(
-                              imageUrl: article.thumbnailUrl,
+                              imageUrl: article.thumbnail,
                               width: double.infinity,
                               height: 160,
                               fit: BoxFit.cover,
@@ -605,12 +605,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                                 ImageUtils.avatarWithFallback(
                                   imageUrl: article.authorImageUrl,
                                   radius: 12,
-                                  name: article.authorName,
+                                  name: article.authorName ?? '',
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    article.authorName,
+                                    article.authorName ?? 'Unknown Author',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 13,

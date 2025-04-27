@@ -333,6 +333,7 @@ class _ContentSharingScreenState extends State<ContentSharingScreen> with Single
         String? thumbnailUrl = ''; // Default empty string
         String id = '';
         String description = ''; // For sharing context
+        Map<String, dynamic> metadata = {};
 
         // --- Access data based on contentType and model/map ---
         if (contentType == 'course' && item is Map<String, dynamic>) {
@@ -348,8 +349,12 @@ class _ContentSharingScreenState extends State<ContentSharingScreen> with Single
         } else if (contentType == 'article' && item is Article) {
           title = item.title ?? 'Unnamed Article';
           id = item.id;
-          thumbnailUrl = item.thumbnailUrl; // Access model property
+          thumbnailUrl = item.thumbnail; // Use thumbnail
           description = item.content ?? ''; // Use content as description for articles
+          metadata = {
+            'authorName': item.authorName,
+            'readTime': item.readTimeMinutes,
+          };
         } else {
            // Handle unexpected item type or structure
            debugPrint("[ContentSharingScreen] !! Warning: Unexpected item type in _buildContentList for $contentType: ${item.runtimeType}");

@@ -103,7 +103,7 @@ class Coach {
       credentials: List<String>.from(json['credentials'] ?? []),
       experience: _parseExperience(json['experience']),
       isActive: json['isActive'] ?? true,
-      bookingUrl: json['bookingUrl'] ?? '',
+      bookingUrl: json['bookingLink'] as String? ?? json['bookingUrl'] as String? ?? '',
       email: json['email'] as String?,
       phoneNumber: json['phoneNumber'] as String?,
       instagramUrl: json['instagramUrl'] as String?,

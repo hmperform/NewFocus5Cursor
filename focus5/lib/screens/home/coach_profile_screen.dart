@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/content_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../models/content_models.dart';
 
 import '../../models/coach_model.dart' as coachModel;
 import '../../models/user_model.dart';
@@ -23,6 +25,9 @@ import 'articles_list_screen.dart';
 import 'coach_detail_screen.dart';
 import 'coach_sessions_screen.dart';
 import 'course_detail_screen.dart';
+import '../../screens/home/article_detail_screen.dart';
+import '../../screens/home/audio_player_screen.dart';
+import '../../providers/audio_provider.dart';
 
 class CoachProfileScreen extends StatefulWidget {
   final String coachId;
@@ -41,36 +46,59 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
   bool _isLoading = true;
   coachModel.Coach? _coach;
   String? _error;
-  List<dynamic> _coachContent = [];
+  List<DailyAudio> _coachModules = [];
+  List<Article> _coachArticles = [];
+  List<Course> _coachCourses = [];
+  bool _loadingContent = true;
   
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) { 
-      _loadCoachData();
+      _loadCoachAndContent();
     });
   }
   
-  Future<void> _loadCoachData() async {
+  Future<void> _loadCoachAndContent() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _loadingContent = true;
+      _error = null;
+    });
+
     try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-      
       final coachProvider = Provider.of<CoachProvider>(context, listen: false);
-      final coachModel.Coach? coach = await coachProvider.getCoachById(widget.coachId);
+      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
       
+      final coach = await coachProvider.getCoachById(widget.coachId);
+      if (!mounted) return;
       setState(() {
         _coach = coach;
         _isLoading = false;
       });
+
+      if (_coach != null) {
+        _coachModules = await contentProvider.getDailyAudiosByCoach(_coach!.id);
+        _coachArticles = await contentProvider.getArticlesByCoach(_coach!.id);
+        _coachCourses = await contentProvider.getCoursesByCoach(_coach!.id);
+        
+        if (!mounted) return;
+        setState(() {
+          _loadingContent = false;
+        });
+      } else {
+        throw Exception('Coach data is null after fetch.');
+      }
+
     } catch (e) {
-      debugPrint('Error loading coach data: $e');
+      debugPrint('Error loading coach data or content: $e');
+      if (!mounted) return;
       setState(() {
-        _error = 'Failed to load coach data: $e';
+        _error = 'Failed to load coach data or content: $e';
         _isLoading = false;
+        _loadingContent = false;
       });
     }
   }
@@ -79,6 +107,18 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not launch $urlString')),
+        );
+      }
+      throw 'Could not launch $urlString';
+    }
   }
 
   @override
@@ -125,7 +165,7 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _loadCoachData,
+                onPressed: _loadCoachAndContent,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFB4FF00),
                   foregroundColor: Colors.black,
@@ -177,18 +217,18 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
                       );
                     },
                   ),
-                  // Gradient overlay
+                  // Gradient overlay - RESTORED AND MODIFIED HERE
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7),
-                          Colors.black,
+                          Colors.transparent, // Start transparent
+                          Colors.black,       // Become fully black sooner
+                          Colors.black,       // Stay black
                         ],
-                        stops: const [0.6, 0.8, 1.0],
+                        stops: const [0.5, 0.9, 1.0], // Start fade at 50%, fully black by 90%-100%
                       ),
                     ),
                   ),
@@ -200,8 +240,8 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
           // Coach info and booking button
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
+              padding: const EdgeInsets.all(20.0), // Restore original padding
+              child: Column( // Restore original Column structure
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Coach name
@@ -243,11 +283,8 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () {
-                        if (_coach!.bookingUrl.isNotEmpty) {
-                          // Launch booking URL
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Opening booking page...')),
-                          );
+                        if (_coach!.bookingUrl != null && _coach!.bookingUrl.isNotEmpty) {
+                          _launchURL(_coach!.bookingUrl);
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -278,7 +315,6 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
                   TabBar(
                     controller: _tabController,
                     tabs: const [
-                      Tab(text: 'Podcasts'),
                       Tab(text: 'Modules'),
                       Tab(text: 'Articles'),
                       Tab(text: 'Courses'),
@@ -298,9 +334,6 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
             child: TabBarView(
               controller: _tabController,
               children: [
-                // Podcasts tab
-                _buildPodcastsList(),
-                
                 // Modules tab
                 _buildModulesList(),
                 
@@ -317,143 +350,79 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
     );
   }
   
-  Widget _buildPodcastsList() {
-    // We don't have podcasts in the model yet, so load them from the ContentProvider
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final podcasts = contentProvider.getMediaByCoach(_coach!.id, 'audio') ?? [];
-    
-    if (podcasts.isEmpty) {
-      return Center(
+  Widget _buildModulesList() {
+    if (_loadingContent) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFB4FF00)));
+    }
+    if (_coachModules.isEmpty) {
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(16.0),
           child: Text(
-            'No podcasts available from this coach yet',
+            'No modules available from this coach yet',
             style: TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
           ),
         ),
       );
     }
-    
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: podcasts.length,
+      itemCount: _coachModules.length,
       itemBuilder: (context, index) {
-        final podcast = podcasts[index];
-        
+        final module = _coachModules[index];
         return Card(
           color: const Color(0xFF1E1E1E),
           margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          clipBehavior: Clip.antiAlias,
           child: ListTile(
-            contentPadding: const EdgeInsets.all(12),
+            contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                podcast['imageUrl'] ?? 'https://picsum.photos/100/100?random=1',
+              child: ImageUtils.networkImageWithFallback(
+                imageUrl: module.thumbnail,
                 width: 60,
                 height: 60,
                 fit: BoxFit.cover,
               ),
             ),
             title: Text(
-              podcast['title'] ?? 'Unnamed Podcast',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+              module.title,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              podcast['duration'] ?? 'Unknown duration',
-              style: const TextStyle(
-                color: Colors.white70,
-              ),
+              '${module.durationMinutes} min • ${module.focusAreas.isNotEmpty ? module.focusAreas.first : 'Audio'}',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
-            trailing: const Icon(
-              Icons.play_circle_outline,
-              color: Color(0xFFB4FF00),
-              size: 36,
-            ),
+            trailing: const Icon(Icons.play_circle_outline, color: Color(0xFFB4FF00), size: 32),
             onTap: () {
-              // Play podcast
+              final audioProvider = context.read<AudioProvider>();
+              final audioObject = Audio(
+                id: module.id,
+                title: module.title,
+                subtitle: module.focusAreas.join(', '),
+                description: module.description,
+                imageUrl: module.thumbnail,
+                audioUrl: module.audioUrl,
+                sequence: 0,
+                slideshowImages: [module.slideshow1, module.slideshow2, module.slideshow3]
+                    .where((s) => s.isNotEmpty).toList(),
+                sourceType: AudioSource.daily,
+              );
+              
+              // audioProvider.startAudioPlayback(audioObject);
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  // Pass the DailyAudio object and a placeholder for currentDay
+                  builder: (context) => AudioPlayerScreen(audio: module, currentDay: 0), 
+                ),
+              );
             },
-          ),
-        );
-      },
-    );
-  }
-  
-  Widget _buildModulesList() {
-    // We don't have modules in the model yet, so load them from the ContentProvider
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final modules = contentProvider.getMediaByCoach(_coach!.id, 'video') ?? [];
-    
-    if (modules.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'No modules available from this coach yet',
-            style: TextStyle(color: Colors.white70),
-          ),
-        ),
-      );
-    }
-    
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 1.2,
-      ),
-      itemCount: modules.length,
-      itemBuilder: (context, index) {
-        final module = modules[index];
-        
-        return Container(
-          decoration: BoxDecoration(
-            color: _getModuleColor(index),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      module['title'] ?? 'Unnamed Module',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${module['lessons'] ?? 0} lessons',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                right: 8,
-                bottom: 8,
-                child: Icon(
-                  Icons.arrow_forward,
-                  color: Colors.white.withOpacity(0.5),
-                ),
-              ),
-            ],
           ),
         );
       },
@@ -461,205 +430,101 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
   }
   
   Widget _buildArticlesList() {
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final coachId = _coach!.id;
-    final articles = contentProvider.getArticlesByAuthor(coachId);
-    
-    if (articles.isEmpty) {
-      return const Center(
-        child: Text('No articles available', style: TextStyle(color: Colors.white70)),
-      );
+    if (_loadingContent) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFB4FF00)));
     }
-    
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Articles',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: articles.length > 3 ? 3 : articles.length,
-            itemBuilder: (context, index) {
-              return ArticleListCard(article: articles[index]);
-            },
-          ),
-          if (articles.length > 3)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Center(
-                child: TextButton(
-                  onPressed: () {
-                    // Navigate to all articles by this coach
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ArticlesListScreen(
-                          tag: _coach!.name,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'See all articles',
-                    style: TextStyle(
-                      color: Color(0xFFB4FF00),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildCoursesList() {
-    // We don't have courses in the model yet, so we'll need to fetch them
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final courses = contentProvider.getCoursesByCoach(_coach!.id) ?? [];
-    
-    if (courses.isEmpty) {
-      return Center(
+    if (_coachArticles.isEmpty) {
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(16.0),
           child: Text(
-            'No courses available from this coach yet',
+            'No articles available from this coach yet',
             style: TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
           ),
         ),
       );
     }
-    
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: courses.length,
+      itemCount: _coachArticles.length,
       itemBuilder: (context, index) {
-        final course = courses[index];
+        final originalArticle = _coachArticles[index];
         
-        return Card(
-          color: const Color(0xFF1E1E1E),
-          margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Course image
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12),
-                ),
-                child: Image.network(
-                  course.imageUrl,
-                  height: 150,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              
-              // Course info
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      course.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          color: Colors.white60,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${course.durationMinutes} min',
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        const Icon(
-                          Icons.menu_book,
-                          color: Colors.white60,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${course.modules.length} modules',
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Navigate to course detail screen
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CourseDetailScreen(
-                                courseId: course.id,
-                                course: course,
-                              ),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white.withOpacity(0.1),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text('View Course'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        // Create a new Article instance with author details overridden by the current coach
+        final displayArticle = originalArticle.copyWithAuthorDetails(
+          name: _coach!.name, // Use current coach's name
+          imageUrl: _coach!.profileImageUrl, // Use current coach's image
         );
+        
+        // Use the ArticleListCard widget with the modified article data
+        return ArticleListCard(article: displayArticle);
       },
     );
   }
   
-  Color _getModuleColor(int index) {
-    final colors = [
-      const Color(0xFF4A5CFF), // Blue
-      const Color(0xFF53B175), // Green
-      const Color(0xFFFF8700), // Orange
-      const Color(0xFFFF5757), // Red
-      const Color(0xFF9747FF), // Purple
-      const Color(0xFF00C1AC), // Teal
-    ];
-    
-    return colors[index % colors.length];
+  Widget _buildCoursesList() {
+    if (_loadingContent) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFB4FF00)));
+    }
+    if (_coachCourses.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'No courses available from this coach yet',
+            style: TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _coachCourses.length,
+      itemBuilder: (context, index) {
+        final course = _coachCourses[index];
+        return Card(
+          color: const Color(0xFF1E1E1E),
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ImageUtils.networkImageWithFallback(
+                imageUrl: course.thumbnailUrl.isNotEmpty ? course.thumbnailUrl : course.imageUrl,
+                width: 60,
+                height: 60,
+                fit: BoxFit.cover,
+              ),
+            ),
+            title: Text(
+              course.title,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '${course.lessonsList.length} lessons • ${course.durationMinutes} min',
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CourseDetailScreen(
+                    courseId: course.id,
+                    course: course,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 } 

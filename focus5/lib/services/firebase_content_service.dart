@@ -4,7 +4,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/content_models.dart';
-import '../models/coach_model.dart'; // Ensure CoachModel is imported
 
 // Helper function to sanitize Firestore document data
 Map<String, dynamic> _sanitizeDocumentData(Map<String, dynamic>? data) {
@@ -535,50 +534,81 @@ class FirebaseContentService {
     }
   }
   
+  // Get all coaches (Helper for getArticles)
+  Future<Map<String, Coach>> _getAllCoachesMap() async {
+    try {
+      final coachesSnapshot = await _firestore.collection('coaches').get();
+      final Map<String, Coach> coachMap = {};
+      for (var doc in coachesSnapshot.docs) {
+        try {
+          final data = doc.data();
+          data['id'] = doc.id;
+          coachMap[doc.id] = Coach.fromJson(data);
+        } catch (e) {
+          debugPrint("Error parsing coach ${doc.id}: $e");
+          // Skip this coach if parsing fails
+        }
+      }
+      return coachMap;
+    } catch (e) {
+      debugPrint("Error fetching all coaches: $e");
+      return {}; // Return empty map on error
+    }
+  }
+
   // Get all articles
   Future<List<Article>> getArticles({String? universityCode}) async {
     try {
       debugPrint('Fetching articles from Firestore...');
       final QuerySnapshot snapshot = await _firestore.collection('articles').get();
-      debugPrint('Found ${snapshot.docs.length} articles in Firestore');
-      
-      final articles = snapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        data = _sanitizeDocumentData(data);
-        data['id'] = doc.id;
-        
-        // Ensure required fields are present
-        if (data['publishedDate'] == null) {
-          data['publishedDate'] = DateTime.now().toIso8601String();
+      debugPrint('Found ${snapshot.docs.length} raw articles in Firestore');
+
+      // Fetch all coaches first to avoid repeated lookups
+      final Map<String, Coach> coachesMap = await _getAllCoachesMap();
+      debugPrint('Fetched ${coachesMap.length} coaches for author lookup');
+
+      final List<Article> articles = [];
+      for (var doc in snapshot.docs) {
+        try {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>; 
+          // No need to sanitize here if Article.fromJson handles types correctly
+          data['id'] = doc.id;
+          
+          debugPrint('Parsing article: ${data['title'] ?? '[No Title]'}');
+          // Parse the basic article data
+          Article article = Article.fromJson(data); 
+
+          // Get the author details from the coaches map
+          Coach? authorCoach = coachesMap[article.author.id];
+          debugPrint('  Article ID: ${article.id}, Author Ref ID: ${article.author.id}'); // Log IDs
+
+          if (authorCoach != null) {
+             debugPrint('  Found author: ${authorCoach.fullName}, Image: ${authorCoach.profileImageUrl}. Updating article object...'); // Log details
+             // Create enriched article object with author details
+             article = article.copyWithAuthorDetails(
+               name: authorCoach.fullName, // Use fullName from Coach model
+               imageUrl: authorCoach.profileImageUrl, // Use profileImageUrl from Coach model
+             );
+          } else {
+             debugPrint('  Warning: Could not find author coach with ID: ${article.author.id} for article ${article.id}'); // Log missing coach
+             // Optionally set default/placeholder author details if needed
+             // article = article.copyWithAuthorDetails(name: 'Unknown Author', imageUrl: '');
+          }
+          articles.add(article);
+        } catch (e) {
+           debugPrint("Error processing article ${doc.id}: $e");
+           // Skip this article if parsing/processing fails
         }
-        if (data['authorImageUrl'] == null) {
-          data['authorImageUrl'] = '';
-        }
-        if (data['thumbnailUrl'] == null) {
-          data['thumbnailUrl'] = data['imageUrl'] ?? '';
-        }
-        if (data['tags'] == null) {
-          data['tags'] = [];
-        }
-        if (data['focusAreas'] == null) {
-          data['focusAreas'] = [];
-        }
-        if (data['universityExclusive'] == null) {
-          data['universityExclusive'] = false;
-        }
-        if (data['universityAccess'] == null) {
-          data['universityAccess'] = [];
-        }
-        
-        debugPrint('Parsing article: ${data['title']}');
-        return Article.fromJson(data);
-      }).toList();
+      }
+      debugPrint('Successfully processed ${articles.length} articles');
       
       // Filter based on university access if needed
       if (universityCode != null) {
         final filteredArticles = articles.where((article) {
           if (!article.universityExclusive) return true;
-          return article.universityAccess?.contains(universityCode) ?? false;
+          // Ensure universityAccess list contains strings for comparison
+          final accessList = article.universityAccess?.map((e) => e.toString()).toList() ?? [];
+          return accessList.contains(universityCode);
         }).toList();
         debugPrint('Filtered to ${filteredArticles.length} articles for university $universityCode');
         return filteredArticles;
@@ -586,7 +616,7 @@ class FirebaseContentService {
       
       return articles;
     } catch (e) {
-      debugPrint('Error getting articles: $e');
+      debugPrint('Error in getArticles: $e');
       return [];
     }
   }

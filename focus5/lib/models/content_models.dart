@@ -671,11 +671,9 @@ class Coach {
 class Article {
   final String id;
   final String title;
-  final String authorId;
-  final String authorName;
-  final String authorImageUrl;
+  final DocumentReference author;
   final String content;
-  final String thumbnailUrl;
+  final String thumbnail;
   final DateTime publishedDate;
   final List<String> tags;
   final int readTimeMinutes;
@@ -683,39 +681,89 @@ class Article {
   final bool universityExclusive;
   final List<String>? universityAccess;
 
+  // Add coach details optionally loaded after fetching
+  // These are not part of the core Firestore data model
+  String? authorName; 
+  String? authorImageUrl;
+
   Article({
     required this.id,
     required this.title,
-    required this.authorId,
-    required this.authorName,
-    required this.authorImageUrl,
+    required this.author,
     required this.content,
-    required this.thumbnailUrl, 
+    required this.thumbnail,
     required this.publishedDate,
     required this.tags,
     required this.readTimeMinutes,
     required this.focusAreas,
     required this.universityExclusive,
     this.universityAccess,
+    this.authorName,
+    this.authorImageUrl,
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
+    // Handle author reference parsing
+    DocumentReference authorRef;
+    if (json['author'] is DocumentReference) {
+      authorRef = json['author'] as DocumentReference;
+    } else if (json['author'] is Map && json['author']['path'] is String) {
+       // Handle case where reference is stored as a map {id: '...', path: '...'} - robustness
+      try {
+         authorRef = FirebaseFirestore.instance.doc(json['author']['path']);
+         // If only path is given, might need ID too if path isn't complete e.g., 'coaches'
+         // If path includes ID like 'coaches/coach-001', doc() handles it.
+         // If map has id: FirebaseFirestore.instance.doc('${json['author']['path']}/${json['author']['id']}');
+      } catch (e) {
+         debugPrint("Error parsing author reference map: $e, defaulting to dummy path");
+         authorRef = FirebaseFirestore.instance.doc('coaches/UNKNOWN'); // Default/error case
+      }
+    } else {
+      debugPrint("Article ${json['id']} has invalid or missing 'author' reference field. Type: ${json['author']?.runtimeType}");
+      authorRef = FirebaseFirestore.instance.doc('coaches/UNKNOWN'); // Default/error case
+    }
+
+    // Handle publishedDate parsing (Timestamp or String)
+    DateTime parsedPublishedDate;
+    if (json['publishedDate'] is Timestamp) {
+      parsedPublishedDate = (json['publishedDate'] as Timestamp).toDate();
+    } else if (json['publishedDate'] is String) {
+      parsedPublishedDate = DateTime.tryParse(json['publishedDate'] as String) ?? DateTime.now();
+    } else {
+      parsedPublishedDate = DateTime.now(); // Default
+    }
+    
     return Article(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      authorId: json['authorId'] as String,
-      authorName: json['authorName'] as String,
-      authorImageUrl: json['authorImageUrl'] as String,
-      content: json['content'] as String,
-      thumbnailUrl: json['thumbnailUrl'] as String,
-      publishedDate: DateTime.parse(json['publishedDate'] as String),
-      tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
-      readTimeMinutes: json['readTimeMinutes'] as int,
-      focusAreas: (json['focusAreas'] as List<dynamic>).map((e) => e as String).toList(),
-      universityExclusive: json['universityExclusive'] as bool,
-      universityAccess: json['universityAccess'] != null
-          ? (json['universityAccess'] as List<dynamic>).map((e) => e as String).toList()
-          : null,
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      author: authorRef,
+      content: json['content'] as String? ?? '',
+      thumbnail: json['thumbnail'] as String? ?? '',
+      publishedDate: parsedPublishedDate,
+      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      readTimeMinutes: (json['readTimeMinutes'] as num?)?.toInt() ?? 0,
+      focusAreas: (json['focusAreas'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      universityExclusive: json['universityExclusive'] as bool? ?? false,
+      universityAccess: (json['universityAccess'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
+    );
+  }
+  
+  // Helper method to create a copy with updated author details
+  Article copyWithAuthorDetails({String? name, String? imageUrl}) {
+    return Article(
+      id: this.id,
+      title: this.title,
+      author: this.author,
+      content: this.content,
+      thumbnail: this.thumbnail,
+      publishedDate: this.publishedDate,
+      tags: this.tags,
+      readTimeMinutes: this.readTimeMinutes,
+      focusAreas: this.focusAreas,
+      universityExclusive: this.universityExclusive,
+      universityAccess: this.universityAccess,
+      authorName: name ?? this.authorName,
+      authorImageUrl: imageUrl ?? this.authorImageUrl,
     );
   }
 
@@ -723,12 +771,10 @@ class Article {
     return {
       'id': id,
       'title': title,
-      'authorId': authorId,
-      'authorName': authorName,
-      'authorImageUrl': authorImageUrl,
+      'author': author,
       'content': content,
-      'thumbnailUrl': thumbnailUrl,
-      'publishedDate': publishedDate.toIso8601String(),
+      'thumbnail': thumbnail,
+      'publishedDate': Timestamp.fromDate(publishedDate),
       'tags': tags,
       'readTimeMinutes': readTimeMinutes,
       'focusAreas': focusAreas,

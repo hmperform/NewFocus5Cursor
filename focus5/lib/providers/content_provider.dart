@@ -267,8 +267,10 @@ class ContentProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
       
+      // Fetch articles. We assume _contentService.getArticles now handles
+      // fetching author details and returns enriched Article objects.
       _articles = await _contentService.getArticles(universityCode: _universityCode);
-      debugPrint('Loaded ${_articles.length} articles');
+      debugPrint('Loaded ${_articles.length} articles with author details');
       
       _isLoading = false;
       notifyListeners();
@@ -289,8 +291,9 @@ class ContentProvider with ChangeNotifier {
     }
   }
   
-  List<Article> getArticlesByAuthor(String authorId) {
-    return _articles.where((article) => article.authorId == authorId).toList();
+  // Renamed and updated filtering logic
+  List<Article> getArticlesByCoach(String coachId) {
+    return _articles.where((article) => article.author.id == coachId).toList();
   }
   
   List<Article> getArticlesByTag(String tag) {
@@ -372,30 +375,23 @@ class ContentProvider with ChangeNotifier {
     return courses.where((course) => course.featured).toList();
   }
 
-  // Method to get media (audio/video) by coach
-  List<dynamic>? getMediaByCoach(String coachId, String mediaType) {
+  // Method to get media (audio/video) by coach - REMOVED (Replaced by specific getters)
+  // List<dynamic>? getMediaByCoach(String coachId, String mediaType) { ... }
+  
+  // Method to get Daily Audios by coach - Renamed and updated
+  List<DailyAudio> getDailyAudiosByCoach(String coachId) {
     try {
-      if (mediaType == 'audio') {
-        return _audioModules.where((audio) => audio.creatorId == coachId).toList();
-      } else {
-        // For videos, look in modules within courses
-        List<Lesson> coachLessons = [];
-        for (final course in _courses) {
-          if (course.creatorId == coachId) {
-            coachLessons.addAll(course.modules.where((lesson) => lesson.type == LessonType.video));
-          }
-        }
-        return coachLessons;
-      }
+       // Compare document IDs
+      return _audioModules.where((audio) => audio.creatorId.id == coachId).toList();
     } catch (e) {
-      _errorMessage = 'Failed to get media by coach: ${e.toString()}';
-      debugPrint('Error getting media by coach: $e');
+      _errorMessage = 'Failed to get daily audios by coach: ${e.toString()}';
+      debugPrint('Error getting daily audios by coach: $e');
       return [];
     }
   }
 
   // Method to get courses by coach
-  List<Course>? getCoursesByCoach(String coachId) {
+  List<Course> getCoursesByCoach(String coachId) {
     try {
       return _courses.where((course) => course.creatorId == coachId).toList();
     } catch (e) {

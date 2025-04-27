@@ -5,8 +5,8 @@ import 'package:transparent_image/transparent_image.dart';
 import '../../models/content_models.dart';
 import '../../providers/user_provider.dart';
 import '../../screens/home/article_detail_screen.dart';
-import '../../utils/image_utils.dart';
 import '../../services/paywall_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
@@ -69,13 +69,19 @@ class ArticleCard extends StatelessWidget {
                     topLeft: Radius.circular(12),
                     topRight: Radius.circular(12),
                   ),
-                  child: ImageUtils.networkImageWithFallback(
-                    imageUrl: article.thumbnailUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: article.thumbnail,
                     width: double.infinity,
                     height: 180,
                     fit: BoxFit.cover,
-                    backgroundColor: const Color(0xFF2A2A2A),
-                    errorColor: Colors.white54,
+                    placeholder: (context, url) => Container(
+                      color: const Color(0xFF2A2A2A),
+                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0, color: Colors.white54)),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: const Color(0xFF2A2A2A),
+                      child: const Icon(Icons.broken_image, color: Colors.white54),
+                    ),
                   ),
                 ),
                 if (isCompleted)
@@ -135,15 +141,25 @@ class ArticleCard extends StatelessWidget {
                   // Author and date
                   Row(
                     children: [
-                      ImageUtils.avatarWithFallback(
-                        imageUrl: article.authorImageUrl,
-                        radius: 14,
-                        name: article.authorName,
+                      CachedNetworkImage(
+                        imageUrl: article.authorImageUrl ?? '',
+                        imageBuilder: (context, imageProvider) => CircleAvatar(
+                          backgroundImage: imageProvider,
+                          radius: 14,
+                        ),
+                        placeholder: (context, url) => const CircleAvatar(
+                          radius: 14,
+                          child: Icon(Icons.person, size: 16),
+                        ),
+                        errorWidget: (context, url, error) => const CircleAvatar(
+                          radius: 14,
+                          child: Icon(Icons.person, size: 16),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          article.authorName,
+                          article.authorName ?? 'Unknown Author',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 14,
@@ -240,41 +256,30 @@ class ArticleListCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Article image with completion indicator
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(10),
-                    bottomLeft: Radius.circular(10),
+            // Article image - Simplified for square testing
+            SizedBox( // Constrain the size to be square
+              width: 100, 
+              height: 100,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10),
+                  bottomLeft: Radius.circular(10),
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: article.thumbnail,
+                  width: 100, 
+                  height: 100,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: const Color(0xFF2A2A2A),
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0, color: Colors.white54)),
                   ),
-                  child: ImageUtils.networkImageWithFallback(
-                    imageUrl: article.thumbnailUrl,
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    backgroundColor: const Color(0xFF2A2A2A),
-                    errorColor: Colors.white54,
+                  errorWidget: (context, url, error) => Container(
+                    color: const Color(0xFF2A2A2A),
+                    child: const Icon(Icons.broken_image, color: Colors.white54),
                   ),
                 ),
-                if (isCompleted)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
             
             // Article info
@@ -317,15 +322,25 @@ class ArticleListCard extends StatelessWidget {
                     // Author
                     Row(
                       children: [
-                        ImageUtils.avatarWithFallback(
-                          imageUrl: article.authorImageUrl,
-                          radius: 12,
-                          name: article.authorName,
+                        CachedNetworkImage(
+                          imageUrl: article.authorImageUrl ?? '',
+                          imageBuilder: (context, imageProvider) => CircleAvatar(
+                            backgroundImage: imageProvider,
+                            radius: 12,
+                          ),
+                          placeholder: (context, url) => const CircleAvatar(
+                            radius: 12, 
+                            child: Icon(Icons.person, size: 14),
+                          ),
+                          errorWidget: (context, url, error) => const CircleAvatar(
+                            radius: 12, 
+                            child: Icon(Icons.person, size: 14),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            article.authorName,
+                            article.authorName ?? 'Unknown Author',
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 14,
@@ -434,13 +449,19 @@ class HorizontalArticleCard extends StatelessWidget {
                     topLeft: Radius.circular(12),
                     topRight: Radius.circular(12),
                   ),
-                  child: ImageUtils.networkImageWithFallback(
-                    imageUrl: article.thumbnailUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: article.thumbnail,
                     width: double.infinity,
                     height: 160,
                     fit: BoxFit.cover,
-                    backgroundColor: const Color(0xFF2A2A2A),
-                    errorColor: Colors.white54,
+                    placeholder: (context, url) => Container(
+                      color: const Color(0xFF2A2A2A),
+                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0, color: Colors.white54)),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: const Color(0xFF2A2A2A),
+                      child: const Icon(Icons.broken_image, color: Colors.white54),
+                    ),
                   ),
                 ),
                 if (isCompleted)
@@ -486,15 +507,25 @@ class HorizontalArticleCard extends StatelessWidget {
                   // Author with image
                   Row(
                     children: [
-                      ImageUtils.avatarWithFallback(
-                        imageUrl: article.authorImageUrl,
-                        radius: 12,
-                        name: article.authorName,
+                      CachedNetworkImage(
+                        imageUrl: article.authorImageUrl ?? '',
+                        imageBuilder: (context, imageProvider) => CircleAvatar(
+                          backgroundImage: imageProvider,
+                          radius: 12,
+                        ),
+                        placeholder: (context, url) => const CircleAvatar(
+                          radius: 12,
+                          child: Icon(Icons.person, size: 14),
+                        ),
+                        errorWidget: (context, url, error) => const CircleAvatar(
+                          radius: 12,
+                          child: Icon(Icons.person, size: 14),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          article.authorName,
+                          article.authorName ?? 'Unknown Author',
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 13,

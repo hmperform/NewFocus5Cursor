@@ -76,9 +76,9 @@ class ArticleDetailScreen extends StatelessWidget {
                   SizedBox(
                     height: MediaQuery.of(context).size.width * 0.7,
                     width: double.infinity,
-                    child: article.thumbnailUrl.isNotEmpty
+                    child: article.thumbnail.isNotEmpty
                         ? ImageUtils.networkImageWithFallback(
-                            imageUrl: article.thumbnailUrl,
+                            imageUrl: article.thumbnail,
                             width: double.infinity,
                             height: MediaQuery.of(context).size.width * 0.7,
                             fit: BoxFit.cover,
@@ -165,7 +165,7 @@ class ArticleDetailScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (context) => CoachProfileScreen(
-                                coachId: article.authorId,
+                                coachId: article.author.id,
                               ),
                             ),
                           );
@@ -175,14 +175,14 @@ class ArticleDetailScreen extends StatelessWidget {
                             ImageUtils.avatarWithFallback(
                               imageUrl: article.authorImageUrl,
                               radius: 20,
-                              name: article.authorName,
+                              name: article.authorName ?? '',
                             ),
                             const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  article.authorName,
+                                  article.authorName ?? 'Unknown Author',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -329,7 +329,7 @@ class ArticleDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'More from ${article.authorName}',
+                        'More from ${article.authorName ?? "this Author"}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -357,8 +357,9 @@ class ArticleDetailScreen extends StatelessWidget {
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     
-    final relatedArticles = contentProvider.getArticlesByAuthor(currentArticle.authorId)
+    final relatedArticles = contentProvider.getArticlesByCoach(currentArticle.author.id)
         .where((article) => article.id != currentArticle.id)
+        .take(3)
         .toList();
     
     if (relatedArticles.isEmpty) {
@@ -402,7 +403,7 @@ class ArticleDetailScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   child: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
-                    image: article.thumbnailUrl,
+                    image: article.thumbnail,
                     width: 80,
                     height: 80,
                     fit: BoxFit.cover,

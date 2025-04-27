@@ -1032,10 +1032,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           // Navigate with required data for ArticleDetailScreen
           navigator.pushNamed('/article-details', arguments: { // Pass arguments as map
             'title': article.title,
-            'imageUrl': article.thumbnailUrl,
+            'imageUrl': article.thumbnail,
             'content': article.content,
-            // Pass article object if screen expects it?
-            // 'article': article 
+            'metadata': {
+              'authorName': article.authorName,
+            },
           });
           break;
           

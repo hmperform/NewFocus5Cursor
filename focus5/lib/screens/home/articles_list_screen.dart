@@ -45,12 +45,13 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
       return articles;
     }
     
+    final lowerQuery = _searchQuery.toLowerCase();
+    
     return articles.where((article) {
       // Search filtering
-      final matchesSearch = _searchQuery.isEmpty || 
-          article.title.toLowerCase().contains(_searchQuery) ||
-          article.authorName.toLowerCase().contains(_searchQuery) ||
-          article.tags.any((tag) => tag.toLowerCase().contains(_searchQuery));
+      final matchesSearch = article.title.toLowerCase().contains(lowerQuery) ||
+          article.tags.any((tag) => tag.toLowerCase().contains(lowerQuery)) ||
+          (article.authorName?.toLowerCase().contains(lowerQuery) ?? false);
       
       // Focus area filtering
       final matchesFocusArea = widget.focusArea == null || 
