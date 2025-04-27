@@ -44,43 +44,41 @@ class ContentProvider with ChangeNotifier {
   Future<void> initContent(String? universityCode) async {
     if (_isLoading) return; // Prevent multiple initializations
     
+    // Set loading state immediately
+    _isLoading = true;
     _errorMessage = null;
     _universityCode = universityCode;
-    
-    // Use post-frame callback to avoid setState during build
-    SchedulerBinding.instance.addPostFrameCallback((_) async {
-      _isLoading = true;
-      notifyListeners();
-  
-      try {
-        // Load courses from Firebase
-        await loadCourses();
-        
-        // Load audio modules from Firebase
-        await loadAudioModules();
-        
-        // Load daily lesson assignment
-        await loadDailyLesson();
-        
-        // Load articles from Firebase
-        await loadArticles();
-        
-        _isLoading = false;
-        _errorMessage = null;
-      } catch (e) {
-        _isLoading = false;
-        _errorMessage = 'Failed to load content: ${e.toString()}';
-        debugPrint('Error in initContent: ${e.toString()}');
+    notifyListeners();
+
+    try {
+      // Directly await loading functions
+      // Use Future.wait for potential parallelization if desired, or sequence them
+      // Sequencing them might be safer if there are dependencies or to manage load
+      await loadCourses(); 
+      await loadAudioModules();
+      await loadDailyLesson();
+      await loadArticles();
+
+      // All loading successful
+      _isLoading = false;
+      _errorMessage = null;
+
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = 'Failed to load initial content: ${e.toString()}';
+      debugPrint('Error in initContent: ${e.toString()}');
+    } finally {
+      // Ensure loading is false and notify listeners regardless of success/failure
+      if (_isLoading) { // Check in case error handling didn't set it
+         _isLoading = false;
       }
-      
       notifyListeners();
-    });
+    }
   }
 
   Future<void> loadCourses() async {
     try {
-      _isLoading = true;
-      notifyListeners();
+      // Loading state is managed by initContent now
       
       final courses = await _contentService.getCourses();
       if (courses != null) {
@@ -88,17 +86,17 @@ class ContentProvider with ChangeNotifier {
       } else {
         _courses = [];
       }
+      debugPrint("ContentProvider: Loaded ${_courses.length} courses.");
     } catch (e) {
       debugPrint('Error loading courses: $e');
       _courses = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      throw Exception('Failed to load courses: $e'); // Re-throw to be caught by initContent
     }
   }
   
   Future<void> loadAudioModules() async {
     try {
+      // Loading state managed by initContent
       _audioModules = await _contentService.fetchDailyAudios();
       
       // Sort by document ID
@@ -121,26 +119,31 @@ class ContentProvider with ChangeNotifier {
         print('\n🎵 ContentProvider: No audio modules available');
       }
       
-      notifyListeners();
+      // Don't notify here, initContent will notify at the end
+      debugPrint("ContentProvider: Loaded ${_audioModules.length} audio modules.");
     } catch (e) {
-      _errorMessage = 'Failed to load audio modules: ${e.toString()}';
-      print('\n🎵 ContentProvider Error: $e');
-      notifyListeners();
+      // Don't set _errorMessage or notify here
+      throw Exception('Failed to load audio modules: $e'); // Re-throw
     }
   }
   
   Future<void> loadDailyLesson() async {
     try {
+      // Loading state managed by initContent
       _dailyLessonAssignment = await _contentService.getTodayLessonAssignment();
       
       if (_dailyLessonAssignment != null && _dailyLessonAssignment!['lesson'] != null) {
         _dailyLesson = Lesson.fromJson(_dailyLessonAssignment!['lesson'] as Map<String, dynamic>);
       }
       
-      notifyListeners();
+      // Don't notify here
+      debugPrint("ContentProvider: Daily lesson loaded: ${_dailyLesson != null}");
     } catch (e) {
-      _errorMessage = 'Failed to load daily lesson: ${e.toString()}';
-      notifyListeners();
+      print('\n🎵 ContentProvider Error loading daily lesson: $e');
+      // Don't set _errorMessage or notify here
+      // This might be less critical, so maybe don't re-throw?
+      // For consistency, let's re-throw for now.
+      throw Exception('Failed to load daily lesson: $e');
     }
   }
   
@@ -148,6 +151,7 @@ class ContentProvider with ChangeNotifier {
     if (_dailyLessonAssignment == null) return false;
     
     try {
+      // This method modifies state independently, so it needs its own notifyListeners
       final assignmentId = _dailyLessonAssignment!['assignment']['id'];
       final result = await _contentService.markLessonCompleted(assignmentId);
       
@@ -155,22 +159,27 @@ class ContentProvider with ChangeNotifier {
         // Update the local assignment state
         _dailyLessonAssignment!['assignment']['completed'] = true;
         _dailyLessonAssignment!['assignment']['completedDate'] = DateTime.now().toIso8601String();
-        notifyListeners();
+        notifyListeners(); // Notify specifically for this change
       }
       
       return result;
     } catch (e) {
-      _errorMessage = 'Failed to mark lesson as completed: ${e.toString()}';
-      notifyListeners();
+      _errorMessage = 'Failed to mark lesson as completed: ${e.toString()}'; // Okay to set error message here
+      notifyListeners(); // Notify about the error
       return false;
     }
   }
   
   Future<void> refreshTodayAudio() async {
     try {
+      _isLoading = true; // Manage loading for refresh specifically
+      notifyListeners();
       await loadAudioModules();
+      _isLoading = false;
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to load today\'s audio: ${e.toString()}';
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -182,11 +191,7 @@ class ContentProvider with ChangeNotifier {
   }
   
   List<Course> getCoursesForFocusArea(String focusArea) {
-    if (_courses.isEmpty) {
-      // Trigger async load if courses aren't loaded yet
-      loadCourses();
-      return [];
-    }
+    // Don't trigger load here, assume initContent handled it or is running
     return _courses.where((course) => course.focusAreas.contains(focusArea)).toList();
   }
   
@@ -263,23 +268,17 @@ class ContentProvider with ChangeNotifier {
   
   Future<void> loadArticles() async {
     try {
-      debugPrint('Loading articles from Firebase...');
-      _isLoading = true;
-      notifyListeners();
+      // Loading state managed by initContent
+      _articles = await _contentService.getArticles();
       
-      // Fetch articles. We assume _contentService.getArticles now handles
-      // fetching author details and returns enriched Article objects.
-      _articles = await _contentService.getArticles(universityCode: _universityCode);
-      debugPrint('Loaded ${_articles.length} articles with author details');
+      // Optionally load author details here or leave it to the detail screen
+      // For simplicity, let's assume detail screen handles it for now.
+      debugPrint("ContentProvider: Loaded ${_articles.length} articles.");
       
-      _isLoading = false;
-      notifyListeners();
     } catch (e) {
       debugPrint('Error loading articles: $e');
-      _errorMessage = 'Failed to load articles: ${e.toString()}';
       _articles = [];
-      _isLoading = false;
-      notifyListeners();
+      throw Exception('Failed to load articles: $e'); // Re-throw
     }
   }
   

@@ -4,6 +4,9 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:transparent_image/transparent_image.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'dart:math'; // Import for random selection
+import 'package:shared_preferences/shared_preferences.dart'; // Import for persistence
+import 'package:intl/intl.dart'; // Import for date formatting
 
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
@@ -21,6 +24,7 @@ import 'media_player_screen.dart';
 import '../../utils/basic_video_helper.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/app_icons.dart'; // Import the app icons utility
+import 'article_detail_screen.dart'; // Import Article Detail Screen
 // import '../../constants/dummy_data.dart'; // Commented out unused import
 // import '../../widgets/loaders/loading_indicator.dart'; // Commented out unused import
 // import '../../widgets/quick_action_card.dart'; // Commented out unused import
@@ -36,18 +40,19 @@ class DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<DashboardTab> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
-  List<Course> _featuredCourses = [];
-  List<dynamic> _recentMedia = []; // Combine recent videos and audios
-  // final List<String> quickActions = DummyData.quickActions;
-  // final List<Map<String, dynamic>> forYouItems = DummyData.forYouItems;
+  Course? _dailyCourse; // State for daily course
+  Article? _dailyArticle; // State for daily article
+  bool _dailySelectionMadeForToday = false; // Flag to track selection
 
-  bool _isLoadingFeatured = true;
-  bool _isLoadingRecent = true;
+  // Keys for SharedPreferences
+  static const String _prefsKeyDailyCourseId = 'daily_course_id';
+  static const String _prefsKeyDailyArticleId = 'daily_article_id';
+  static const String _prefsKeyLastSelectionDate = 'last_selection_date';
 
   @override
   void initState() {
     super.initState();
-    
+    _dailySelectionMadeForToday = false; // Reset flag on init
     // Wait until build completes before loading content
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _safeLoadContent();
@@ -94,6 +99,10 @@ class _DashboardTabState extends State<DashboardTab> {
     
     setState(() {
       _isLoading = true;
+      // Reset daily items temporarily during refresh
+      _dailyCourse = null;
+      _dailyArticle = null;
+      _dailySelectionMadeForToday = false; // Reset flag on refresh
     });
     
     // Create a completer to track when loading is complete
@@ -106,7 +115,7 @@ class _DashboardTabState extends State<DashboardTab> {
         completer.complete();
       } catch (e) {
         print('Error loading dashboard: $e');
-        completer.complete(); // Complete the future even on error
+        completer.completeError(e); // Propagate error
       } finally {
         if (mounted) {
           setState(() {
@@ -117,14 +126,13 @@ class _DashboardTabState extends State<DashboardTab> {
     });
     
     // Safety timeout
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && _isLoading) {
-        setState(() {
+    Future.delayed(const Duration(seconds: 10), () {
+      if (mounted && _isLoading && !completer.isCompleted) {
+         print("Dashboard loading timed out.");
+         setState(() {
           _isLoading = false;
-        });
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
+         });
+        completer.complete(); // Complete to avoid hanging
       }
     });
     
@@ -144,30 +152,231 @@ class _DashboardTabState extends State<DashboardTab> {
         return;
       }
       
-      // Load core content if needed
-      if (contentProvider.courses.isEmpty) {
+      // 1. Ensure core content (courses, articles) is loaded
+      if (contentProvider.courses.isEmpty || contentProvider.articles.isEmpty) {
+         debugPrint("DashboardTab: Core content empty, initializing...");
         try {
-          await Future.microtask(() => null); // Delay to prevent build conflicts
-          if (mounted) {
-            await contentProvider.initContent(userId);
-          }
+          await contentProvider.initContent(userId);
+           debugPrint("DashboardTab: Core content initialized. Courses: ${contentProvider.courses.length}, Articles: ${contentProvider.articles.length}");
         } catch (e) {
           print('Content initialization error: $e');
+           // If init fails, we might not have content for daily selection
+           // Handle this gracefully later (e.g., show message)
         }
+      } else {
+         debugPrint("DashboardTab: Core content already loaded. Courses: ${contentProvider.courses.length}, Articles: ${contentProvider.articles.length}");
       }
       
-      // Audio module loading is now handled by AudioModuleProvider constructor/update
-      /*
-      try {
-        print('DashboardTab: Loading current audio module...');
-        await audioModuleProvider.loadCurrentAudioModule(userId);
-        print('DashboardTab: Finished loading audio module.');
-      } catch (e) {
-        print('Audio refresh error: $e');
-      }
-      */
+      if (!mounted) return; // Check mount status after async gap
+
+      // 2. Handle Daily Selection Logic
+      await _updateDailySelection(contentProvider);
+
     } catch (e) {
       print('Dashboard loading error: $e');
+       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading dashboard content: ${e.toString()}'))
+        );
+      }
+    }
+  }
+
+  Future<void> _updateDailySelection(ContentProvider contentProvider) async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayString = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final lastSelectionDate = prefs.getString(_prefsKeyLastSelectionDate);
+
+    String? savedCourseId;
+    String? savedArticleId;
+
+    bool selectNew = false; // Default to false, only set true if needed
+    bool isToday = lastSelectionDate == todayString;
+
+    if (isToday) {
+      savedCourseId = prefs.getString(_prefsKeyDailyCourseId);
+      savedArticleId = prefs.getString(_prefsKeyDailyArticleId);
+      if (savedCourseId != null && savedArticleId != null) {
+        selectNew = false;
+        debugPrint("DashboardTab: Using saved daily selection for $todayString");
+      } else {
+         debugPrint("DashboardTab: Date matches but IDs potentially missing, checking available content before deciding selection path.");
+         // Check if saved IDs exist
+         if (savedCourseId == null || savedArticleId == null) {
+            // If IDs are missing, we might need to select new *if* content is available
+             bool courseContentAvailable = contentProvider.courses.isNotEmpty;
+             bool articleContentAvailable = contentProvider.articles.isNotEmpty;
+
+             if ((savedCourseId == null && courseContentAvailable) || (savedArticleId == null && articleContentAvailable)) {
+                 selectNew = true;
+                 debugPrint("DashboardTab: Missing saved IDs and content available. Marking for new selection.");
+             } else {
+                 // Missing IDs but no content yet, wait for potential future load.
+                 selectNew = false;
+                 debugPrint("DashboardTab: Missing saved IDs but no corresponding content available yet.");
+             }
+         } else {
+            // Saved IDs exist, use the saved path
+            selectNew = false;
+         }
+      }
+    } else {
+       debugPrint("DashboardTab: Last selection date ($lastSelectionDate) doesn't match today ($todayString), selecting new.");
+       selectNew = true;
+    }
+
+    Course? newDailyCourse = _dailyCourse; // Start with current state
+    Article? newDailyArticle = _dailyArticle;
+    bool dataChanged = false;
+
+    final allCourses = contentProvider.courses;
+    final allArticles = contentProvider.articles;
+
+    if (selectNew) {
+      debugPrint("DashboardTab: Entering selectNew block.");
+      bool courseSelected = false;
+      bool articleSelected = false;
+
+      // Select new random items
+      if (allCourses.isNotEmpty) {
+        final random = Random();
+        newDailyCourse = allCourses[random.nextInt(allCourses.length)];
+        await prefs.setString(_prefsKeyDailyCourseId, newDailyCourse.id);
+         debugPrint("DashboardTab: Selected new daily course: ${newDailyCourse.id}");
+        courseSelected = true;
+        dataChanged = true;
+      } else {
+         debugPrint("DashboardTab: No courses available to select randomly.");
+         // Ensure course ID is cleared if none available
+         if (prefs.containsKey(_prefsKeyDailyCourseId)) {
+            await prefs.remove(_prefsKeyDailyCourseId);
+         }
+         if (_dailyCourse != null) dataChanged = true; // Data changed if we cleared a previously held course
+         newDailyCourse = null; // Explicitly set to null
+      }
+
+      if (allArticles.isNotEmpty) {
+        final random = Random();
+        newDailyArticle = allArticles[random.nextInt(allArticles.length)];
+        await prefs.setString(_prefsKeyDailyArticleId, newDailyArticle.id);
+         debugPrint("DashboardTab: Selected new daily article: ${newDailyArticle.id}");
+        articleSelected = true;
+        dataChanged = true;
+      } else {
+         debugPrint("DashboardTab: No articles available to select randomly.");
+          // Ensure article ID is cleared if none available
+         if (prefs.containsKey(_prefsKeyDailyArticleId)) {
+            await prefs.remove(_prefsKeyDailyArticleId);
+         }
+         if (_dailyArticle != null) dataChanged = true; // Data changed if we cleared a previously held article
+         newDailyArticle = null; // Explicitly set to null
+      }
+
+      // Update the selection date only if we successfully selected at least one item
+      if (courseSelected || articleSelected) {
+        await prefs.setString(_prefsKeyLastSelectionDate, todayString);
+        debugPrint("DashboardTab: Updated selection date to $todayString after selecting new items.");
+      } else {
+        debugPrint("DashboardTab: Selection failed (no content?), cleared date to allow retry.");
+      }
+
+    } else {
+      // Find items based on saved IDs for today
+      debugPrint("DashboardTab: Entering load from saved ID block for date $lastSelectionDate (Today: $todayString).");
+      bool foundSavedCourse = false;
+      bool foundSavedArticle = false;
+
+      // Only try to load if the state doesn't already have it
+      if (_dailyCourse == null && savedCourseId != null) {
+          try {
+             newDailyCourse = allCourses.firstWhere((c) => c.id == savedCourseId);
+             dataChanged = true;
+          } catch (e) {
+             debugPrint("DashboardTab: Saved course ID $savedCourseId not found, clearing.");
+             prefs.remove(_prefsKeyDailyCourseId); // Clear invalid ID
+             prefs.remove(_prefsKeyLastSelectionDate); // Force re-selection next time
+             newDailyCourse = null; // Ensure it's null if not found
+          } finally {
+             if (newDailyCourse != null) foundSavedCourse = true;
+          }
+      } else if (_dailyCourse != null) {
+          foundSavedCourse = true; // Already have it in state
+      }
+ 
+      // Only try to load if the state doesn't already have it
+      if (_dailyArticle == null && savedArticleId != null) {
+          try {
+             newDailyArticle = allArticles.firstWhere((a) => a.id == savedArticleId);
+             dataChanged = true;
+          } catch (e) {
+             debugPrint("DashboardTab: Saved article ID $savedArticleId not found, clearing.");
+             prefs.remove(_prefsKeyDailyArticleId); // Clear invalid ID
+             prefs.remove(_prefsKeyLastSelectionDate); // Force re-selection next time
+             newDailyArticle = null; // Ensure it's null if not found
+          } finally {
+             if (newDailyArticle != null) foundSavedArticle = true;
+          }
+      } else if (_dailyArticle != null) {
+          foundSavedArticle = true; // Already have it in state
+      }
+ 
+      // Check if we successfully loaded items based on saved IDs *for today*
+      if (isToday) {
+          if (foundSavedCourse || foundSavedArticle) {
+            debugPrint("DashboardTab: Loaded/validated items based on saved IDs for today. CourseFound: $foundSavedCourse, ArticleFound: $foundSavedArticle");
+          } else if (savedCourseId != null || savedArticleId != null) {
+            // We had saved IDs for today, but couldn't find the items
+            debugPrint("DashboardTab: Had saved IDs for today, but failed to find items. Content available? C:${contentProvider.courses.isNotEmpty}, A:${contentProvider.articles.isNotEmpty}");
+            // Force re-selection logic if content exists now and we didn't find saved items
+            if (contentProvider.courses.isNotEmpty || contentProvider.articles.isNotEmpty) {
+                debugPrint("DashboardTab: Content is now available, forcing re-selection attempt.");
+                await prefs.remove(_prefsKeyLastSelectionDate); // Clear date to trigger selectNew path
+                await _updateDailySelection(contentProvider); // Re-run selection
+                return; // Exit this run
+            } else {
+               debugPrint("DashboardTab: No content available to re-select.");
+            }
+          }
+      } else {
+        // This path means selectNew was false, but the date didn't match today - indicates a logic issue or stale state.
+        // Force a re-selection for today.
+         debugPrint("DashboardTab: Date matched but failed to find saved items. Will attempt reselection if content is available.");
+        await prefs.remove(_prefsKeyLastSelectionDate);
+        await _updateDailySelection(contentProvider); // Re-run selection
+        return; // Exit this run
+      }
+    }
+
+    // Update state if mounted
+    if (mounted && dataChanged) { // Only call setState if data actually changed
+      setState(() {
+        _dailyCourse = newDailyCourse;
+        _dailyArticle = newDailyArticle;
+      });
+    }
+
+    // Update completion flag separately, based on the *current* state and available content
+    if (mounted) {
+        // Determine if selection is complete for today based on available content
+        bool courseRequirementMet = !contentProvider.courses.isNotEmpty || (contentProvider.courses.isNotEmpty && newDailyCourse != null);
+        bool articleRequirementMet = !contentProvider.articles.isNotEmpty || (contentProvider.articles.isNotEmpty && newDailyArticle != null);
+
+        // Check if the selection attempt actually ran for today's date or a new selection was made
+        // (Using selectNew and isToday flags calculated at the start of the function)
+        bool attemptedToday = (selectNew || isToday);
+
+        // Calculate the final completion state based on whether requirements are met for an attempt made today
+        bool finalCompletionState = attemptedToday && courseRequirementMet && articleRequirementMet;
+
+        // Only update the flag via setState if its state needs to change
+        if (finalCompletionState != _dailySelectionMadeForToday) {
+           debugPrint("DashboardTab: Updating _dailySelectionMadeForToday = $finalCompletionState (Was: $_dailySelectionMadeForToday). Attempted: $attemptedToday, CourseMet: $courseRequirementMet, ArticleMet: $articleRequirementMet");
+            setState(() {
+              _dailySelectionMadeForToday = finalCompletionState;
+            });
+          } else {
+              debugPrint("DashboardTab: Flag _dailySelectionMadeForToday ($finalCompletionState) already correct. No update needed.");
+          }
     }
   }
 
@@ -189,6 +398,43 @@ class _DashboardTabState extends State<DashboardTab> {
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
     final surfaceColor = Theme.of(context).colorScheme.surface;
 
+    // Only trigger if loading is done and selection isn't complete
+    if (!_isLoading && !_dailySelectionMadeForToday) {
+      bool needsCourse = contentProvider.courses.isNotEmpty && _dailyCourse == null;
+      bool needsArticle = contentProvider.articles.isNotEmpty && _dailyArticle == null;
+
+      // Trigger update if the flag is false and we need either item
+      if (needsCourse || needsArticle) {
+        debugPrint("DashboardTab [Build Trigger 1]: Triggering update check. NeedsCourse: $needsCourse, NeedsArticle: $needsArticle, Flag: $_dailySelectionMadeForToday");
+        // Use post-frame callback to avoid calling setState during build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Re-check conditions inside callback for safety
+          if (mounted && !_dailySelectionMadeForToday) {
+            bool stillNeedsCourseCB = contentProvider.courses.isNotEmpty && _dailyCourse == null;
+            bool stillNeedsArticleCB = contentProvider.articles.isNotEmpty && _dailyArticle == null;
+            if (stillNeedsCourseCB || stillNeedsArticleCB) {
+              debugPrint("DashboardTab [Callback 1]: Re-running selection logic. StillNeedsC: $stillNeedsCourseCB, StillNeedsA: $stillNeedsArticleCB");
+              _updateDailySelection(contentProvider); 
+            }
+          }
+        });
+      }
+    }
+
+    // --- Add SECOND check specifically for articles loaded later ---
+    if (!_isLoading && contentProvider.articles.isNotEmpty && _dailyArticle == null) {
+      // This checks if articles are loaded but not yet in the state, 
+      // potentially because the first selection attempt happened too early.
+      debugPrint("DashboardTab [Build Trigger 2]: Articles available but not in state. Triggering potential update.");
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _dailyArticle == null && contentProvider.articles.isNotEmpty) { // Re-check in callback
+           debugPrint("DashboardTab [Callback 2]: Re-running selection logic specifically for missing article.");
+           _updateDailySelection(contentProvider);
+        }
+      });
+    }
+    // --- End second check ---
+
     // Simplified build with overlay for loading
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -203,15 +449,15 @@ class _DashboardTabState extends State<DashboardTab> {
             // Main content
             ListView(
               controller: _scrollController,
-              padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
+              padding: const EdgeInsets.only(top: 64, bottom: 16), // Add padding for StatusBar and bottom
               children: [
                 const SizedBox(height: 8),
                 _buildTopSection(context, MediaQuery.of(context).size.width),
                 _buildDayStreak(),
                 _buildStartYourDay(context),
-                _buildRecentCourses(),
-                _buildFeaturedCourses(context),
-                const SizedBox(height: 24),
+                if (_dailyCourse != null) _buildDailyCourse(context, _dailyCourse!),
+                if (_dailyArticle != null) _buildDailyArticle(context, _dailyArticle!),
+                const SizedBox(height: 24), // Keep some bottom padding
               ],
             ),
             
@@ -282,310 +528,6 @@ class _DashboardTabState extends State<DashboardTab> {
     
     // Use the streak value from user data and the updated DailyStreakWidget
     return DailyStreakWidget(showStreak: true);
-  }
-
-  Widget _buildRecentCourses() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final surfaceColor = Theme.of(context).colorScheme.surface;
-    final contentProvider = Provider.of<ContentProvider>(context);
-    
-    // Determine how many courses are featured (max 2)
-    final int featuredCount = contentProvider.courses.length >= 2 ? 2 : contentProvider.courses.length;
-    
-    // Get courses for the "Recent" list, skipping those shown in "Featured"
-    final recentCourses = contentProvider.courses.skip(featuredCount).take(4).toList();
-
-    if (contentProvider.isLoading && recentCourses.isEmpty && featuredCount == 0) { // Only show loading if nothing else is loaded
-      return Container(
-        height: 230, // Adjusted height? Check UI
-        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
-      );
-    } else if (recentCourses.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'Recent Courses',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: recentCourses.length,
-            itemBuilder: (context, index) {
-              final course = recentCourses[index];
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CourseDetailScreen(
-                          courseId: course.id,
-                          course: course,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: 160,
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            topRight: Radius.circular(12),
-                          ),
-                          child: FadeInImage.memoryNetwork(
-                            placeholder: kTransparentImage,
-                            image: course.thumbnailUrl,
-                            height: 100,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            imageErrorBuilder: (ctx, err, st) => Container(
-                              height: 100,
-                              color: Colors.grey.shade300,
-                              child: const Icon(Icons.image_not_supported, color: Colors.grey),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            course.title,
-                            style: TextStyle(
-                              color: textColor,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturedCourses(BuildContext context) {
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final accentColor = themeProvider.accentColor;
-    
-    // If courses are empty, show loading indicator
-    if (contentProvider.courses.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        height: 240,
-        child: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-          ),
-        ),
-      );
-    }
-    
-    // Get the first two courses
-    final courses = contentProvider.courses.take(2).toList();
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 240,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                if (courses.isNotEmpty) CourseCard(
-                  courseId: courses[0].id,
-                  title: courses[0].title,
-                  description: courses[0].description,
-                  imageUrl: courses[0].thumbnailUrl,
-                  durationMinutes: courses[0].durationMinutes,
-                  lessonsCount: courses[0].lessonsList.length,
-                  creatorName: courses[0].creatorName,
-                  creatorImageUrl: courses[0].creatorImageUrl,
-                  premium: courses[0].premium,
-                  focusPointsCost: courses[0].focusPointsCost,
-                ),
-                const SizedBox(width: 16),
-                if (courses.length > 1) CourseCard(
-                  courseId: courses[1].id,
-                  title: courses[1].title,
-                  description: courses[1].description,
-                  imageUrl: courses[1].thumbnailUrl,
-                  durationMinutes: courses[1].durationMinutes,
-                  lessonsCount: courses[1].lessonsList.length,
-                  creatorName: courses[1].creatorName,
-                  creatorImageUrl: courses[1].creatorImageUrl,
-                  premium: courses[1].premium,
-                  focusPointsCost: courses[1].focusPointsCost,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCourseCard(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required String imageUrl,
-  }) {
-    final cardWidth = MediaQuery.of(context).size.width * 0.65;
-    
-    return GestureDetector(
-      onTap: () {
-        // Navigate to course detail screen
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CourseDetailScreen(
-              courseId: 'course1', // Replace with actual course ID when available
-              course: null,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: cardWidth,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Stack(
-          children: [
-            // Image with placeholder
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: FadeInImage.memoryNetwork(
-                placeholder: kTransparentImage,
-                image: imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                imageErrorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFF333333),
-                    width: double.infinity,
-                    height: double.infinity,
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      color: Colors.grey,
-                      size: 48,
-                    ),
-                  );
-                },
-              ),
-            ),
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.8),
-                  ],
-                ),
-              ),
-            ),
-            // Content
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFB4FF00),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Read More',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // White circle
-            Positioned(
-              top: 16,
-              right: 16,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildStartYourDay(BuildContext context) {
@@ -757,6 +699,205 @@ class _DashboardTabState extends State<DashboardTab> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDailyCourse(BuildContext context, Course course) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+            Text(
+              "Course of the Day",
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 2,
+              margin: EdgeInsets.zero, // Use padding outside the card
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              clipBehavior: Clip.antiAlias, // Clip the image
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CourseDetailScreen(courseId: course.id),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    // Image
+                    SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: ImageUtils.networkImageWithFallback(
+                        imageUrl: course.thumbnailUrl,
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                        backgroundColor: Colors.grey[300],
+                        errorColor: Colors.grey[600],
+                      ),
+                    ),
+                    // Text Content
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              course.title,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              course.description,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.timer_outlined, size: 16, color: accentColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${course.durationMinutes} min',
+                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: accentColor, fontWeight: FontWeight.w600),
+                                ),
+                                const Spacer(),
+                                AppIcons.getFocusPointIcon(
+                                  width: 16,
+                                  height: 16,
+                                  color: accentColor
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${course.xpReward} XP',
+                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: accentColor, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+         ],
+      ),
+    );
+  }
+
+  Widget _buildDailyArticle(BuildContext context, Article article) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final accentColor = themeProvider.accentColor;
+
+     return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+            Text(
+              "Article of the Day",
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              elevation: 2,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+               clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () {
+                  // Ensure article author details are potentially loaded before navigating
+                   // (Article model has copyWithAuthorDetails, but fetching logic might be in ContentProvider or ArticleDetailScreen itself)
+                   // For now, just navigate. ArticleDetailScreen should handle fetching author if needed.
+                   Navigator.push(
+                     context,
+                     MaterialPageRoute(
+                       builder: (context) => ArticleDetailScreen(articleId: article.id),
+                     ),
+                   );
+                },
+                 child: Row(
+                   children: [
+                     // Image
+                     SizedBox(
+                       width: 100,
+                       height: 100,
+                       child: ImageUtils.networkImageWithFallback(
+                         imageUrl: article.thumbnail,
+                         width: 100,
+                         height: 100,
+                         fit: BoxFit.cover,
+                         backgroundColor: Colors.grey[300],
+                         errorColor: Colors.grey[600],
+                       ),
+                     ),
+                     // Text Content
+                     Expanded(
+                       child: Padding(
+                         padding: const EdgeInsets.all(12.0),
+                         child: Column(
+                           crossAxisAlignment: CrossAxisAlignment.start,
+                           mainAxisAlignment: MainAxisAlignment.center,
+                           children: [
+                             Text(
+                               article.title,
+                               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                               maxLines: 2,
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                             const SizedBox(height: 4),
+                             // Consider showing author name if available and loaded
+                             // Text(
+                             //   article.authorName ?? 'Author loading...', // Placeholder if name isn't loaded yet
+                             //   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+                             //   maxLines: 1,
+                             //   overflow: TextOverflow.ellipsis,
+                             // ),
+                             // const SizedBox(height: 4),
+                             Text(
+                               // Displaying tags or focus areas might be better than content snippet here
+                               article.tags.isNotEmpty ? article.tags.take(3).join(', ') : (article.focusAreas.isNotEmpty ? article.focusAreas.take(3).join(', ') : 'Insightful read'),
+                               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                               maxLines: 2,
+                               overflow: TextOverflow.ellipsis,
+                             ),
+                             const SizedBox(height: 8),
+                             Row(
+                               children: [
+                                 Icon(Icons.timer_outlined, size: 16, color: accentColor),
+                                 const SizedBox(width: 4),
+                                 Text(
+                                   '${article.readTimeMinutes} min read',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: accentColor, fontWeight: FontWeight.w600),
+                                 ),
+                               ],
+                             ),
+                           ],
+                         ),
+                       ),
+                     ),
+                   ],
+                 ),
+              ),
+            ),
+         ],
+      ),
     );
   }
 
