@@ -205,6 +205,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final accentColor = themeProvider.accentColor;
     final userProvider = Provider.of<UserProvider>(context, listen: true);
 
+    // Sort lessons strictly by sortOrder
+    _course?.lessonsList.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
     if (_isLoading) {
       return Scaffold(
         backgroundColor: backgroundColor,
