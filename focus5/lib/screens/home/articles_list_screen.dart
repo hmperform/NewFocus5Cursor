@@ -22,10 +22,14 @@ class ArticlesListScreen extends StatefulWidget {
 class _ArticlesListScreenState extends State<ArticlesListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _selectedTag = 'All';
   
   @override
   void initState() {
     super.initState();
+    if (widget.tag != null) {
+      _selectedTag = widget.tag!;
+    }
   }
   
   @override
@@ -40,26 +44,26 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
     });
   }
   
+  void _handleTagSelection(String tag) {
+    setState(() {
+      _selectedTag = tag;
+    });
+  }
+  
   List<Article> _getFilteredArticles(List<Article> articles) {
-    if (_searchQuery.isEmpty && widget.focusArea == null && widget.tag == null) {
-      return articles;
-    }
-    
+    final bool filterByTag = _selectedTag != 'All';
     final lowerQuery = _searchQuery.toLowerCase();
     
     return articles.where((article) {
-      // Search filtering
-      final matchesSearch = article.title.toLowerCase().contains(lowerQuery) ||
+      final matchesSearch = lowerQuery.isEmpty ||
+          article.title.toLowerCase().contains(lowerQuery) ||
           article.tags.any((tag) => tag.toLowerCase().contains(lowerQuery)) ||
           (article.authorName?.toLowerCase().contains(lowerQuery) ?? false);
       
-      // Focus area filtering
       final matchesFocusArea = widget.focusArea == null || 
           article.focusAreas.contains(widget.focusArea);
       
-      // Tag filtering
-      final matchesTag = widget.tag == null || 
-          article.tags.contains(widget.tag);
+      final matchesTag = !filterByTag || article.tags.contains(_selectedTag);
       
       return matchesSearch && matchesFocusArea && matchesTag;
     }).toList();
@@ -69,13 +73,34 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
   Widget build(BuildContext context) {
     final contentProvider = Provider.of<ContentProvider>(context);
     final allArticles = contentProvider.articles;
+
+    // --- Dynamic Tag Generation Start ---
+    // 1. Count tag frequencies
+    final Map<String, int> tagCounts = {};
+    for (var article in allArticles) {
+      for (var tag in article.tags) {
+        tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+      }
+    }
+
+    // 2. Sort tags by frequency (descending)
+    final sortedTags = tagCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    // 3. Get top 5 tags (or fewer if not enough unique tags)
+    final topTags = sortedTags.take(5).map((entry) => entry.key).toList();
+
+    // 4. Create the final list for chips
+    final List<String> filterTags = ['All', ...topTags];
+    // --- Dynamic Tag Generation End ---
+
     final filteredArticles = _getFilteredArticles(allArticles);
     
     String title = 'Articles';
     if (widget.focusArea != null) {
       title = '${widget.focusArea} Articles';
-    } else if (widget.tag != null) {
-      title = '${widget.tag} Articles';
+    } else if (_selectedTag != 'All') {
+      title = '$_selectedTag Articles';
     }
     
     return Scaffold(
@@ -119,19 +144,18 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
           ),
           
           // Filter chips
-          if (widget.focusArea == null && widget.tag == null)
+          if (widget.focusArea == null)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
-                children: [
-                  _buildFilterChip('All', isSelected: true),
-                  _buildFilterChip('Motivation'),
-                  _buildFilterChip('Focus'),
-                  _buildFilterChip('Performance'),
-                  _buildFilterChip('Mindfulness'),
-                  _buildFilterChip('Mental Toughness'),
-                ],
+                children: filterTags.map((tag) =>
+                  _buildFilterChip(
+                    tag,
+                    isSelected: _selectedTag == tag,
+                    onSelected: () => _handleTagSelection(tag),
+                  )
+                ).toList(),
               ),
             ),
           
@@ -157,7 +181,7 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
                             color: Colors.grey[400],
                           ),
                         ),
-                        if (_searchQuery.isNotEmpty || widget.focusArea != null || widget.tag != null)
+                        if (_searchQuery.isNotEmpty || widget.focusArea != null || _selectedTag != 'All')
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
@@ -184,7 +208,7 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
     );
   }
   
-  Widget _buildFilterChip(String label, {bool isSelected = false}) {
+  Widget _buildFilterChip(String label, {required bool isSelected, required VoidCallback onSelected}) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
       child: FilterChip(
@@ -198,8 +222,9 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
         selectedColor: const Color(0xFFB4FF00),
         checkmarkColor: Colors.black,
         onSelected: (selected) {
-          // Handle filter selection
-          // You would implement state changes here
+          if (selected) {
+            onSelected();
+          }
         },
       ),
     );
