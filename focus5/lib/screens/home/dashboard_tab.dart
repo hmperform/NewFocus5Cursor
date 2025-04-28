@@ -5,8 +5,9 @@ import 'package:transparent_image/transparent_image.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:math'; // Import for random selection
-import 'package:shared_preferences/shared_preferences.dart'; // Import for persistence
+import 'package:shared_preferences/shared_preferences.dart'; // Keep for course/article IDs
 import 'package:intl/intl.dart'; // Import for date formatting
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
 
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
@@ -44,10 +45,10 @@ class _DashboardTabState extends State<DashboardTab> {
   Article? _dailyArticle; // State for daily article
   bool _dailySelectionMadeForToday = false; // Flag to track selection
 
-  // Keys for SharedPreferences
+  // Keys for SharedPreferences (Keep for IDs, remove date key)
   static const String _prefsKeyDailyCourseId = 'daily_course_id';
   static const String _prefsKeyDailyArticleId = 'daily_article_id';
-  static const String _prefsKeyLastSelectionDate = 'last_selection_date';
+  // static const String _prefsKeyLastSelectionDate = 'last_selection_date'; // REMOVED
 
   @override
   void initState() {
@@ -139,12 +140,12 @@ class _DashboardTabState extends State<DashboardTab> {
     return completer.future;
   }
 
-  // Load content in a separate method
   Future<void> _loadDashboardContent() async {
     try {
       // Get providers safely
       final contentProvider = Provider.of<ContentProvider>(context, listen: false);
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userProvider = Provider.of<UserProvider>(context, listen: false); // Get UserProvider
       final userId = authProvider.currentUser?.id;
       
       if (userId == null) {
@@ -169,8 +170,8 @@ class _DashboardTabState extends State<DashboardTab> {
       
       if (!mounted) return; // Check mount status after async gap
 
-      // 2. Handle Daily Selection Logic
-      await _updateDailySelection(contentProvider);
+      // 2. Handle Daily Selection Logic (Pass UserProvider)
+      await _updateDailySelection(contentProvider, userProvider);
 
     } catch (e) {
       print('Dashboard loading error: $e');
@@ -182,23 +183,29 @@ class _DashboardTabState extends State<DashboardTab> {
     }
   }
 
-  Future<void> _updateDailySelection(ContentProvider contentProvider) async {
+  Future<void> _updateDailySelection(ContentProvider contentProvider, UserProvider userProvider) async {
     final prefs = await SharedPreferences.getInstance();
     final todayString = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final lastSelectionDate = prefs.getString(_prefsKeyLastSelectionDate);
 
-    String? savedCourseId;
-    String? savedArticleId;
+    // --- Read lastSelectionDate from UserProvider --- 
+    final user = userProvider.user;
+    final DateTime? userLastSelectionDateTime = user?.lastSelectionDate;
+    final String? lastSelectionDateString = userLastSelectionDateTime != null
+        ? DateFormat('yyyy-MM-dd').format(userLastSelectionDateTime)
+        : null;
+    // --- End Read --- 
 
-    bool selectNew = false; // Default to false, only set true if needed
-    bool isToday = lastSelectionDate == todayString;
+    String? savedCourseId = prefs.getString(_prefsKeyDailyCourseId);
+    String? savedArticleId = prefs.getString(_prefsKeyDailyArticleId);
+
+    bool selectNew = false; 
+    // Compare Firestore date string with today's date string
+    bool isToday = lastSelectionDateString == todayString;
 
     if (isToday) {
-      savedCourseId = prefs.getString(_prefsKeyDailyCourseId);
-      savedArticleId = prefs.getString(_prefsKeyDailyArticleId);
       if (savedCourseId != null && savedArticleId != null) {
         selectNew = false;
-        debugPrint("DashboardTab: Using saved daily selection for $todayString");
+        debugPrint("DashboardTab: Using saved daily selection for $todayString (Date from Firestore: $lastSelectionDateString)");
       } else {
          debugPrint("DashboardTab: Date matches but IDs potentially missing, checking available content before deciding selection path.");
          // Check if saved IDs exist
@@ -221,7 +228,7 @@ class _DashboardTabState extends State<DashboardTab> {
          }
       }
     } else {
-       debugPrint("DashboardTab: Last selection date ($lastSelectionDate) doesn't match today ($todayString), selecting new.");
+       debugPrint("DashboardTab: Last selection date from Firestore ($lastSelectionDateString) doesn't match today ($todayString), selecting new.");
        selectNew = true;
     }
 
@@ -231,8 +238,9 @@ class _DashboardTabState extends State<DashboardTab> {
 
     final allCourses = contentProvider.courses;
     final allArticles = contentProvider.articles;
+    final userId = user?.id;
 
-    if (selectNew) {
+    if (selectNew && userId != null) { // Ensure userId is available for Firestore update
       debugPrint("DashboardTab: Entering selectNew block.");
       bool courseSelected = false;
       bool articleSelected = false;
@@ -272,17 +280,27 @@ class _DashboardTabState extends State<DashboardTab> {
          newDailyArticle = null; // Explicitly set to null
       }
 
-      // Update the selection date only if we successfully selected at least one item
+      // --- Update Firestore with the selection date --- 
       if (courseSelected || articleSelected) {
-        await prefs.setString(_prefsKeyLastSelectionDate, todayString);
-        debugPrint("DashboardTab: Updated selection date to $todayString after selecting new items.");
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .update({'lastSelectionDate': Timestamp.now()});
+          debugPrint("DashboardTab: Updated Firestore lastSelectionDate to now ($todayString) after selecting new items.");
+        } catch (e) {
+           debugPrint("DashboardTab: Error updating Firestore lastSelectionDate: $e");
+           // Handle potential error - maybe try again later?
+        }
       } else {
-        debugPrint("DashboardTab: Selection failed (no content?), cleared date to allow retry.");
+        debugPrint("DashboardTab: Selection failed (no content?), did not update Firestore date.");
+        // Consider if we need to clear Firestore date here if selection fails?
+        // Maybe not, allow retry on next load.
       }
 
     } else {
       // Find items based on saved IDs for today
-      debugPrint("DashboardTab: Entering load from saved ID block for date $lastSelectionDate (Today: $todayString).");
+      debugPrint("DashboardTab: Entering load from saved ID block for date $lastSelectionDateString (Today: $todayString).");
       bool foundSavedCourse = false;
       bool foundSavedArticle = false;
 
@@ -292,10 +310,11 @@ class _DashboardTabState extends State<DashboardTab> {
              newDailyCourse = allCourses.firstWhere((c) => c.id == savedCourseId);
              dataChanged = true;
           } catch (e) {
-             debugPrint("DashboardTab: Saved course ID $savedCourseId not found, clearing.");
-             prefs.remove(_prefsKeyDailyCourseId); // Clear invalid ID
-             prefs.remove(_prefsKeyLastSelectionDate); // Force re-selection next time
-             newDailyCourse = null; // Ensure it's null if not found
+             debugPrint("DashboardTab: Saved course ID $savedCourseId not found, clearing prefs.");
+             prefs.remove(_prefsKeyDailyCourseId);
+             // Don't clear Firestore date here, let mismatch trigger next time
+             // prefs.remove(_prefsKeyLastSelectionDate); 
+             newDailyCourse = null;
           } finally {
              if (newDailyCourse != null) foundSavedCourse = true;
           }
@@ -309,10 +328,11 @@ class _DashboardTabState extends State<DashboardTab> {
              newDailyArticle = allArticles.firstWhere((a) => a.id == savedArticleId);
              dataChanged = true;
           } catch (e) {
-             debugPrint("DashboardTab: Saved article ID $savedArticleId not found, clearing.");
-             prefs.remove(_prefsKeyDailyArticleId); // Clear invalid ID
-             prefs.remove(_prefsKeyLastSelectionDate); // Force re-selection next time
-             newDailyArticle = null; // Ensure it's null if not found
+             debugPrint("DashboardTab: Saved article ID $savedArticleId not found, clearing prefs.");
+             prefs.remove(_prefsKeyDailyArticleId);
+             // Don't clear Firestore date here
+             // prefs.remove(_prefsKeyLastSelectionDate); 
+             newDailyArticle = null;
           } finally {
              if (newDailyArticle != null) foundSavedArticle = true;
           }
@@ -330,20 +350,14 @@ class _DashboardTabState extends State<DashboardTab> {
             // Force re-selection logic if content exists now and we didn't find saved items
             if (contentProvider.courses.isNotEmpty || contentProvider.articles.isNotEmpty) {
                 debugPrint("DashboardTab: Content is now available, forcing re-selection attempt.");
-                await prefs.remove(_prefsKeyLastSelectionDate); // Clear date to trigger selectNew path
-                await _updateDailySelection(contentProvider); // Re-run selection
-                return; // Exit this run
-            } else {
-               debugPrint("DashboardTab: No content available to re-select.");
+                // No need to explicitly clear Firestore date here, the mismatch will handle it.
+                // Re-running _updateDailySelection immediately might cause loops if content provider isn't fully ready.
             }
           }
       } else {
-        // This path means selectNew was false, but the date didn't match today - indicates a logic issue or stale state.
-        // Force a re-selection for today.
-         debugPrint("DashboardTab: Date matched but failed to find saved items. Will attempt reselection if content is available.");
-        await prefs.remove(_prefsKeyLastSelectionDate);
-        await _updateDailySelection(contentProvider); // Re-run selection
-        return; // Exit this run
+        // This case should be less likely now, as the date mismatch triggers selectNew path.
+         debugPrint("DashboardTab: Logic error or stale state? Date mismatch ($lastSelectionDateString vs $todayString) but selectNew was false.");
+         // Let the date mismatch handle re-selection on the next load.
       }
     }
 
@@ -414,7 +428,7 @@ class _DashboardTabState extends State<DashboardTab> {
             bool stillNeedsArticleCB = contentProvider.articles.isNotEmpty && _dailyArticle == null;
             if (stillNeedsCourseCB || stillNeedsArticleCB) {
               debugPrint("DashboardTab [Callback 1]: Re-running selection logic. StillNeedsC: $stillNeedsCourseCB, StillNeedsA: $stillNeedsArticleCB");
-              _updateDailySelection(contentProvider); 
+              _updateDailySelection(contentProvider, userProvider); 
             }
           }
         });
@@ -429,7 +443,7 @@ class _DashboardTabState extends State<DashboardTab> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _dailyArticle == null && contentProvider.articles.isNotEmpty) { // Re-check in callback
            debugPrint("DashboardTab [Callback 2]: Re-running selection logic specifically for missing article.");
-           _updateDailySelection(contentProvider);
+           _updateDailySelection(contentProvider, userProvider);
         }
       });
     }

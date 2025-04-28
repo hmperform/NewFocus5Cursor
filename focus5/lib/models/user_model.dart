@@ -41,6 +41,7 @@ class User {
   final int? highScoreGrid;
   final int? highScoreGridHard;
   final int? highScoreWordSearch;
+  final DateTime? lastSelectionDate;
 
   User({
     required this.id,
@@ -81,6 +82,7 @@ class User {
     this.highScoreGrid,
     this.highScoreGridHard,
     this.highScoreWordSearch,
+    this.lastSelectionDate,
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.lastActive = lastActive ?? DateTime.now(),
@@ -149,30 +151,12 @@ class User {
     }
 
     // Parse date fields
-    DateTime? lastLogin;
-    if (data['lastLoginDate'] != null) {
-      final timestamp = data['lastLoginDate'] as Timestamp;
-      lastLogin = DateTime.fromMillisecondsSinceEpoch(
-        timestamp.millisecondsSinceEpoch
-      );
-    }
-    
-    DateTime? lastActive;
-    if (data['lastActive'] != null) {
-      final timestamp = data['lastActive'] as Timestamp;
-      lastActive = DateTime.fromMillisecondsSinceEpoch(
-        timestamp.millisecondsSinceEpoch
-      );
-    }
-    
-    DateTime? created;
-    if (data['createdAt'] != null) {
-      final timestamp = data['createdAt'] as Timestamp;
-      created = DateTime.fromMillisecondsSinceEpoch(
-        timestamp.millisecondsSinceEpoch
-      );
-    }
-    
+    DateTime? lastLogin = _parseTimestamp(data['lastLoginDate']);
+    DateTime? lastActive = _parseTimestamp(data['lastActive']);
+    DateTime? created = _parseTimestamp(data['createdAt']);
+    DateTime? lastCompletion = _parseTimestamp(data['lastCompletionDate']);
+    DateTime? lastSelection = _parseTimestamp(data['lastSelectionDate']);
+
     return User(
       id: doc.id,
       email: data['email'] ?? '',
@@ -215,9 +199,7 @@ class User {
       totalLoginDays: data['totalLoginDays'] ?? 0,
       badgesgranted: grantedBadgesList,
       purchasedCourses: purchasedCoursesList,
-      lastCompletionDate: data['lastCompletionDate'] != null 
-          ? (data['lastCompletionDate'] as Timestamp).toDate() 
-          : DateTime.now(),
+      lastCompletionDate: lastCompletion ?? DateTime.now(),
       savedCourses: data['savedCourses'] != null 
           ? List<String>.from(data['savedCourses']) 
           : [],
@@ -226,7 +208,16 @@ class User {
       highScoreGrid: (data['highScoreGrid'] as num?)?.toInt(),
       highScoreGridHard: (data['highScoreGridHard'] as num?)?.toInt(),
       highScoreWordSearch: (data['highScoreWordSearch'] as num?)?.toInt(),
+      lastSelectionDate: lastSelection,
     );
+  }
+
+  // Helper function to safely parse Timestamps
+  static DateTime? _parseTimestamp(dynamic timestampData) {
+    if (timestampData is Timestamp) {
+      return timestampData.toDate();
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -267,6 +258,7 @@ class User {
       if (highScoreGrid != null) 'highScoreGrid': highScoreGrid,
       if (highScoreGridHard != null) 'highScoreGridHard': highScoreGridHard,
       if (highScoreWordSearch != null) 'highScoreWordSearch': highScoreWordSearch,
+      if (lastSelectionDate != null) 'lastSelectionDate': Timestamp.fromDate(lastSelectionDate!),
     };
   }
 
@@ -309,6 +301,7 @@ class User {
     int? highScoreGrid,
     int? highScoreGridHard,
     int? highScoreWordSearch,
+    DateTime? lastSelectionDate,
   }) {
     return User(
       id: id ?? this.id,
@@ -349,6 +342,7 @@ class User {
       highScoreGrid: highScoreGrid ?? this.highScoreGrid,
       highScoreGridHard: highScoreGridHard ?? this.highScoreGridHard,
       highScoreWordSearch: highScoreWordSearch ?? this.highScoreWordSearch,
+      lastSelectionDate: lastSelectionDate ?? this.lastSelectionDate,
     );
   }
 }
