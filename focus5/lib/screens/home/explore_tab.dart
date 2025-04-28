@@ -29,6 +29,7 @@ import 'all_coaches_screen.dart';
 import '../../utils/image_utils.dart';
 import '../../utils/app_icons.dart'; // Import the app icons utility
 import '../../widgets/status_bar.dart'; // Import the StatusBar
+import 'package:focus5/screens/home/all_courses_screen.dart'; // Add import for the new screen
 
 class ExploreTab extends StatefulWidget {
   const ExploreTab({Key? key}) : super(key: key);
@@ -347,13 +348,45 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), // Adjusted top padding
-          child: Text(
-            'Trending Courses', // Updated title
-            style: TextStyle(
-              fontSize: 20, // Consistent title size
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
+          child: Row( // Wrap title in a Row
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Align title and button
+            children: [
+              Text(
+                'Trending Courses', // Updated title
+                style: TextStyle(
+                  fontSize: 20, // Consistent title size
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              TextButton( // Add the View All button
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AllCoursesScreen(), // Navigate to the new screen
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         SizedBox(

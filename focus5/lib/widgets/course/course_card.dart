@@ -8,12 +8,14 @@ class CourseCard extends StatelessWidget {
   final Course course;
   final bool isPurchased;
   final double? cardWidth;
+  final String? description;
   
   const CourseCard({
     Key? key,
     required this.course,
     required this.isPurchased,
     this.cardWidth,
+    this.description,
   }) : super(key: key);
 
   @override
@@ -126,6 +128,21 @@ class CourseCard extends StatelessWidget {
                     ),
                     
                     const SizedBox(height: 8),
+                    
+                    // Description (if provided)
+                    if (description != null && description!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0, bottom: 4.0),
+                        child: Text(
+                          description!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: textColor.withOpacity(0.75),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     
                     // Duration and Focus Points Cost
                     Row(
