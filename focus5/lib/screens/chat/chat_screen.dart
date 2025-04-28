@@ -214,7 +214,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         );
       }
     } catch (e) {
-      debugPrint('ChatScreen: Error sending message: $e');
+      // Enhanced error logging
+      debugPrint('>>> CHAT SCREEN ERROR: Failed to send message in chat ${widget.chatId}. Error: $e'); 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -569,7 +570,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                         message.sharedContent!.thumbnailUrl!.isNotEmpty)
                                                                       Image.network(
                                                                         message.sharedContent!.thumbnailUrl!,
-                                                                        height: 150,
+                                                                        height: 100,
                                                                         width: double.infinity,
                                                                         fit: BoxFit.cover,
                                                                         errorBuilder: (context, error, stackTrace) {
@@ -591,7 +592,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                         },
                                                                       ),
                                                                     Padding(
-                                                                      padding: const EdgeInsets.all(12),
+                                                                      padding: const EdgeInsets.all(8),
                                                                       child: Column(
                                                                         crossAxisAlignment: CrossAxisAlignment.start,
                                                                         children: [
@@ -617,20 +618,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                                               ),
                                                                             ],
                                                                           ),
-                                                                          const SizedBox(height: 8),
+                                                                          const SizedBox(height: 6),
                                                                           Text(
                                                                             message.sharedContent!.title,
                                                                             style: const TextStyle(
-                                                                              fontSize: 16,
+                                                                              fontSize: 14,
                                                                               fontWeight: FontWeight.bold,
                                                                               color: Colors.black,
                                                                             ),
+                                                                            maxLines: 2,
+                                                                            overflow: TextOverflow.ellipsis,
                                                                           ),
                                                                           const SizedBox(height: 4),
                                                                           Text(
                                                                             message.sharedContent!.description,
                                                                             style: TextStyle(
-                                                                              fontSize: 14,
+                                                                              fontSize: 12,
                                                                               color: Colors.grey.shade800,
                                                                             ),
                                                                             maxLines: 2,

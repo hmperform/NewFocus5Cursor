@@ -447,11 +447,12 @@ class ChatProvider with ChangeNotifier {
         'lastMessageSenderId': currentUserId,
         'readBy': [currentUserId],
       });
-      
+      debugPrint('>>> ChatProvider.sendMessage: Successfully UPDATED chat ${chatRef.id}');
+
       // Add message to Firestore
-      debugPrint('ChatProvider: Adding message to Firestore with ID: ${messageRef.id}');
+      debugPrint('>>> ChatProvider.sendMessage: Attempting to SET message ${messageRef.id}');
       await messageRef.set(message);
-      debugPrint('ChatProvider: Message sent successfully with ID: ${messageRef.id}');
+      debugPrint('>>> ChatProvider.sendMessage: Successfully SET message ${messageRef.id}');
       
       // Add to recently sent messages to prevent duplicate
       _recentlySentMessages[messageRef.id] = DateTime.now();
@@ -460,7 +461,7 @@ class ChatProvider with ChangeNotifier {
       // This prevents duplicate messages from appearing
       
     } catch (e, stackTrace) {
-      debugPrint('ChatProvider Error: Error sending message: $e');
+      debugPrint('>>> ChatProvider.sendMessage ERROR: Failed to send message for chat $chatId. Error: $e');
       debugPrint('ChatProvider Error: Stack trace: $stackTrace');
       rethrow;
     }
@@ -623,15 +624,26 @@ class ChatProvider with ChangeNotifier {
           ? [currentUserId, otherUserId] // For group chats, add more participants as needed
           : [currentUserId, otherUserId];
       
+      // Create DocumentReferences
+      final List<DocumentReference> participantRefs = participantIds
+          .map((id) => _firestore.collection('users').doc(id))
+          .toList();
+      final DocumentReference createdByRef = _firestore.collection('users').doc(currentUserId);
+      
       debugPrint('Creating new chat with ID: ${chatRef.id}');
       await chatRef.set({
         'participantIds': participantIds,
+        'participantRefs': participantRefs, // Added participantRefs
         'createdAt': Timestamp.fromDate(timestamp),
-        'createdBy': currentUserId,
+        'createdBy': currentUserId, // Keep original ID field for compatibility?
+        'createdByRef': createdByRef, // Added createdByRef
+        'lastMessageText': 'Chat created', // Initial message text
         'lastMessageTime': Timestamp.fromDate(timestamp),
+        'lastMessageSenderId': currentUserId, // Keep original ID field
+        'lastMessageSenderRef': createdByRef, // Added lastMessageSenderRef (creator is the initial sender)
         'isGroupChat': isGroup,
         'readBy': [currentUserId],
-        'groupName': groupName,
+        'groupName': groupName, // Will be null for 1:1 chats
       });
       
       debugPrint('Chat created successfully: ${chatRef.id}');
@@ -1135,14 +1147,23 @@ class ChatProvider with ChangeNotifier {
       
       final timestamp = DateTime.now();
       
+      // Create DocumentReferences
+      final List<DocumentReference> participantRefs = allParticipantIds
+          .map((id) => _firestore.collection('users').doc(id))
+          .toList();
+      final DocumentReference createdByRef = _firestore.collection('users').doc(currentUserId);
+      
       // Create the chat document
       final chatDoc = await _firestore.collection('chats').add({
         'participantIds': allParticipantIds,
-        'createdBy': currentUserId,
+        'participantRefs': participantRefs, // Added participantRefs
+        'createdBy': currentUserId, // Keep original ID field?
+        'createdByRef': createdByRef, // Added createdByRef
         'createdAt': Timestamp.fromDate(timestamp),
         'lastMessageText': 'Group chat created',
         'lastMessageTime': Timestamp.fromDate(timestamp),
-        'lastMessageSenderId': currentUserId,
+        'lastMessageSenderId': currentUserId, // Keep original ID field?
+        'lastMessageSenderRef': createdByRef, // Added lastMessageSenderRef (creator is sender of initial message)
         'readBy': [currentUserId],
         'isGroupChat': true,
         'groupName': groupName,
