@@ -94,27 +94,31 @@ class _ContentSharingScreenState extends State<ContentSharingScreen> with Single
       debugPrint('[ContentSharingScreen] Processed ${tempCourses.length} courses.');
 
       // Fetch Audio Modules (Using DailyAudio Model)
-      final modulesSnapshot = await _firestore.collection('daily_audio').get();
+      debugPrint('[ContentSharingScreen] --- Fetching Audio Modules --- '); // Renamed log
+      final modulesSnapshot = await _firestore.collection('audio_modules').get(); // Corrected collection name
       int fetchedModuleCount = modulesSnapshot.docs.length;
-      debugPrint('[ContentSharingScreen] Fetched $fetchedModuleCount module documents.');
+      debugPrint('[ContentSharingScreen] Fetched $fetchedModuleCount module documents from audio_modules.'); // Updated log
       List<DailyAudio> tempModules = [];
-       for (var doc in modulesSnapshot.docs) {
+       for (var i = 0; i < modulesSnapshot.docs.length; i++) { // Loop with index
+          final doc = modulesSnapshot.docs[i];
           final data = doc.data();
-          // --> Add document ID to the map before parsing <--
           data['id'] = doc.id;
-          // --> Log Raw Data <--
-          debugPrint('[ContentSharingScreen] Raw Module Data (ID: ${doc.id}): $data');
+          debugPrint('[ContentSharingScreen] [Module ${i+1}/${fetchedModuleCount}] Raw Data (ID: ${doc.id}): $data');
           try {
-             // --> Use DailyAudio.fromJson <--
-             tempModules.add(DailyAudio.fromJson(data));
-          } catch (e) {
-              debugPrint('[ContentSharingScreen] !! Error processing module ${doc.id}: $e. Provide default values or skip.');
-              // Optionally add a default/placeholder module or skip
+             debugPrint('[ContentSharingScreen] [Module ${i+1}] Attempting DailyAudio.fromJson...'); // Added print
+             final parsedModule = DailyAudio.fromJson(data);
+             tempModules.add(parsedModule);
+             debugPrint('[ContentSharingScreen] [Module ${i+1}] Successfully parsed: ${parsedModule.title}'); // Added print
+          } catch (e, stackTrace) { // Catch stack trace too
+              // Enhanced error print
+              debugPrint('[ContentSharingScreen] !! [Module ${i+1}] ERROR processing module ${doc.id}:\nError: $e\nStackTrace: $stackTrace'); 
           }
        }
-      debugPrint('[ContentSharingScreen] Processed ${tempModules.length} modules.');
+      // Log final count before setting state
+      debugPrint('[ContentSharingScreen] Finished processing modules. tempModules count: ${tempModules.length}'); 
 
       // Fetch Articles (Using Article Model)
+      debugPrint('[ContentSharingScreen] --- Fetching Articles --- '); // Added separator
       final articlesSnapshot = await _firestore.collection('articles').get();
       int fetchedArticleCount = articlesSnapshot.docs.length;
       debugPrint('[ContentSharingScreen] Fetched $fetchedArticleCount article documents.');
@@ -142,6 +146,9 @@ class _ContentSharingScreenState extends State<ContentSharingScreen> with Single
           _originalCourses = List.from(tempCourses);
           _originalModules = List.from(tempModules);
           _originalArticles = List.from(tempArticles);
+
+          // Log counts just before filtering
+          debugPrint('[ContentSharingScreen] Setting state with -> Original Counts -> Courses: ${_originalCourses.length}, Modules: ${_originalModules.length}, Articles: ${_originalArticles.length}');
 
           // Apply initial filter (which might be empty, use controller text)
           _filterContent(_searchController.text, isInitialLoad: true);
@@ -284,7 +291,7 @@ class _ContentSharingScreenState extends State<ContentSharingScreen> with Single
             unselectedLabelColor: Colors.grey,
             tabs: const [
               Tab(text: 'Courses'),
-              Tab(text: 'Audio'),
+              Tab(text: 'Modules'),
               Tab(text: 'Articles'),
             ],
           ),

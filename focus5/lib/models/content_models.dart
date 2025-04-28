@@ -385,41 +385,65 @@ class DailyAudio {
   });
 
   factory DailyAudio.fromJson(Map<String, dynamic> json) {
+    // Helper function to safely parse references (String, Map, or DocumentReference)
+    DocumentReference _parseRef(dynamic value, String collectionPath) {
+      if (value is DocumentReference) {
+        return value;
+      } else if (value is Map && value.containsKey('id') && value['id'] is String) {
+        // Handle map like {id: '...', path: '...'}
+        // Path could be value['path'] ?? '$collectionPath/${value['id']}' if path isn't always present
+        return FirebaseFirestore.instance.doc('$collectionPath/${value['id']}');
+      } else if (value is String && value.isNotEmpty) {
+        // Handle plain string ID
+        return FirebaseFirestore.instance.doc('$collectionPath/$value');
+      } else {
+        // Fallback for null or unexpected type
+        debugPrint('Warning: Unexpected reference type or null value for $collectionPath: $value');
+        return FirebaseFirestore.instance.doc('$collectionPath/UNKNOWN'); // Default/error case
+      }
+    }
+
+    // Helper for dates (Timestamp or ISO String)
+    DateTime _parseDate(dynamic value) {
+       if (value is Timestamp) {
+         return value.toDate();
+       } else if (value is String) {
+         try {
+           return DateTime.parse(value);
+         } catch (e) {
+           debugPrint('Warning: Could not parse date string: $value. Error: $e');
+           return DateTime.now(); // Fallback on parse error
+         }
+       } else {
+         return DateTime.now(); // Fallback for null or other types
+       }
+    }
+
     return DailyAudio(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      audioUrl: json['audioUrl'] ?? '',
-      thumbnail: json['thumbnail'] ?? '',
-      slideshow1: json['slideshow1'] ?? '',
-      slideshow2: json['slideshow2'] ?? '',
-      slideshow3: json['slideshow3'] ?? '',
-      creatorId: json['creatorId'] is DocumentReference
-          ? json['creatorId']
-          : FirebaseFirestore.instance.doc('coaches/${json['creatorId']['id'] ?? ''}'),
-      creatorName: json['creatorName'] is DocumentReference
-          ? json['creatorName']
-          : FirebaseFirestore.instance.doc('coaches/${json['creatorName']['id'] ?? ''}'),
-      focusAreas: List<String>.from(json['focusAreas'] ?? []),
-      durationMinutes: json['durationMinutes'] ?? 0,
-      xpReward: json['xpReward'] ?? 0,
-      universityExclusive: json['universityExclusive'] ?? false,
-      universityAccess: json['universityAccess'] != null
-          ? FirebaseFirestore.instance.doc('universities/${json['universityAccess']['id'] ?? ''}')
+      id: json['id']?.toString() ?? '', // Use toString() for safety
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      audioUrl: json['audioUrl']?.toString() ?? '',
+      thumbnail: json['thumbnail']?.toString() ?? '',
+      slideshow1: json['slideshow1']?.toString() ?? '',
+      slideshow2: json['slideshow2']?.toString() ?? '',
+      slideshow3: json['slideshow3']?.toString() ?? '',
+      creatorId: _parseRef(json['creatorId'], 'coaches'), // Use helper
+      creatorName: _parseRef(json['creatorName'], 'coaches'), // Use helper (assuming name is also a ref to coaches? Might need adjustment)
+      focusAreas: (json['focusAreas'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+      xpReward: (json['xpReward'] as num?)?.toInt() ?? 0,
+      universityExclusive: json['universityExclusive'] as bool? ?? false,
+      universityAccess: json['universityAccess'] != null 
+          ? _parseRef(json['universityAccess'], 'universities') // Use helper
           : null,
-      createdAt: json['createdAt'] != null
-          ? (json['createdAt'] is Timestamp
-              ? (json['createdAt'] as Timestamp).toDate()
-              : DateTime.parse(json['createdAt']))
-          : DateTime.now(),
-      datePublished: json['datePublished'] != null
-          ? (json['datePublished'] is Timestamp
-              ? (json['datePublished'] as Timestamp).toDate()
-              : DateTime.parse(json['datePublished']))
-          : DateTime.now(),
-      waveformData: List<double>.from(json['waveformData'] ?? []),
-      waveformResolution: json['waveformResolution'] ?? 100,
-      postCompletionScreens: json['postCompletionScreens'],
+      createdAt: _parseDate(json['createdAt']), // Use helper
+      datePublished: _parseDate(json['datePublished']), // Use helper
+      waveformData: (json['waveformData'] as List<dynamic>? ?? []).map((e) => (e as num?)?.toDouble() ?? 0.0).toList(), // Safer parsing
+      waveformResolution: (json['waveformResolution'] as num?)?.toInt() ?? 100,
+      postCompletionScreens: json['postCompletionScreens'] is Map 
+          ? Map<String, dynamic>.from(json['postCompletionScreens'])
+          : null, // Ensure it's a map or null
     );
   }
 
