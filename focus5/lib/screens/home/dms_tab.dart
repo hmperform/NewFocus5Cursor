@@ -4,8 +4,10 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../providers/chat_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../models/chat_models.dart';
+import '../../models/user_model.dart';
 import 'chat_detail_screen.dart';
 import '../../utils/image_utils.dart';
+import '../../widgets/common/empty_state_widget.dart';
 
 class DMsTab extends StatefulWidget {
   const DMsTab({Key? key}) : super(key: key);
@@ -17,6 +19,18 @@ class DMsTab extends StatefulWidget {
 class _DMsTabState extends State<DMsTab> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+        _isSearching = _searchQuery.isNotEmpty;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -34,6 +48,26 @@ class _DMsTabState extends State<DMsTab> {
     final textColor = Theme.of(context).colorScheme.onBackground;
     final secondaryTextColor = themeProvider.secondaryTextColor;
     final accentColor = themeProvider.accentColor;
+    final unreadColor = accentColor.withOpacity(0.1);
+
+    final filteredChats = chatProvider.chats.where((chat) {
+      if (!_isSearching) return true;
+
+      final otherUser = chatProvider.getUserById(
+          chat.participantIds.firstWhere((id) => id != chatProvider.currentUserId,
+              orElse: () => ''));
+
+      if (!chat.isGroupChat && otherUser != null) {
+        return otherUser.fullName.toLowerCase().contains(_searchQuery) ||
+               chat.lastMessageText.toLowerCase().contains(_searchQuery);
+      } else if (chat.isGroupChat && chat.groupName != null) {
+        return chat.groupName!.toLowerCase().contains(_searchQuery) ||
+               chat.lastMessageText.toLowerCase().contains(_searchQuery);
+      }
+      return false;
+    }).toList();
+
+    filteredChats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -61,11 +95,11 @@ class _DMsTabState extends State<DMsTab> {
         children: [
           // Search bar
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Container(
               decoration: BoxDecoration(
                 color: surfaceColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(30),
               ),
               child: TextField(
                 controller: _searchController,
@@ -75,13 +109,16 @@ class _DMsTabState extends State<DMsTab> {
                   hintStyle: TextStyle(color: secondaryTextColor),
                   prefixIcon: Icon(Icons.search, color: secondaryTextColor),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  suffixIcon: _isSearching
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: secondaryTextColor),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
                 ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.toLowerCase();
-                  });
-                },
               ),
             ),
           ),
@@ -140,44 +177,34 @@ class _DMsTabState extends State<DMsTab> {
             ),
           ),
 
-          // Chat list
+          // Chat list or Empty State
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: chatProvider.chats.length,
-              itemBuilder: (context, index) {
-                final chat = chatProvider.chats[index];
-                
-                // Filter based on search query
-                if (_searchQuery.isNotEmpty) {
-                  final otherUser = chatProvider.getUserById(
-                    chat.participantIds.firstWhere((id) => id != 'current_user', 
-                    orElse: () => ''));
-                  
-                  if (!chat.isGroupChat && 
-                      !otherUser!.name.toLowerCase().contains(_searchQuery) &&
-                      !chat.lastMessageText.toLowerCase().contains(_searchQuery)) {
-                    return const SizedBox.shrink();
-                  }
-                  
-                  if (chat.isGroupChat && 
-                      !chat.groupName!.toLowerCase().contains(_searchQuery) &&
-                      !chat.lastMessageText.toLowerCase().contains(_searchQuery)) {
-                    return const SizedBox.shrink();
-                  }
-                }
-
-                return _buildChatTile(
-                  context: context,
-                  chat: chat,
-                  chatProvider: chatProvider,
-                  backgroundColor: surfaceColor,
-                  textColor: textColor,
-                  secondaryTextColor: secondaryTextColor,
-                  accentColor: accentColor,
-                );
-              },
-            ),
+            child: filteredChats.isEmpty
+                ? EmptyStateWidget(
+                    iconData: Icons.chat_bubble_outline,
+                    message: _isSearching
+                        ? 'No results found for "$_searchQuery"'
+                        : 'No conversations yet.
+Start a chat with a coach!',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
+                    itemCount: filteredChats.length,
+                    itemBuilder: (context, index) {
+                      final chat = filteredChats[index];
+                      return _buildChatTile(
+                        context: context,
+                        chat: chat,
+                        chatProvider: chatProvider,
+                        themeProvider: themeProvider,
+                        backgroundColor: surfaceColor,
+                        textColor: textColor,
+                        secondaryTextColor: secondaryTextColor,
+                        accentColor: accentColor,
+                        unreadColor: unreadColor,
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -188,13 +215,34 @@ class _DMsTabState extends State<DMsTab> {
     required BuildContext context,
     required Chat chat,
     required ChatProvider chatProvider,
+    required ThemeProvider themeProvider,
     required Color backgroundColor,
     required Color textColor,
     required Color secondaryTextColor,
     required Color accentColor,
+    required Color unreadColor,
   }) {
-    final otherUser = chat.isGroupChat ? null : chatProvider.getUserById(
-      chat.participantIds.firstWhere((id) => id != 'current_user'));
+    final currentUserId = chatProvider.currentUserId;
+    User? otherUser;
+    if (!chat.isGroupChat) {
+       final otherParticipantId = chat.participantIds.firstWhere((id) => id != currentUserId, orElse: () => '');
+       if (otherParticipantId.isNotEmpty) {
+         otherUser = chatProvider.getUserById(otherParticipantId);
+       }
+    }
+
+    final bool isUnread = !chat.readBy.contains(currentUserId);
+
+    DateTime? lastMessageDateTime;
+    try {
+      lastMessageDateTime = DateTime.tryParse(chat.lastMessageTime);
+    } catch (e) {
+      print("Error parsing lastMessageTime: ${chat.lastMessageTime} - $e");
+      lastMessageDateTime = DateTime.tryParse(chat.createdAt);
+    }
+    final String timeAgoString = lastMessageDateTime != null
+        ? timeago.format(lastMessageDateTime)
+        : '';
 
     return GestureDetector(
       onTap: () {
@@ -206,41 +254,38 @@ class _DMsTabState extends State<DMsTab> {
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
+          color: isUnread ? unreadColor : backgroundColor,
+          borderRadius: BorderRadius.circular(15),
         ),
         child: Row(
           children: [
             Stack(
+              clipBehavior: Clip.none,
               children: [
                 ImageUtils.avatarWithFallback(
                   imageUrl: chat.isGroupChat
-                      ? chat.groupAvatarUrl ?? 'https://ui-avatars.com/api/?name=${chat.groupName}'
-                      : otherUser?.avatarUrl ?? '',
+                      ? chat.groupAvatarUrl
+                      : otherUser?.profileImageUrl,
                   radius: 28,
-                  name: chat.isGroupChat ? chat.groupName : otherUser?.name ?? 'User',
+                  name: chat.isGroupChat ? (chat.groupName ?? 'Group') : (otherUser?.fullName ?? 'User'),
                 ),
-                if (!chat.isGroupChat && otherUser != null)
+                if (!chat.isGroupChat && otherUser?.isCoach == true)
                   Positioned(
-                    right: 0,
-                    bottom: 0,
+                    right: -2,
+                    bottom: -2,
                     child: Container(
-                      width: 14,
-                      height: 14,
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: otherUser.status == UserStatus.online
-                            ? Colors.green
-                            : otherUser.status == UserStatus.away
-                                ? Colors.orange
-                                : Colors.grey,
+                        color: backgroundColor,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: backgroundColor,
-                          width: 2,
-                        ),
+                      ),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: accentColor,
+                        size: 16,
                       ),
                     ),
                   ),
@@ -251,55 +296,54 @@ class _DMsTabState extends State<DMsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        chat.isGroupChat ? chat.groupName! : otherUser?.name ?? '',
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 16,
-                          fontWeight: chat.hasUnreadMessages ? FontWeight.bold : FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        timeago.format(chat.lastMessageTime, allowFromNow: true),
-                        style: TextStyle(
-                          color: secondaryTextColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    chat.isGroupChat ? (chat.groupName ?? 'Group') : (otherUser?.fullName ?? 'User'),
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          chat.lastMessageText,
-                          style: TextStyle(
-                            color: chat.hasUnreadMessages ? textColor : secondaryTextColor,
-                            fontSize: 14,
-                            fontWeight: chat.hasUnreadMessages ? FontWeight.w500 : FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (chat.hasUnreadMessages)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
+                  Text(
+                    chat.lastMessageText,
+                    style: TextStyle(
+                      color: isUnread ? textColor : secondaryTextColor,
+                      fontSize: 14,
+                      fontWeight: isUnread ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                 Text(
+                   timeAgoString,
+                   style: TextStyle(
+                     color: secondaryTextColor,
+                     fontSize: 12,
+                   ),
+                 ),
+                 if (isUnread) ...[
+                   const SizedBox(height: 4),
+                   Container(
+                     width: 8,
+                     height: 8,
+                     decoration: BoxDecoration(
+                       color: accentColor,
+                       shape: BoxShape.circle,
+                     ),
+                   ),
+                 ],
+              ],
             ),
           ],
         ),
