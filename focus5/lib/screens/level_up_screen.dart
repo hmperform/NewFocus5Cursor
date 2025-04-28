@@ -102,8 +102,8 @@ class _LevelUpScreenState extends State<LevelUpScreen> {
                 const SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () {
-                    // Pop until the first route (presumably the home screen)
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    // Simply pop the current screen (LevelUpScreen)
+                    Navigator.of(context).pop();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFB4FF00), // Accent color

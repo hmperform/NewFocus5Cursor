@@ -72,7 +72,7 @@ class ArticleCard extends StatelessWidget {
                   child: CachedNetworkImage(
                     imageUrl: article.thumbnail,
                     width: double.infinity,
-                    height: 180,
+                    height: 140,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: const Color(0xFF2A2A2A),
@@ -118,90 +118,101 @@ class ArticleCard extends StatelessWidget {
               ],
             ),
             
-            // Article info
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  Text(
-                    article.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Author and date
-                  Row(
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: article.authorImageUrl ?? '',
-                        imageBuilder: (context, imageProvider) => CircleAvatar(
-                          backgroundImage: imageProvider,
-                          radius: 14,
-                        ),
-                        placeholder: (context, url) => const CircleAvatar(
-                          radius: 14,
-                          child: Icon(Icons.person, size: 16),
-                        ),
-                        errorWidget: (context, url, error) => const CircleAvatar(
-                          radius: 14,
-                          child: Icon(Icons.person, size: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          article.authorName ?? 'Unknown Author',
+            // Article info - Wrap Padding in Expanded
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  // Ensure the inner column doesn't overflow the Expanded space
+                  children: [
+                    // Top part (Title + Author)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title
+                        Text(
+                          article.title,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1.3,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Info row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        formattedDate,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[400],
+                        const SizedBox(height: 6),
+                        
+                        // Author
+                        Row(
+                          children: [
+                            CachedNetworkImage(
+                              imageUrl: article.authorImageUrl ?? '',
+                              imageBuilder: (context, imageProvider) => CircleAvatar(
+                                backgroundImage: imageProvider,
+                                radius: 14,
+                              ),
+                              placeholder: (context, url) => const CircleAvatar(
+                                radius: 14,
+                                child: Icon(Icons.person, size: 16),
+                              ),
+                              errorWidget: (context, url, error) => const CircleAvatar(
+                                radius: 14,
+                                child: Icon(Icons.person, size: 16),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                article.authorName ?? 'Unknown Author',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 14,
+                      ],
+                    ),
+                    
+                    // Spacer to push the bottom row down if needed (flexible)
+                    const Spacer(),
+
+                    // Bottom part (Date + Time)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          formattedDate,
+                          style: TextStyle(
+                            fontSize: 12,
                             color: Colors.grey[400],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${article.readTimeMinutes} min',
-                            style: TextStyle(
-                              fontSize: 12,
+                        ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 14,
                               color: Colors.grey[400],
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
+                            const SizedBox(width: 4),
+                            Text(
+                              '${article.readTimeMinutes} min',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

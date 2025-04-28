@@ -133,36 +133,37 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
-    
+    final contentProvider = Provider.of<ContentProvider>(context); // Get content provider
+
+    // Check loading state for content
+    if (contentProvider.isLoading) {
+       return const Center(child: CircularProgressIndicator());
+    }
+
     return Scaffold(
       body: Stack(
         children: [
-          _isLoading 
-            ? Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    themeProvider.accentColor,
-                  ),
-                ),
-              )
-            : ListView(
+          ListView( // Removed the _isLoading ternary, handle loading above
                 controller: _scrollController,
-                padding: const EdgeInsets.only(top: 64), // Add padding for StatusBar
+                padding: const EdgeInsets.only(top: 64, bottom: 80), // Add padding for StatusBar and bottom
                 children: [
-                  // Coaches section (moved to top)
+                  // Coaches section (increased height)
                   _buildCoachesSection(),
-                  
-                  // Featured section
-                  _buildFeaturedSection(),
-                  
-                  // Courses grid
-                  _buildCoursesGrid(),
-                  
-                  // Focus areas
-                  _buildModulesSection(),
+                  const SizedBox(height: 20), // <<< Reduced spacing (was 32)
+
+                  // Featured section (assuming this is featured courses)
+                  _buildFeaturedCoursesSection(), // Renamed from _buildFeaturedSection
+                  const SizedBox(height: 32), // Add spacing
+
+                  // Trending Courses Section (Used Courses Grid before)
+                  _buildTrendingCoursesSection(), // Renamed from _buildCoursesGrid
+                  const SizedBox(height: 32), // Add spacing
+
+                  // Articles section (Replaced Modules/Focus Areas)
+                  _buildArticlesSection(),
                 ],
               ),
-              
+
           // Status Bar
           const Positioned(
             top: 0,
@@ -175,68 +176,30 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     );
   }
   
-  List<Widget> _buildOrderedSections() {
-    if (_loadingConfig) {
-      return [
-        const SizedBox(height: 40),
-        const Center(child: CircularProgressIndicator()),
-        const SizedBox(height: 80),
-      ];
-    }
-    
-    // Always show coaches first, regardless of config
-    final List<Widget> orderedSections = [
-      _buildCoachesSection(),
-      const SizedBox(height: 24), // Add spacing after coaches
-    ];
-    
-    // Get section order from app config for other sections
-    final List<dynamic> sectionOrder = 
-        _appConfig['section_order'] as List<dynamic>? ?? 
-        ['focus_areas', 'featured_courses', 'articles', 'trending_courses'];
-    
-    // Map section IDs to their builder methods (excluding coaches since it's already added)
-    final Map<String, Widget> sectionWidgets = {
-      'focus_areas': _buildModulesSection(),
-      'featured_courses': _buildFeaturedCoursesSection(),
-      'articles': _buildArticlesSection(),
-      'trending_courses': _buildTrendingCoursesSection(),
-    };
-    
-    // Add remaining sections in configured order
-    for (final sectionId in sectionOrder) {
-      if (sectionId != 'coaches' && sectionWidgets.containsKey(sectionId)) {
-        orderedSections.add(sectionWidgets[sectionId]!);
-      }
-    }
-    
-    // Add bottom padding
-    orderedSections.add(const SizedBox(height: 80));
-    
-    return orderedSections;
-  }
-  
   Widget _buildCoachesSection() {
     final coachProvider = Provider.of<CoachProvider>(context);
     final coaches = coachProvider.coaches;
     final textColor = Theme.of(context).colorScheme.onBackground;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    if (coachProvider.isLoading && coaches.isEmpty) {
+    // Limit to 5 coaches for the horizontal list
+    final displayedCoaches = coaches.take(5).toList();
+
+    if (coachProvider.isLoading && displayedCoaches.isEmpty) {
       return Container(
-        height: 100,
+        height: 180, // Adjusted height for loading state
         child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
       );
     }
 
-    if (coachProvider.error != null && coaches.isEmpty) {
+    if (coachProvider.error != null && displayedCoaches.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
         child: Text('Error loading coaches: ${coachProvider.error}', style: TextStyle(color: Colors.red)),
       );
     }
 
-    if (coaches.isEmpty) {
+    if (displayedCoaches.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -251,7 +214,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
               Text(
                 'Featured Coaches',
                 style: TextStyle(
-                  fontSize: 24, // Larger font size
+                  fontSize: 20, // Slightly smaller title
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
@@ -287,16 +250,16 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           ),
         ),
         SizedBox(
-          height: 280, // Increased height for larger coach cards
+          height: 264, // *** Increased height for coach cards (220 * 1.2) ***
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
-            itemCount: coaches.length,
+            itemCount: displayedCoaches.length, // Use limited list
             itemBuilder: (context, index) {
-              final coach = coaches[index];
+              final coach = displayedCoaches[index];
               return Container(
-                width: MediaQuery.of(context).size.width * 0.5,
-                margin: const EdgeInsets.only(right: 16),
+                width: 192, // *** Increased width for coach cards (160 * 1.2) ***
+                margin: const EdgeInsets.only(right: 12),
                 child: GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -309,58 +272,48 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                     );
                   },
                   child: Card(
-                    elevation: 4,
+                    clipBehavior: Clip.antiAlias, // Ensures content respects rounded corners
+                    elevation: 3,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Stack( // Use Stack for image background and text overlay
+                      fit: StackFit.expand,
                       children: [
-                        // Coach image
-                        ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16),
-                          ),
-                          child: Image.network(
-                            coach.profileImageUrl,
-                            height: 180,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                height: 180,
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.person, size: 50),
-                              );
-                            },
+                        // Coach image as background
+                        ImageUtils.networkImageWithFallback(
+                          imageUrl: coach.profileImageUrl,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover, // Cover the card area
+                          errorColor: Colors.grey.shade300,
+                          backgroundColor: Colors.grey.shade100,
+                        ),
+                        // Gradient overlay for text readability
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.center,
+                            ),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                coach.name,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: textColor,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                coach.title ?? '',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: textColor.withOpacity(0.7),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                        // Coach name at the bottom
+                        Positioned(
+                          bottom: 8,
+                          left: 8,
+                          right: 8,
+                          child: Text(
+                            coach.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ],
@@ -376,336 +329,110 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   }
   
   Widget _buildTrendingCoursesSection() {
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final courses = contentProvider.courses; // Get all courses
-    final isLoading = contentProvider.isLoading;
-    final error = contentProvider.errorMessage;
-    final textColor = Theme.of(context).colorScheme.onBackground;
     final themeProvider = Provider.of<ThemeProvider>(context);
-
-    // Handle loading and error states specifically for courses
-    if (isLoading && courses.isEmpty) {
-      return Container(
-        height: 260, // Approx height for course cards
-        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
-      );
-    } 
-
-    if (error != null && courses.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text('Error loading courses: $error', style: TextStyle(color: Colors.red)),
-      );
-    }
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final courses = contentProvider.courses; // Assuming this gets all/trending courses
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     if (courses.isEmpty) {
-      return const SizedBox.shrink(); // No courses to show
+      return const SizedBox.shrink();
     }
+
+    // Limit to 6 courses for the grid
+    final displayedCourses = courses.take(6).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16), // Match padding of other sections
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Trending Courses', // UPDATED TITLE
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              // Optional: Add a "View All" button if needed
-              // TextButton(...)
-            ],
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), // Adjusted top padding
+          child: Text(
+            'Trending Courses', // Updated title
+            style: TextStyle(
+              fontSize: 20, // Consistent title size
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
           ),
         ),
-        // Use horizontal ListView similar to Featured Courses
         SizedBox(
-          height: 260, // Match height of _buildFeaturedCoursesSection
+          height: 260, // <<< Increased height for the horizontal list (was 220)
           child: ListView.builder(
-            padding: const EdgeInsets.only(left: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
-            itemCount: courses.length, // Show all courses
+            itemCount: displayedCourses.length,
             itemBuilder: (context, index) {
-              final course = courses[index];
-              // Reuse the existing course card builder from Featured Courses
-              return _buildCourseCard(course); 
+              final course = displayedCourses[index];
+              // Use CourseCard, assuming it's adapted for horizontal display below
+              // Pass a specific width to the card
+              return Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: CourseCard(
+                  course: course,
+                  isPurchased: userProvider.hasPurchasedCourse(course.id),
+                  cardWidth: MediaQuery.of(context).size.width * 0.65, // Example width 
+                ),
+              );
             },
           ),
         ),
-         const SizedBox(height: 24), // Add spacing after the section
       ],
     );
   }
   
   Widget _buildArticlesSection() {
     final contentProvider = Provider.of<ContentProvider>(context);
-    final articles = contentProvider.articles;
-    final isLoading = contentProvider.isLoading;
-    final error = contentProvider.errorMessage;
+    final articles = contentProvider.articles; // Assumes articles are loaded by initContent
     final textColor = Theme.of(context).colorScheme.onBackground;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    if (isLoading && articles.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    } 
+    // Sort articles by published date (newest first) and take top 5
+    articles.sort((a, b) => b.publishedDate.compareTo(a.publishedDate));
+    final displayedArticles = articles.take(5).toList();
 
-    if (error != null && articles.isEmpty) {
-      return Center(child: Text('Error loading articles: $error', style: TextStyle(color: Colors.red)));
+    if (contentProvider.isLoading && displayedArticles.isEmpty) {
+      return Container(
+        height: 250, // Placeholder height during load
+        child: Center(child: CircularProgressIndicator(color: themeProvider.accentColor)),
+      );
     }
 
-    if (articles.isEmpty) {
-      return const SizedBox.shrink(); // No articles to show
+    if (contentProvider.errorMessage != null && displayedArticles.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text('Error loading articles: ${contentProvider.errorMessage}', style: TextStyle(color: Colors.red)),
+      );
+    }
+
+    if (displayedArticles.isEmpty) {
+      return const SizedBox.shrink(); // Hide section if no articles
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Add top spacing to separate from previous section
-        const SizedBox(height: 16),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), // Adjusted top padding
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Latest Articles',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushNamed('/articles-list');
-                },
-                child: Text('See All', style: TextStyle(color: themeProvider.accentColor)),
-              ),
-            ],
-          ),
-        ),
-        // Replace vertical ListView with horizontal SizedBox and ListView
-        SizedBox(
-          height: 300, // Adjusted height for the article cards
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: articles.length,
-            itemBuilder: (context, index) {
-              final article = articles[index];
-              
-              // Create a card with proper sizing for horizontal scrolling
-              final formattedDate = DateFormat('MMM d, yyyy').format(article.publishedDate);
-              final userProvider = Provider.of<UserProvider>(context);
-              final isCompleted = userProvider.completedArticleIds.contains(article.id);
-              
-              return GestureDetector(
-                onTap: () async {
-                  // Check if user has access or show paywall
-                  final paywallService = PaywallService();
-                  final hasAccess = await paywallService.showPaywallIfNeeded(
-                    context,
-                    source: 'article',
-                  );
-                  
-                  // If user has access, navigate to article
-                  if (hasAccess && context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ArticleDetailScreen(articleId: article.id),
-                      ),
-                    );
-                  }
-                },
-                child: Container(
-                  width: 280,
-                  margin: const EdgeInsets.only(right: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isCompleted 
-                        ? Border.all(color: Colors.green, width: 2)
-                        : null,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Article image
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(12),
-                              topRight: Radius.circular(12),
-                            ),
-                            child: ImageUtils.networkImageWithFallback(
-                              imageUrl: article.thumbnail,
-                              width: double.infinity,
-                              height: 160,
-                              fit: BoxFit.cover,
-                              backgroundColor: const Color(0xFF2A2A2A),
-                              errorColor: Colors.white54,
-                            ),
-                          ),
-                          if (isCompleted)
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      
-                      // Article info
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Title
-                            Text(
-                              article.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1.3,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            
-                            // Author info
-                            Row(
-                              children: [
-                                ImageUtils.avatarWithFallback(
-                                  imageUrl: article.authorImageUrl,
-                                  radius: 12,
-                                  name: article.authorName ?? '',
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    article.authorName ?? 'Unknown Author',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            
-                            // Date and read time
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  size: 12,
-                                  color: Colors.grey[400],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  formattedDate,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[400],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Icon(
-                                  Icons.access_time,
-                                  size: 12,
-                                  color: Colors.grey[400],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${article.readTimeMinutes} min read',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[400],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        // Add more bottom spacing
-        const SizedBox(height: 40),
-      ],
-    );
-  }
-  
-  Widget _buildFeaturedCoursesSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final courses = contentProvider.getFeaturedCourses();
-    
-    if (courses.isEmpty) {
-      return const SizedBox.shrink(); // Hide if no courses
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Featured Courses',
+                'Recent Articles',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 20, // Consistent title size
                   fontWeight: FontWeight.bold,
                   color: textColor,
                 ),
               ),
               TextButton(
                 onPressed: () {
-                  // TODO: Implement navigation to All Courses Screen
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(
-                  //     builder: (context) => const AllCoursesScreen(),
-                  //   ),
-                  // );
-                  log('Navigate to All Courses');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ArticlesListScreen(), // Navigate to all articles
+                    ),
+                  );
                 },
                 child: Row(
                   children: [
@@ -729,7 +456,81 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           ),
         ),
         SizedBox(
-          height: 260,
+          height: 280, // *** Keep article section height moderate ***
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: displayedArticles.length,
+            itemBuilder: (context, index) {
+              final article = displayedArticles[index];
+              // Use ArticleCard - ensure it's designed for horizontal lists or adjust width here
+              return Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.75, // *** Adjusted width to be relative and slightly smaller to prevent overflow ***
+                  child: ArticleCard(article: article),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildFeaturedCoursesSection() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final contentProvider = Provider.of<ContentProvider>(context);
+    final courses = contentProvider.getFeaturedCourses();
+    
+    if (courses.isEmpty) {
+      return const SizedBox.shrink(); // Hide if no courses
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), // Adjusted top padding
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Featured Courses',
+                style: TextStyle(
+                  fontSize: 20, // Consistent title size
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  // TODO: Navigate to a 'View All Courses' screen if it exists
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'View all',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: themeProvider.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 16,
+                      color: themeProvider.accentColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 320, // *** Increased height for featured courses list ***
           child: ListView.builder(
             padding: const EdgeInsets.only(left: 16),
             scrollDirection: Axis.horizontal,
@@ -749,6 +550,9 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final textColor = Theme.of(context).colorScheme.onBackground;
     final isDarkMode = themeProvider.isDarkMode;
     
+    // *** Increased width for featured course card ***
+    final cardWidth = MediaQuery.of(context).size.width * 0.85; // Made slightly wider
+
     return GestureDetector(
       onTap: () async {
         final paywallService = PaywallService();
@@ -770,7 +574,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
         );
       },
       child: Container(
-        width: 280,
+        width: cardWidth, // *** Use calculated width ***
         margin: const EdgeInsets.only(right: 20, bottom: 10),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
@@ -797,12 +601,12 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
                   child: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
                     image: course.imageUrl,
-                    height: 140,
+                    height: 180, // *** Increased image height ***
                     width: double.infinity,
                     fit: BoxFit.cover,
                     imageErrorBuilder: (context, error, stackTrace) {
                       return Container(
-                        height: 140,
+                        height: 180, // *** Increased image height ***
                         width: double.infinity,
                         color: Colors.grey.shade200,
                         child: const Icon(Icons.image, color: Colors.grey),
@@ -941,261 +745,6 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
           ],
         ),
       ),
-    );
-  }
-  
-  Widget _buildModulesSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final contentProvider = Provider.of<ContentProvider>(context);
-    final modules = contentProvider.courses.expand((course) => course.modules).toList();
-    
-    if (modules.isEmpty) {
-      return const SizedBox.shrink(); // Hide if no modules
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Focus Areas',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // TODO: Implement navigation to All Modules Screen
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(builder: (context) => const AllModulesScreen()),
-                  // );
-                  log('Navigate to All Modules');
-                },
-                child: Row(
-                  children: [
-                    Text(
-                      'View all',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: themeProvider.accentColor,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 16,
-                      color: themeProvider.accentColor,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 160,
-          child: ListView.builder(
-            padding: const EdgeInsets.only(left: 16),
-            scrollDirection: Axis.horizontal,
-            itemCount: modules.length,
-            itemBuilder: (context, index) {
-              final module = modules[index];
-              
-              return GestureDetector(
-                onTap: () {
-                  // Navigate to the focus area courses screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => FocusAreaCoursesScreen(
-                        focusArea: module.categories.isNotEmpty ? module.categories.first : module.title,
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 160,
-                  margin: const EdgeInsets.only(right: 16, bottom: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Background image
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: FadeInImage.memoryNetwork(
-                          placeholder: kTransparentImage,
-                          image: module.imageUrl ?? 'https://via.placeholder.com/300',
-                          fit: BoxFit.cover,
-                          imageErrorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade300,
-                              child: const Icon(Icons.image, color: Colors.grey),
-                            );
-                          },
-                        ),
-                      ),
-                      
-                      // Gradient overlay
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.7),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      
-                      // Module title
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                module.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturedSection() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final userProvider = Provider.of<UserProvider>(context);
-    final contentProvider = Provider.of<ContentProvider>(context);
-    
-    // Skip rendering this section if there are no featured courses and it's still loading
-    if (contentProvider.isLoading && contentProvider.featuredCourses.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    // Skip rendering if there are no featured courses even after loading
-    if (!contentProvider.isLoading && contentProvider.featuredCourses.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Text(
-            'Featured',
-            style: TextStyle(
-              color: themeProvider.textColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 220,
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            scrollDirection: Axis.horizontal,
-            itemCount: contentProvider.featuredCourses.length,
-            itemBuilder: (context, index) {
-              final course = contentProvider.featuredCourses[index];
-              return FeaturedCourseCard(
-                course: course,
-                isPurchased: userProvider.hasPurchasedCourse(course.id),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCoursesGrid() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final userProvider = Provider.of<UserProvider>(context);
-    final contentProvider = Provider.of<ContentProvider>(context);
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Text(
-            'Explore Courses',
-            style: TextStyle(
-              color: themeProvider.textColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        contentProvider.allCourses.isEmpty
-            ? Center(child: CircularProgressIndicator())
-            : GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.8,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: contentProvider.allCourses.length,
-                itemBuilder: (context, index) {
-                  final course = contentProvider.allCourses[index];
-                  return CourseCard(
-                    course: course,
-                    isPurchased: userProvider.hasPurchasedCourse(course.id),
-                  );
-                },
-              ),
-      ],
     );
   }
 } 

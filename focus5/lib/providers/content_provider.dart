@@ -269,11 +269,42 @@ class ContentProvider with ChangeNotifier {
   Future<void> loadArticles() async {
     try {
       // Loading state managed by initContent
-      _articles = await _contentService.getArticles();
+      List<Article> baseArticles = await _contentService.getArticles();
       
-      // Optionally load author details here or leave it to the detail screen
-      // For simplicity, let's assume detail screen handles it for now.
-      debugPrint("ContentProvider: Loaded ${_articles.length} articles.");
+      // Fetch author details for each article
+      List<Article> articlesWithAuthors = [];
+      for (var article in baseArticles) {
+        try {
+          DocumentSnapshot authorDoc = await article.author.get();
+          String authorName = 'Unknown Author'; // Default
+          String? authorImageUrl;
+
+          if (authorDoc.exists && authorDoc.data() != null) {
+            // Safely access data
+            final data = authorDoc.data() as Map<String, dynamic>; 
+            authorName = data.containsKey('name') ? data['name'] as String? ?? 'Unknown Author' : 'Unknown Author';
+            // Check for both possible image URL fields
+            authorImageUrl = data.containsKey('profileImageUrl') 
+                              ? data['profileImageUrl'] as String? 
+                              : (data.containsKey('imageUrl') ? data['imageUrl'] as String? : null);
+                              
+            articlesWithAuthors.add(article.copyWithAuthorDetails(
+              name: authorName,
+              imageUrl: authorImageUrl,
+            ));
+          } else {
+            // Author document doesn't exist or has no data
+            articlesWithAuthors.add(article.copyWithAuthorDetails(name: authorName)); // Use default name
+          }
+        } catch (e) {
+          // Error fetching specific author, add article with default/unknown author
+          debugPrint('Error fetching/parsing author for article ${article.id}: $e');
+          articlesWithAuthors.add(article.copyWithAuthorDetails(name: 'Unknown Author'));
+        }
+      }
+      
+      _articles = articlesWithAuthors;
+      debugPrint("ContentProvider: Loaded ${_articles.length} articles with author details.");
       
     } catch (e) {
       debugPrint('Error loading articles: $e');

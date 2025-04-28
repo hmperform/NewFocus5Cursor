@@ -43,7 +43,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     _controller.forward();
     
-    // Navigate after delay
     _navigateToNextScreen();
   }
 
