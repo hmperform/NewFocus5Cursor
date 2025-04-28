@@ -170,12 +170,9 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
             ),
             child: TabBar(
               controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              indicatorSize: TabBarIndicatorSize.tab,
               indicatorColor: Theme.of(context).colorScheme.primary,
-              labelColor: Theme.of(context).colorScheme.primary,
+              labelColor: isDarkMode ? Colors.white : Colors.black,
               unselectedLabelColor: secondaryTextColor,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               tabs: const [
@@ -281,18 +278,21 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
       itemCount: _filteredAudios.length,
       itemBuilder: (context, index) {
         final audio = _filteredAudios[index];
-        String coachName = 'Unknown Coach';
+        String coachName = 'Unknown Coach'; // Default value
         try {
-            final coachData = contentProvider.coaches.firstWhere(
-              (c) => c['id'] == audio.creatorName.id, 
-              orElse: () => {},
-            );
-            if (coachData.isNotEmpty) {
-              coachName = coachData['name'] as String? ?? 'Unknown Coach';
-            }
-          } catch (e) {
-            print('Error looking up coach for audio ${audio.id}: $e');
-          }
+          // Find the coach map; firstWhere throws if not found
+          final coachDataMap = contentProvider.coaches.firstWhere(
+            (c) => c['id'] == audio.creatorId.id,
+            // No orElse needed, catch block handles not found
+          );
+          // If found, extract the name safely
+          coachName = coachDataMap['name'] as String? ?? 'Unknown Coach';
+
+        } catch (e) {
+           // Catches StateError if coach not found, or other potential errors
+           debugPrint('Coach lookup failed for creatorId ${audio.creatorId.id}: $e. Using default name.');
+           // coachName remains 'Unknown Coach'
+        }
         
         return _buildMediaCard(
           title: audio.title,

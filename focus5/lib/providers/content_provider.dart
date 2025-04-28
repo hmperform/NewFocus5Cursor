@@ -58,6 +58,7 @@ class ContentProvider with ChangeNotifier {
       await loadAudioModules();
       await loadDailyLesson();
       await loadArticles();
+      await loadCoaches();
 
       // All loading successful
       _isLoading = false;
@@ -513,6 +514,27 @@ class ContentProvider with ChangeNotifier {
                course.creatorName.toLowerCase().contains(lowerQuery) ||
                course.focusAreas.any((area) => area.toLowerCase().contains(lowerQuery));
       }).toList();
+    }
+  }
+
+  Future<void> loadCoaches() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('coaches').get();
+      _coaches = snapshot.docs.map((doc) {
+        final data = doc.data();
+        // Ensure essential fields are present, provide defaults if necessary
+        return {
+          'id': doc.id, // Use the document ID as the coach ID
+          'name': data['name']?.toString() ?? 'Unknown Coach',
+          // Add other fields you might need, e.g., 'imageUrl'
+          'imageUrl': data['imageUrl']?.toString() ?? '',
+        };
+      }).toList();
+      debugPrint("ContentProvider: Loaded ${_coaches.length} coaches.");
+    } catch (e) {
+      debugPrint('Error loading coaches: $e');
+      _coaches = []; // Reset on error
+      throw Exception('Failed to load coaches: $e'); // Re-throw to be caught by initContent
     }
   }
 } 
