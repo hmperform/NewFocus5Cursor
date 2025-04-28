@@ -2283,4 +2283,96 @@ class UserProvider extends ChangeNotifier {
     });
     // The listener will automatically update the local user object
   }
+
+  // --- Existing methods like addXp, addFocusPoints, etc. ---
+
+  // Update High Score for a Game
+  Future<void> updateGameHighScore(String criteriaType, int score, {BuildContext? context}) async {
+    if (_user == null) {
+      print('UserProvider [updateGameHighScore]: User is null, cannot update.');
+      return;
+    }
+    final userId = _user!.id;
+    print('UserProvider [updateGameHighScore]: Updating score for $criteriaType. User: $userId, Score: $score');
+
+    String scoreField;
+    int? currentHighScore;
+    bool higherIsBetter;
+
+    switch (criteriaType) {
+      case 'ConcentrationGrid':
+        scoreField = 'highScoreGrid';
+        currentHighScore = _user!.highScoreGrid;
+        higherIsBetter = true;
+        break;
+      case 'ConcentrationGridHard':
+        scoreField = 'highScoreGridHard';
+        currentHighScore = _user!.highScoreGridHard;
+        higherIsBetter = true;
+        break;
+      case 'WordSearch':
+        scoreField = 'highScoreWordSearch'; // Now an int field
+        currentHighScore = _user!.highScoreWordSearch;
+        higherIsBetter = false;
+        break;
+      default:
+        print('UserProvider [updateGameHighScore]: Unknown criteriaType: $criteriaType');
+        return;
+    }
+
+    bool isNewHighScore = false;
+    if (higherIsBetter) {
+      if (currentHighScore == null || score > currentHighScore) {
+        isNewHighScore = true;
+      }
+    } else {
+      // Lower is better (WordSearch time)
+      if (currentHighScore == null || score < currentHighScore) {
+        isNewHighScore = true;
+      }
+    }
+
+    if (isNewHighScore) {
+      print('UserProvider [updateGameHighScore]: New high score detected for $scoreField! Old: $currentHighScore, New: $score');
+      try {
+        // Update Firestore
+        await _firestore.collection('users').doc(userId).update({
+          scoreField: score,
+        });
+        print('UserProvider [updateGameHighScore]: Firestore updated successfully.');
+
+        // Update local user object immediately
+        switch (scoreField) {
+          case 'highScoreGrid':
+             _user = _user!.copyWith(highScoreGrid: score);
+             break;
+           case 'highScoreGridHard':
+             _user = _user!.copyWith(highScoreGridHard: score);
+             break;
+           case 'highScoreWordSearch':
+             _user = _user!.copyWith(highScoreWordSearch: score);
+             break; 
+        }
+        
+        notifyListeners(); // Notify after local update
+
+        // Check for badges AFTER successful update
+        // Pass the updated user object and context
+        print('UserProvider [updateGameHighScore]: Checking for badges...');
+        await _badgeService.checkForNewBadges(userId, _user!, context: context);
+        print('UserProvider [updateGameHighScore]: Badge check complete.');
+
+      } catch (e, stackTrace) {
+        print('UserProvider [updateGameHighScore]: Error updating Firestore or checking badges: $e');
+        print(stackTrace);
+        // Optionally notify UI of error
+        _errorMessage = 'Failed to save high score.';
+        notifyListeners();
+      }
+    } else {
+      print('UserProvider [updateGameHighScore]: Score $score is not a new high score for $scoreField (Current: $currentHighScore).');
+    }
+  }
+
+  // --- Other existing methods --- 
 } 

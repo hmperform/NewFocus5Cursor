@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../models/user_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WordSearchGame extends StatefulWidget {
   const WordSearchGame({Key? key}) : super(key: key);
@@ -81,13 +84,21 @@ class _WordSearchGameState extends State<WordSearchGame> {
   bool isGameActive = false;
   bool isGridBlurred = true;
   Cell? startCell;
+  Cell? endCell;
+  List<List<int>> currentDragLine = [];
   List<int> bestTimes = [];
+
+  // Leaderboard State
+  List<User> _leaderboardData = [];
+  bool _leaderboardLoading = false;
+  String? _leaderboardError;
 
   @override
   void initState() {
     super.initState();
     loadTimes();
     generateRandomLetterGrid();
+    _fetchLeaderboard();
   }
 
   @override
@@ -103,7 +114,7 @@ class _WordSearchGameState extends State<WordSearchGame> {
       try {
         List<dynamic> decodedTimes = jsonDecode(timesJson);
         setState(() {
-          bestTimes = List<int>.from(decodedTimes);
+          bestTimes = List<int>.from(decodedTimes.whereType<int>());
         });
       } catch (e) {
         setState(() {
@@ -113,65 +124,79 @@ class _WordSearchGameState extends State<WordSearchGame> {
     }
   }
 
-  Future<void> recordTime(int seconds) async {
-    final prefs = await SharedPreferences.getInstance();
-    bestTimes.add(seconds);
-    bestTimes.sort();
-    // Keep only the best 10 times
-    if (bestTimes.length > 10) {
-      bestTimes = bestTimes.sublist(0, 10);
+  Future<void> recordAndShowCompletion(int seconds) async {
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.updateGameHighScore('WordSearch', seconds, context: context);
+      print('WordSearchGame: Called updateGameHighScore with time $seconds seconds');
+    } catch (e) {
+      print('WordSearchGame: Error getting UserProvider: $e');
     }
-    await prefs.setString('wordSearchTimes', jsonEncode(bestTimes));
     
-    // Show completion dialog with best times
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Congratulations!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('You completed the word search in $timer seconds!'),
-            const SizedBox(height: 16),
-            const Text('Your Best Times:'),
-            const SizedBox(height: 8),
-            Container(
-              height: 150,
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: bestTimes.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      '${index + 1}. ${bestTimes[index]} seconds',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  );
-                },
+    final prefs = await SharedPreferences.getInstance();
+    List<int> currentLocalBestTimes = List<int>.from(bestTimes);
+    currentLocalBestTimes.add(seconds);
+    currentLocalBestTimes.sort();
+    if (currentLocalBestTimes.length > 10) {
+      currentLocalBestTimes = currentLocalBestTimes.sublist(0, 10);
+    }
+    await prefs.setString('wordSearchTimes', jsonEncode(currentLocalBestTimes));
+    setState(() {
+      bestTimes = currentLocalBestTimes;
+    });
+    
+    _fetchLeaderboard();
+    
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Congratulations!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('You completed the word search in $seconds seconds!'),
+              const SizedBox(height: 16),
+              const Text('Your Best Times (Local):'),
+              const SizedBox(height: 8),
+              Container(
+                height: 150,
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: bestTimes.length,
+                  itemBuilder: (context, index) {
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        '${index + 1}. ${bestTimes[index]} seconds',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    );
+                  },
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                restartGame();
+              },
+              child: const Text('Play Again'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: const Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              restartGame();
-            },
-            child: const Text('Play Again'),
-          ),
-        ],
-      ),
-    );
+      );
+    }
   }
 
   void startTimer() {
@@ -191,6 +216,7 @@ class _WordSearchGameState extends State<WordSearchGame> {
   void startGame() {
     setState(() {
       isGameActive = true;
+      isGridBlurred = false;
       generatePuzzle();
       startTimer();
     });
@@ -341,6 +367,51 @@ class _WordSearchGameState extends State<WordSearchGame> {
     }
   }
 
+  void processLine(List<List<int>>? line) {
+    if (line == null) {
+      clearSelections();
+      return;
+    }
+
+    String wordFormed = line.map((pos) => grid[pos[0]][pos[1]].letter).join('');
+    String reversed = wordFormed.split('').reversed.join('');
+    
+    String? foundWord;
+    int foundIndex = -1;
+    for (int i = 0; i < chosenWords.length; i++) {
+      if (chosenWords[i].found) continue; 
+      
+      if (chosenWords[i].word == wordFormed || chosenWords[i].word == reversed) {
+        foundWord = chosenWords[i].word;
+        foundIndex = i;
+        break;
+      }
+    }
+
+    if (foundWord != null && foundIndex != -1) {
+      for (var pos in line) {
+        grid[pos[0]][pos[1]].found = true;
+        grid[pos[0]][pos[1]].selected = false;
+      }
+      
+      chosenWords[foundIndex].found = true;
+      foundCount++;
+      
+      showDefinition(foundWord);
+      
+      if (foundCount == chosenWords.length) {
+        stopTimer();
+        recordAndShowCompletion(timer);
+      }
+    } else {
+      clearSelections(); 
+    }
+    
+    startCell = null;
+    endCell = null;
+    currentDragLine = [];
+  }
+
   void cellTapped(int r, int c) {
     if (!isGameActive) return;
 
@@ -359,51 +430,12 @@ class _WordSearchGameState extends State<WordSearchGame> {
         List<List<int>>? line = getLineOfCells(startR, startC, endR, endC);
         
         if (line != null) {
-          // Mark cells as selected temporarily
           for (var pos in line) {
             grid[pos[0]][pos[1]].selected = true;
           }
-
-          // Collect letters to form a word
-          String wordFormed = line.map((pos) => grid[pos[0]][pos[1]].letter).join('');
-          String reversed = wordFormed.split('').reversed.join('');
-          
-          // Check if the word is in our list
-          String? foundWord;
-          for (var word in chosenWords) {
-            if (word.word == wordFormed || word.word == reversed) {
-              foundWord = word.word;
-              word.found = true;
-              break;
-            }
-          }
-
-          if (foundWord != null) {
-            // Mark cells as found
-            for (var pos in line) {
-              grid[pos[0]][pos[1]].selected = false;
-              grid[pos[0]][pos[1]].found = true;
-            }
-            
-            foundCount++;
-            
-            // Show definition
-            showDefinition(foundWord);
-            
-            // Check for game completion
-            if (foundCount == chosenWords.length) {
-              stopTimer();
-              recordTime(timer);
-            }
-          } else {
-            // Clear selections if word not found
-            clearSelections();
-          }
-        } else {
-          clearSelections();
         }
         
-        startCell = null;
+        processLine(line);
       }
     });
   }
@@ -420,7 +452,6 @@ class _WordSearchGameState extends State<WordSearchGame> {
     int dr = r2 - r1;
     int dc = c2 - c1;
     
-    // Check if it's a straight line (horizontal, vertical, or diagonal)
     if (dr != 0 && dc != 0 && dr.abs() != dc.abs()) return null;
 
     int length = max(dr.abs(), dc.abs()) + 1;
@@ -458,6 +489,52 @@ class _WordSearchGameState extends State<WordSearchGame> {
     );
   }
 
+  Future<void> _fetchLeaderboard() async {
+     setState(() {
+      _leaderboardLoading = true;
+      _leaderboardError = null;
+    });
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final query = firestore
+          .collection('users')
+          .where('highScoreWordSearch', isGreaterThan: 0)
+          .orderBy('highScoreWordSearch', descending: false)
+          .limit(10);
+
+      final snapshot = await query.get();
+
+      final users = snapshot.docs
+          .map((doc) {
+              try {
+                return User.fromFirestore(doc);
+              } catch (e) {
+                 print("Error parsing user data for leaderboard: ${doc.id}, Error: $e");
+                 return null;
+              }
+            })
+          .where((user) => user != null)
+          .cast<User>()
+          .toList();
+
+      if (mounted) {
+          setState(() {
+            _leaderboardData = users;
+            _leaderboardLoading = false;
+          });
+      }
+    } catch (e) {
+      print("Error fetching Word Search leaderboard: $e");
+      if (mounted) {
+          setState(() {
+            _leaderboardLoading = false;
+            _leaderboardError = "Failed to load leaderboard.";
+          });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -490,7 +567,6 @@ class _WordSearchGameState extends State<WordSearchGame> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Game info
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -510,10 +586,10 @@ class _WordSearchGameState extends State<WordSearchGame> {
                     ),
                     if (bestTimes.isNotEmpty)
                       Text(
-                        'Best: ${bestTimes[0]} s',
+                        'Your Best: ${bestTimes[0]} s',
                         style: TextStyle(
-                          color: textColor,
-                          fontSize: 18,
+                          color: textColor, 
+                          fontSize: 18, 
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -522,7 +598,6 @@ class _WordSearchGameState extends State<WordSearchGame> {
               ),
               const SizedBox(height: 16),
               
-              // Instructions
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -530,7 +605,7 @@ class _WordSearchGameState extends State<WordSearchGame> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Tap the first letter of the word you want to find, then tap the last letter of that word. No dragging needed!',
+                  'Find the words listed below. Tap the first and last letter OR drag across the word.',
                   style: TextStyle(
                     color: textColor,
                     fontSize: 14,
@@ -540,7 +615,6 @@ class _WordSearchGameState extends State<WordSearchGame> {
               ),
               const SizedBox(height: 16),
 
-              // Game buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -574,10 +648,8 @@ class _WordSearchGameState extends State<WordSearchGame> {
               ),
               const SizedBox(height: 24),
               
-              // Game grid and word bank
               Column(
                 children: [
-                  // Grid - full width
                   Container(
                     decoration: BoxDecoration(
                       border: Border.all(
@@ -592,56 +664,69 @@ class _WordSearchGameState extends State<WordSearchGame> {
                         imageFilter: isGridBlurred
                             ? ImageFilter.blur(sigmaX: 5, sigmaY: 5)
                             : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-                        child: GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: GRID_SIZE,
-                            childAspectRatio: 1.0,
-                          ),
-                          itemCount: GRID_SIZE * GRID_SIZE,
-                          itemBuilder: (context, index) {
-                            int row = index ~/ GRID_SIZE;
-                            int col = index % GRID_SIZE;
-                            Cell cell = grid[row][col];
-                            
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            double cellWidth = constraints.maxWidth / GRID_SIZE;
+                            double cellHeight = constraints.maxHeight / GRID_SIZE;
+
                             return GestureDetector(
-                              onTap: () => cellTapped(row, col),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: Colors.grey.shade500,
-                                    width: 1,
-                                  ),
-                                  color: cell.found
-                                      ? Colors.green
-                                      : cell.selected
-                                          ? Colors.grey.shade700
-                                          : surfaceColor,
+                              onPanStart: (details) {
+                                int startCol = (details.localPosition.dx / cellWidth).floor().clamp(0, GRID_SIZE - 1);
+                                int startRow = (details.localPosition.dy / cellHeight).floor().clamp(0, GRID_SIZE - 1);
+                                _onPanStart(details, startRow, startCol);
+                              },
+                              onPanUpdate: _onPanUpdate,
+                              onPanEnd: _onPanEnd,
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: GRID_SIZE,
+                                  childAspectRatio: 1.0,
                                 ),
-                                child: Center(
-                                  child: Text(
-                                    cell.letter,
-                                    style: TextStyle(
-                                      color: cell.found
-                                          ? Colors.black
-                                          : cell.selected
-                                              ? Colors.white
-                                              : textColor,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                itemCount: GRID_SIZE * GRID_SIZE,
+                                itemBuilder: (context, index) {
+                                  int row = index ~/ GRID_SIZE;
+                                  int col = index % GRID_SIZE;
+                                  Cell cell = grid[row][col];
+                                  
+                                  return GestureDetector(
+                                    onTap: () => cellTapped(row, col),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Colors.grey.shade500,
+                                          width: 1,
+                                        ),
+                                        color: cell.found
+                                            ? Colors.green
+                                            : cell.selected
+                                                ? Colors.blue.shade300
+                                                : surfaceColor,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          cell.letter,
+                                          style: TextStyle(
+                                            color: cell.found || cell.selected
+                                                ? Colors.black
+                                                : textColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             );
-                          },
+                          }
                         ),
                       ),
                     ),
                   ),
                   
-                  // Word bank - below grid
                   if (isGameActive) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -686,100 +771,162 @@ class _WordSearchGameState extends State<WordSearchGame> {
               ),
               const SizedBox(height: 24),
               
-              // Your times section
-              if (bestTimes.isNotEmpty && !isGridBlurred) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Your Best Times',
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Table(
-                        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                        columnWidths: const {
-                          0: IntrinsicColumnWidth(),
-                          1: IntrinsicColumnWidth(),
-                        },
-                        children: [
-                          TableRow(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Colors.grey.shade700,
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  'Rank',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Text(
-                                  'Time (s)',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          ...bestTimes.asMap().entries.take(5).map((entry) {
-                            return TableRow(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    '${entry.key + 1}',
-                                    style: TextStyle(
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    '${entry.value}',
-                                    style: TextStyle(
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              if (!isGameActive) _buildGlobalLeaderboard(),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildGlobalLeaderboard() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+
+    return Column(
+      children: [
+         Text(
+          'Word Search Leaderboard',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: surfaceColor, 
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              if (_leaderboardLoading)
+                const Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
+                ),
+                
+              if (!_leaderboardLoading && _leaderboardError != null)
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    _leaderboardError!,
+                    style: TextStyle(color: Colors.red, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                
+              if (!_leaderboardLoading && _leaderboardError == null && _leaderboardData.isEmpty)
+                 Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    'No scores recorded yet! Be the first!',
+                    style: TextStyle(color: secondaryTextColor, fontSize: 16),
+                     textAlign: TextAlign.center,
+                  ),
+                ),
+              
+              if (!_leaderboardLoading && _leaderboardError == null && _leaderboardData.isNotEmpty)
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _leaderboardData.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Colors.grey.shade700,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final user = _leaderboardData[index];
+                    final score = user.highScoreWordSearch;
+                                      
+                    return ListTile(
+                      dense: true,
+                      leading: CircleAvatar(
+                        radius: 15,
+                        child: Text('${index + 1}'), // Rank
+                      ),
+                      title: Text(
+                        user.fullName ?? 'Focus User', 
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(
+                        score != null ? '$score s' : '-', // Display time in seconds
+                        style: TextStyle(
+                          color: themeProvider.accentColor, // Highlight score
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onPanStart(DragStartDetails details, int r, int c) {
+    if (!isGameActive || startCell != null) return;
+    
+    setState(() {
+      clearSelections();
+      startCell = grid[r][c];
+      startCell!.selected = true;
+      startCell!.row = r;
+      startCell!.col = c;
+      currentDragLine = [[r, c]];
+    });
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (startCell == null || !isGameActive) return;
+
+    RenderBox? gridBox = context.findRenderObject() as RenderBox?;
+    if (gridBox == null) return;
+
+    Offset localPosition = gridBox.globalToLocal(details.globalPosition);
+
+    double cellWidth = gridBox.size.width / GRID_SIZE;
+    double cellHeight = gridBox.size.height / GRID_SIZE;
+
+    int currentCol = (localPosition.dx / cellWidth).floor();
+    int currentRow = (localPosition.dy / cellHeight).floor();
+
+    currentRow = currentRow.clamp(0, GRID_SIZE - 1);
+    currentCol = currentCol.clamp(0, GRID_SIZE - 1);
+
+    if (endCell != null && endCell!.row == currentRow && endCell!.col == currentCol) {
+      return;
+    }
+
+    setState(() {
+      endCell = grid[currentRow][currentCol];
+      endCell!.row = currentRow;
+      endCell!.col = currentCol;
+
+      currentDragLine = getLineOfCells(startCell!.row!, startCell!.col!, currentRow, currentCol) ?? [];
+
+      clearSelections();
+      for (var pos in currentDragLine) {
+        grid[pos[0]][pos[1]].selected = true;
+      }
+    });
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    if (startCell == null || endCell == null || !isGameActive) return;
+    
+    setState(() {
+      processLine(currentDragLine);
+    });
   }
 }
 

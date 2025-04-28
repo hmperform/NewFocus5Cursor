@@ -5,6 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/user_provider.dart';
+import '../../models/user_model.dart'; // <-- Import User model
+import 'package:cloud_firestore/cloud_firestore.dart'; // <-- Import Firestore
+import 'dart:ui'; // <-- Import dart:ui for ImageFilter
 
 class ConcentrationGridGame extends StatefulWidget {
   const ConcentrationGridGame({Key? key}) : super(key: key);
@@ -97,6 +101,12 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
   String currentMessage = "";
   bool isGridBlurred = true;
 
+  // Leaderboard State
+  List<User> _leaderboardData = [];
+  bool _leaderboardLoading = false;
+  String? _leaderboardError;
+  String _leaderboardModeTitle = 'Easy Mode'; // Track which leaderboard is shown
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +117,10 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
     
     loadData();
     generateNumbers();
+    // Fetch leaderboard for default mode (Easy) initially when game over is true
+    if (gameOver) {
+       _fetchLeaderboardForMode('ConcentrationGrid'); 
+    }
   }
 
   @override
@@ -254,31 +268,37 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
     int currentScore = nextNumber;
     int currentTimeTaken = 60 - timeLeft;
 
-    List<Map<String, dynamic>> currentAttempts;
-    int currentHighScore;
-    int currentBestTime;
-    
+    // ... (logic to determine currentAttempts, currentHighScore, currentBestTime, gameCriteriaType) ...
+    String gameCriteriaType; // Declare here
+    int currentHighScore;    // Declare here
+    int currentBestTime;     // Declare here
+    List<Map<String, dynamic>> currentAttempts; // Declare here
+
     if (isHyperMode) {
       currentAttempts = hyperAttempts;
       currentHighScore = hyperHighScore;
       currentBestTime = hyperBestTime;
+      gameCriteriaType = 'ConcentrationGridHyper'; 
     } else if (isHardMode) {
       currentAttempts = hardAttempts;
       currentHighScore = hardHighScore;
       currentBestTime = hardBestTime;
+      gameCriteriaType = 'ConcentrationGridHard';
     } else {
       currentAttempts = attempts;
       currentHighScore = highScore;
       currentBestTime = bestTime;
+      gameCriteriaType = 'ConcentrationGrid';
     }
-
+    // Add current attempt to local list
     currentAttempts.add({'score': currentScore, 'time': currentTimeTaken});
 
-    // Check improvement
-    bool improved = false;
+    // Check improvement for local storage
+    bool improvedLocally = false;
     if (currentScore > currentHighScore || 
         (currentScore == currentHighScore && currentTimeTaken < currentBestTime)) {
-      improved = true;
+      improvedLocally = true;
+      // ... (update local high scores: hyperHighScore, hardHighScore, highScore) ...
       if (isHyperMode) {
         hyperHighScore = currentScore;
         hyperBestTime = currentTimeTaken;
@@ -291,20 +311,38 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
       }
     }
 
+    // Save local data (attempts history, personal best, unlock status)
+    saveData();
+
+    // ---- Update Firestore High Score and Check Badges ----
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.updateGameHighScore(gameCriteriaType, currentScore, context: context);
+      print('ConcentrationGridGame: Called updateGameHighScore for $gameCriteriaType with score $currentScore');
+    } catch (e) {
+       print('ConcentrationGridGame: Error getting UserProvider: $e');
+    }
+    // ----------------------------------------------------
+
+    // --- Fetch Global Leaderboard for the finished mode ---
+    // Fetch leaderboard AFTER saving the score
+    _fetchLeaderboardForMode(gameCriteriaType);
+    // ------------------------------------------------------
+
     // Check if hyper mode should unlock via Hard mode score
     if (isHardMode && currentScore >= 20 && !hyperUnlocked) {
       hyperUnlocked = true;
+      saveData(); // Save unlock status locally again just in case
     }
 
-    saveData();
-    showEndMessage(improved);
+    showEndMessage(improvedLocally); // Show message based on local improvement
     
     setState(() {
       gameOver = true;
       isGridBlurred = true;
     });
     
-    generateNumbers();
+    generateNumbers(); // Prepare grid for next game
   }
 
   void showEndMessage(bool improved) {
@@ -329,6 +367,80 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
         hyperUnlocked = true;
       });
       saveData();
+    }
+  }
+
+  // --- Fetch Global Leaderboard Data ---
+  Future<void> _fetchLeaderboardForMode(String criteriaType) async {
+    // Skip fetch for hyper mode for now, or implement if needed
+    if (criteriaType == 'ConcentrationGridHyper') {
+      setState(() {
+        _leaderboardData = [];
+        _leaderboardLoading = false;
+        _leaderboardError = 'Hyper Mode Leaderboard Not Available Yet.';
+        _leaderboardModeTitle = 'Hyper Mode';
+      });
+      return;
+    }
+
+    setState(() {
+      _leaderboardLoading = true;
+      _leaderboardError = null;
+      _leaderboardModeTitle = criteriaType == 'ConcentrationGridHard' ? 'Hard Mode' : 'Easy Mode';
+    });
+
+    String scoreField;
+    bool descending;
+
+    switch (criteriaType) {
+      case 'ConcentrationGridHard':
+        scoreField = 'highScoreGridHard';
+        descending = true;
+        break;
+      case 'ConcentrationGrid':
+      default:
+        scoreField = 'highScoreGrid';
+        descending = true;
+        break;
+    }
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final query = firestore
+          .collection('users')
+          .where(scoreField, isGreaterThan: 0) // Only users who have played
+          .orderBy(scoreField, descending: descending)
+          .limit(10); // Limit to top 10
+
+      final snapshot = await query.get();
+
+      final users = snapshot.docs
+          .map((doc) {
+              try {
+                return User.fromFirestore(doc);
+              } catch (e) {
+                 print("Error parsing user data for leaderboard: ${doc.id}, Error: $e");
+                 return null;
+              }
+            })
+          .where((user) => user != null)
+          .cast<User>()
+          .toList();
+
+      if (mounted) {
+          setState(() {
+            _leaderboardData = users;
+            _leaderboardLoading = false;
+          });
+      }
+    } catch (e) {
+      print("Error fetching leaderboard for $criteriaType: $e");
+      if (mounted) {
+          setState(() {
+            _leaderboardLoading = false;
+            _leaderboardError = "Failed to load leaderboard.";
+          });
+      }
     }
   }
 
@@ -508,8 +620,9 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
                   
                   const SizedBox(height: 24),
                   
-                  // Leaderboards
-                  if (gameOver) buildLeaderboards(),
+                  // --- Global Leaderboard Display (Replaces local leaderboards) ---
+                  if (gameOver) _buildGlobalLeaderboard(),
+                  // --------------------------------------------------------------
                 ],
               ),
             ),
@@ -522,7 +635,8 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
   Widget buildGrid() {
     final accentColor = const Color(0xFFB4FF00);
     
-    Widget gridWidget = GridView.builder(
+    // The actual GridView widget
+    Widget gridViewWidget = GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -533,28 +647,38 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
       ),
       itemCount: 100,
       itemBuilder: (context, index) {
-        bool isFound = nextNumber > numbers[index];
+        int num = numbers[index];
+        bool isVisible = num < nextNumber; // Number already found
+        
         return GestureDetector(
-          onTap: () => cellClicked(numbers[index]),
+          onTap: () => cellClicked(num),
           child: Container(
             decoration: BoxDecoration(
-              color: isFound ? Colors.green.withOpacity(0.5) : const Color(0xFF1A1A1A),
-              border: Border.all(color: Colors.grey.shade800),
+              color: isVisible 
+                  ? Colors.grey.shade800 // Dim color for found numbers
+                  : Theme.of(context).colorScheme.surface, 
+              border: Border.all(
+                color: isVisible ? Colors.transparent : Colors.grey.shade500,
+                width: 1
+              ),
             ),
             child: Center(
-              child: Text(
-                numbers[index].toString().padLeft(2, '0'),
-                style: TextStyle(
-                  color: isFound ? Colors.white : Colors.white.withOpacity(0.8),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: isVisible
+                ? null // Hide text for found numbers
+                : Text(
+                    num.toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
             ),
           ),
         );
       },
     );
 
+    // Apply animations if game is active
     if (isHyperMode && !gameOver) {
       return AnimatedBuilder(
         animation: _animationController,
@@ -596,7 +720,7 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
             ),
           );
         },
-        child: gridWidget,
+        child: gridViewWidget,
       );
     } else if (isHardMode && !gameOver) {
       return AnimatedBuilder(
@@ -611,258 +735,156 @@ class _ConcentrationGridGameState extends State<ConcentrationGridGame> with Sing
             child: child,
           );
         },
-        child: gridWidget,
+        child: gridViewWidget,
       );
     } else {
+      // Default state: Apply blur if game is over/not started
       return Container(
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade800),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: isGridBlurred
-          ? ImageFiltered(
-              imageFilter: ColorFilter.matrix([
-                1, 0, 0, 0, 0,
-                0, 1, 0, 0, 0,
-                0, 0, 1, 0, 0,
-                0, 0, 0, 5, -5, // Last value controls blur amount
-              ]),
-              child: gridWidget,
-            )
-          : gridWidget,
+        child: ClipRRect( // Clip the blur effect to the rounded corners
+           borderRadius: BorderRadius.circular(7), // Slightly smaller than container radius
+           child: ImageFiltered(
+            imageFilter: ImageFilter.blur(
+              sigmaX: isGridBlurred ? 5 : 0, // Apply blur based on state
+              sigmaY: isGridBlurred ? 5 : 0, 
+            ),
+            child: gridViewWidget, // The actual grid
+          ),
+        ),
       );
     }
   }
 
-  Widget buildLeaderboards() {
+  // --- New Widget to Display Global Leaderboard ---
+  Widget _buildGlobalLeaderboard() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final textColor = Theme.of(context).colorScheme.onBackground;
+    final secondaryTextColor = themeProvider.secondaryTextColor;
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+
     return Column(
       children: [
-        const Text(
-          'Leaderboards',
+         Text(
+          '$_leaderboardModeTitle Leaderboard',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
+            color: textColor,
+            fontSize: 20, // Slightly smaller than before maybe
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 16),
-        
-        if (attempts.isNotEmpty) 
-          buildLeaderboardSection('Easy Mode', attempts),
-          
-        if (hardAttempts.isNotEmpty)
-          buildLeaderboardSection('Hard Mode', hardAttempts),
-          
-        if (hyperUnlocked && hyperAttempts.isNotEmpty)
-          buildLeaderboardSection('Hyper Mode', hyperAttempts),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              // Loading Indicator
+              if (_leaderboardLoading)
+                const Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(),
+                ),
+                
+              // Error Message
+              if (!_leaderboardLoading && _leaderboardError != null)
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    _leaderboardError!,
+                    style: TextStyle(color: Colors.red, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                
+              // No Scores Message
+              if (!_leaderboardLoading && _leaderboardError == null && _leaderboardData.isEmpty)
+                 Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    'No scores recorded yet! Be the first!',
+                    style: TextStyle(color: secondaryTextColor, fontSize: 16),
+                     textAlign: TextAlign.center,
+                  ),
+                ),
+              
+              // Leaderboard List
+              if (!_leaderboardLoading && _leaderboardError == null && _leaderboardData.isNotEmpty)
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _leaderboardData.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Colors.grey.shade700,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final user = _leaderboardData[index];
+                    
+                    // Determine score based on the title (which reflects the fetched mode)
+                    int? score = _leaderboardModeTitle == 'Hard Mode'
+                                  ? user.highScoreGridHard
+                                  : user.highScoreGrid;
+                                      
+                    return ListTile(
+                      dense: true,
+                      leading: CircleAvatar(
+                        radius: 15,
+                        child: Text('${index + 1}'), // Rank
+                      ),
+                      title: Text(
+                        user.fullName ?? 'Focus User', 
+                        style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(
+                        score?.toString() ?? '-',
+                        style: TextStyle(
+                          color: themeProvider.accentColor, // Highlight score
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
-
-  Widget buildLeaderboardSection(String title, List<Map<String, dynamic>> modeAttempts) {
-    // Sort attempts
-    List<Map<String, dynamic>> sorted = List.from(modeAttempts);
-    sorted.sort((a, b) {
-      if (b['score'] != a['score']) return b['score'] - a['score'];
-      return a['time'] - b['time'];
-    });
-    
-    // Take top 5
-    if (sorted.length > 5) {
-      sorted = sorted.sublist(0, 5);
-    }
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          // Headers
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.grey, width: 0.5),
-              ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  // Only attach the listener for easy mode
-                  onTap: title == 'Easy Mode' ? handleRankHeaderClick : null,
-                  child: const SizedBox(
-                    width: 60,
-                    child: Text(
-                      'Rank',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Score',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(
-                  width: 80,
-                  child: Text(
-                    'Time (s)',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Rows
-          ...List.generate(sorted.length, (index) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: index % 2 == 0 ? Colors.transparent : Colors.black.withOpacity(0.2),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 60,
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${sorted[index]['score']}',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 80,
-                    child: Text(
-                      '${sorted[index]['time']}',
-                      style: const TextStyle(color: Colors.white),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
+  // --- End Global Leaderboard Widget ---
 
   void _showInstructions() {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final textColor = Theme.of(context).colorScheme.onBackground;
-    final secondaryTextColor = themeProvider.secondaryTextColor;
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: Text(
-          'How to Play',
-          style: TextStyle(
-            color: textColor,
-            fontWeight: FontWeight.bold,
+        title: const Text('How to Play Concentration Grid'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Tap the numbers on the grid in sequence, starting from 0.\n\n'
+            'Find as many numbers as you can before the 60-second timer runs out.\n\n'
+            'Modes:\n'
+            '- Easy: Standard 60-second challenge.\n'
+            '- Hard: The grid layout changes frequently!\n'
+            '- Hyper: Unlockable challenge! Find 20 in Hard Mode or ???\n\n'
+            'Your score is the highest number you tapped correctly.'
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '1. Click "Start Game" to begin',
-              style: TextStyle(color: textColor),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '2. Find and tap numbers in sequence from 0 to 99',
-              style: TextStyle(color: textColor),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '3. The current number to find is shown at the top',
-              style: TextStyle(color: textColor),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '4. Try to complete the grid as fast as possible',
-              style: TextStyle(color: textColor),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'This game helps improve:',
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildBenefitRow(context, Icons.visibility, 'Visual scanning'),
-            const SizedBox(height: 4),
-            _buildBenefitRow(context, Icons.speed, 'Processing speed'),
-            const SizedBox(height: 4),
-            _buildBenefitRow(context, Icons.psychology, 'Concentration'),
-          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Got it',
-              style: TextStyle(
-                color: themeProvider.accentColor,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text('Got it!'),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildBenefitRow(BuildContext context, IconData icon, String text) {
-    final secondaryTextColor = Provider.of<ThemeProvider>(context).secondaryTextColor;
-    
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: secondaryTextColor),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: TextStyle(color: secondaryTextColor),
-        ),
-      ],
     );
   }
 

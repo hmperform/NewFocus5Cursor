@@ -38,6 +38,9 @@ class User {
   final List<String> savedCourses;
   final int? lifetimeJournalEntries;
   final int? currentJournalEntries;
+  final int? highScoreGrid;
+  final int? highScoreGridHard;
+  final int? highScoreWordSearch;
 
   User({
     required this.id,
@@ -75,6 +78,9 @@ class User {
     this.savedCourses = const [],
     this.lifetimeJournalEntries,
     this.currentJournalEntries,
+    this.highScoreGrid,
+    this.highScoreGridHard,
+    this.highScoreWordSearch,
   }) : 
     this.lastLoginDate = lastLoginDate ?? DateTime.now(),
     this.lastActive = lastActive ?? DateTime.now(),
@@ -217,6 +223,9 @@ class User {
           : [],
       lifetimeJournalEntries: data['lifetimeJournalEntries'] as int? ?? 0,
       currentJournalEntries: data['currentJournalEntries'] as int? ?? 0,
+      highScoreGrid: (data['highScoreGrid'] as num?)?.toInt(),
+      highScoreGridHard: (data['highScoreGridHard'] as num?)?.toInt(),
+      highScoreWordSearch: (data['highScoreWordSearch'] as num?)?.toInt(),
     );
   }
 
@@ -255,6 +264,9 @@ class User {
       'savedCourses': savedCourses,
       if (lifetimeJournalEntries != null) 'lifetimeJournalEntries': lifetimeJournalEntries,
       if (currentJournalEntries != null) 'currentJournalEntries': currentJournalEntries,
+      if (highScoreGrid != null) 'highScoreGrid': highScoreGrid,
+      if (highScoreGridHard != null) 'highScoreGridHard': highScoreGridHard,
+      if (highScoreWordSearch != null) 'highScoreWordSearch': highScoreWordSearch,
     };
   }
 
@@ -294,6 +306,9 @@ class User {
     List<String>? savedCourses,
     int? lifetimeJournalEntries,
     int? currentJournalEntries,
+    int? highScoreGrid,
+    int? highScoreGridHard,
+    int? highScoreWordSearch,
   }) {
     return User(
       id: id ?? this.id,
@@ -331,6 +346,9 @@ class User {
       savedCourses: savedCourses ?? this.savedCourses,
       lifetimeJournalEntries: lifetimeJournalEntries ?? this.lifetimeJournalEntries,
       currentJournalEntries: currentJournalEntries ?? this.currentJournalEntries,
+      highScoreGrid: highScoreGrid ?? this.highScoreGrid,
+      highScoreGridHard: highScoreGridHard ?? this.highScoreGridHard,
+      highScoreWordSearch: highScoreWordSearch ?? this.highScoreWordSearch,
     );
   }
 }

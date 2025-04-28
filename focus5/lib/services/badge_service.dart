@@ -234,6 +234,31 @@ class BadgeService {
           debugPrint('[BadgeService._hasEarnedBadge] Checking JournalEntriesWritten: User Lifetime Count=${currentLifetimeCount}, Required=${requiredEntries}. Result: $result');
           return result;
           
+        case 'ConcentrationGrid':
+          // Criteria: Score >= requiredCount
+          final int requiredScore = badge.requiredCount;
+          final int userScore = user.highScoreGrid ?? 0; // Use highScoreGrid field
+          final bool result = userScore >= requiredScore;
+          debugPrint('[BadgeService._hasEarnedBadge] Checking ConcentrationGrid: User Score=${userScore}, Required=${requiredScore}. Result: $result');
+          return result;
+
+        case 'ConcentrationGridHard':
+          // Criteria: Score >= requiredCount for hard mode
+          final int requiredScore = badge.requiredCount;
+          final int userScore = user.highScoreGridHard ?? 0; // Use highScoreGridHard field
+          final bool result = userScore >= requiredScore;
+          debugPrint('[BadgeService._hasEarnedBadge] Checking ConcentrationGridHard: User Score=${userScore}, Required=${requiredScore}. Result: $result');
+          return result;
+
+        case 'WordSearch':
+          // Criteria: Time <= requiredCount (lower time is better)
+          final int requiredTime = badge.requiredCount;
+          final int? userTime = user.highScoreWordSearch; // Use highScoreWordSearch field (now int)
+          if (userTime == null || userTime <= 0) return false; // User hasn't set a score or score is invalid
+          final bool result = userTime <= requiredTime;
+          debugPrint('[BadgeService._hasEarnedBadge] Checking WordSearch: User Time=${userTime}, Required=${requiredTime}. Result: $result');
+          return result;
+          
         default:
           debugPrint('[BadgeService._hasEarnedBadge] Unknown criteria type: ${badge.criteriaType}');
           return false;
