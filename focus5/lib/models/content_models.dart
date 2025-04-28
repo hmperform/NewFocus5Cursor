@@ -138,7 +138,7 @@ class Course {
   final String title;
   final String description;
   final String imageUrl;
-  final String thumbnailUrl;
+  final String courseThumbnail;
   final String creatorId;
   final String creatorName;
   final String creatorImageUrl;
@@ -164,7 +164,7 @@ class Course {
     required this.title,
     required this.description,
     required this.imageUrl,
-    required this.thumbnailUrl,
+    required this.courseThumbnail,
     required this.creatorId,
     required this.creatorName,
     required this.creatorImageUrl,
@@ -189,7 +189,7 @@ class Course {
     title = '',
     description = '',
     imageUrl = '',
-    thumbnailUrl = '',
+    courseThumbnail = '',
     creatorId = '',
     creatorName = '',
     creatorImageUrl = '',
@@ -280,12 +280,11 @@ class Course {
       id: json['id'] as String? ?? '', 
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      imageUrl: json['imageUrl'] as String? ?? json['thumbnailUrl'] as String? ?? '',
-      thumbnailUrl: json['thumbnailUrl'] as String? ?? '',
-      // Use the updated helper function for creatorId
-      creatorId: _parseCreatorId(json['creatorId']), 
-      creatorName: json['creatorName'] as String? ?? '', 
-      creatorImageUrl: json['creatorImageUrl'] as String? ?? '', 
+      imageUrl: json['imageUrl'] as String? ?? '',
+      courseThumbnail: json['courseThumbnail'] as String? ?? json['imageUrl'] as String? ?? '',
+      creatorId: _parseCreatorId(json),
+      creatorName: json['creatorName'] as String? ?? 'Unknown Creator',
+      creatorImageUrl: json['creatorImageUrl'] as String? ?? '',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       focusAreas: (json['focusAreas'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
@@ -312,7 +311,7 @@ class Course {
       'title': title,
       'description': description,
       'imageUrl': imageUrl,
-      'thumbnailUrl': thumbnailUrl,
+      'courseThumbnail': courseThumbnail,
       'creatorId': creatorId,
       'creatorName': creatorName,
       'creatorImageUrl': creatorImageUrl,

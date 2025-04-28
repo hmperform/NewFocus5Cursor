@@ -145,7 +145,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 image: DecorationImage(
-                  image: NetworkImage(_course!.thumbnailUrl),
+                  image: NetworkImage(_course!.courseThumbnail ?? ''),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -303,7 +303,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           Hero(
                             tag: 'course-image-${_course.id}',
                             child: ImageUtils.networkImageWithFallback(
-                              imageUrl: _course.thumbnailUrl,
+                              imageUrl: _course.courseThumbnail ?? '',
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
@@ -1514,7 +1514,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 image: DecorationImage(
-                  image: NetworkImage(_course.thumbnailUrl),
+                  image: NetworkImage(_course.courseThumbnail ?? ''),
                   fit: BoxFit.cover,
                 ),
               ),

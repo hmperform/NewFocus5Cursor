@@ -326,7 +326,7 @@ class _CoursesTabState extends State<CoursesTab> {
                   aspectRatio: 16 / 9,
                   child: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
-                    image: course.thumbnailUrl,
+                    image: course.courseThumbnail,
                     fit: BoxFit.cover,
                     imageErrorBuilder: (context, error, stackTrace) {
                       return Container(

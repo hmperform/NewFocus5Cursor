@@ -52,7 +52,7 @@ class CourseCard extends StatelessWidget {
                     aspectRatio: 16 / 9,
                     child: FadeInImage.memoryNetwork(
                       placeholder: kTransparentImage,
-                      image: course.thumbnailUrl.isNotEmpty ? course.thumbnailUrl : course.imageUrl,
+                      image: course.courseThumbnail.isNotEmpty ? course.courseThumbnail : course.imageUrl,
                       fit: BoxFit.cover,
                       imageErrorBuilder: (context, error, stackTrace) {
                         return Container(

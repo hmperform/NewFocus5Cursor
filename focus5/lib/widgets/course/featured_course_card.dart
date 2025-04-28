@@ -56,7 +56,7 @@ class FeaturedCourseCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
-                    image: course.thumbnailUrl.isNotEmpty ? course.thumbnailUrl : course.imageUrl,
+                    image: course.courseThumbnail.isNotEmpty ? course.courseThumbnail : course.imageUrl,
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,

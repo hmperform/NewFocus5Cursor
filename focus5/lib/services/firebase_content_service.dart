@@ -222,7 +222,7 @@ class FirebaseContentService {
         'title': course.title,
         'description': course.description,
         'imageUrl': course.imageUrl,
-        'thumbnailUrl': course.thumbnailUrl,
+        'courseThumbnail': course.courseThumbnail,
         'creatorId': course.creatorId,
         'creatorName': course.creatorName,
         'creatorImageUrl': course.creatorImageUrl,

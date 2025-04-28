@@ -494,7 +494,7 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> with SingleTick
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: ImageUtils.networkImageWithFallback(
-                imageUrl: course.thumbnailUrl.isNotEmpty ? course.thumbnailUrl : course.imageUrl,
+                imageUrl: course.courseThumbnail.isNotEmpty ? course.courseThumbnail : course.imageUrl,
                 width: 60,
                 height: 60,
                 fit: BoxFit.cover,

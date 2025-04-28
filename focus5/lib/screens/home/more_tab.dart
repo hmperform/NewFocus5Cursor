@@ -273,7 +273,9 @@ class MoreTab extends StatelessWidget {
                         // Image using FadeInImage
                          FadeInImage.memoryNetwork(
                            placeholder: kTransparentImage,
-                           image: course.thumbnailUrl.isNotEmpty ? course.thumbnailUrl : course.imageUrl,
+                           height: 50,
+                           width: 50,
+                           image: course.courseThumbnail.isNotEmpty ? course.courseThumbnail : course.imageUrl,
                            fit: BoxFit.cover,
                            imageErrorBuilder: (context, error, stackTrace) {
                              return Container(

@@ -343,7 +343,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> with SingleTick
           xpReward: course.xpReward,
           instructor: course.creatorName,
           categories: course.focusAreas,
-          imageUrl: course.thumbnailUrl,
+          imageUrl: course.courseThumbnail,
           item: course,
            onTap: () {
              print('Tapped Course: ${course.title}');

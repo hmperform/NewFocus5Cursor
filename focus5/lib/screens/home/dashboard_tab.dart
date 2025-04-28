@@ -737,7 +737,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       width: 100,
                       height: 100,
                       child: ImageUtils.networkImageWithFallback(
-                        imageUrl: course.thumbnailUrl,
+                        imageUrl: course.courseThumbnail,
                         width: 100,
                         height: 100,
                         fit: BoxFit.cover,
@@ -1165,7 +1165,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   courseId: course.id,
                   title: course.title,
                   description: course.description,
-                  imageUrl: course.thumbnailUrl,
+                  imageUrl: course.courseThumbnail,
                   durationMinutes: course.durationMinutes,
                   lessonsCount: course.lessonsList.length,
                   creatorName: course.creatorName,
