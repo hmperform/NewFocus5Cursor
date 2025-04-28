@@ -607,7 +607,7 @@ class _ProfileTabState extends State<ProfileTab> {
                             };
                           }).toList();
 
-                          // Show up to 3 badges (prioritize earned badges)
+                          // Show up to 10 badges (prioritize earned badges)
                           final earnedBadges = badgesWithStatus
                               .where((item) => item['isEarned'] == true)
                               .toList();
@@ -615,25 +615,24 @@ class _ProfileTabState extends State<ProfileTab> {
                               .where((item) => item['isEarned'] == false)
                               .toList();
 
-                          // Combine them, showing earned first, up to 3 total
-                          List<Map<String, dynamic>> displayBadges = [];
-                          displayBadges.addAll(earnedBadges);
+                          // Combine them, showing earned first, up to 10 total
+                          List<Map<String, dynamic>> displayedBadges = [];
+                          displayedBadges.addAll(earnedBadges);
 
-                          // If we have less than 3 earned badges, add some unearned ones
-                          if (earnedBadges.length < 3) {
-                            displayBadges.addAll(
-                              unearnedBadges.take(3 - earnedBadges.length)
-                            );
+                          // Calculate remaining slots and add unearned badges if needed
+                          int remainingSlots = 10 - displayedBadges.length;
+                          if (remainingSlots > 0) {
+                            displayedBadges.addAll(unearnedBadges.take(remainingSlots));
                           }
 
-                          // Limit to 3 badges max
-                          final displayedBadges = displayBadges.take(3).toList();
+                          // Ensure the final list does not exceed 10 (optional safety check, take() handles it)
+                          // final badgesToShow = displayedBadges.take(10).toList(); // Use displayedBadges directly
 
                           return SizedBox(
                             height: 125, // Increased from 115 to accommodate the content
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
-                              itemCount: displayedBadges.length,
+                              itemCount: displayedBadges.length, // Use the potentially longer list
                               itemBuilder: (context, index) {
                                 final badgeData = displayedBadges[index];
                                 final badge = badgeData['badge'] as AppBadge;
