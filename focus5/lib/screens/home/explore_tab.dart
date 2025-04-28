@@ -43,7 +43,7 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
   late ScrollController _scrollController;
   bool _isSearching = false;
   String _searchQuery = '';
-  bool _isLoading = false;
+  bool _isLoading = true;
   int _selectedTabIndex = 0;
   
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -76,19 +76,34 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
       });
     });
 
-    // Initialize content data
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final contentProvider = Provider.of<ContentProvider>(context, listen: false);
-      // *** Always call initContent to handle loading of all content types ***
-      contentProvider.initContent(null); 
+    // Initialize content data using a dedicated async method
+    _initializeData();
+  }
 
-      // Load coaches separately as before
-      final coachProvider = Provider.of<CoachProvider>(context, listen: false);
-      coachProvider.loadCoaches();
-      
-      // Load app configuration for section ordering
-      _loadAppConfig();
-    });
+  // New method to handle all initial data loading
+  Future<void> _initializeData() async {
+    final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+    final coachProvider = Provider.of<CoachProvider>(context, listen: false);
+    
+    try {
+      // Wait for all loading operations to complete
+      await Future.wait([
+        contentProvider.initContent(null), // Load content
+        coachProvider.loadCoaches(),       // Load coaches
+        _loadAppConfig(),                 // Load app config
+      ]);
+    } catch (e) {
+      // Handle potential errors during loading (optional, but recommended)
+      debugPrint("Error initializing Explore Tab data: $e");
+      // You might want to show an error message to the user here
+    } finally {
+      // Ensure loading state is set to false even if errors occur
+      if (mounted) { // Check if the widget is still in the tree
+        setState(() {
+          _isLoading = false; // <<< Set loading to false after all futures complete
+        });
+      }
+    }
   }
   
   Future<void> _loadAppConfig() async {
@@ -136,9 +151,14 @@ class _ExploreTabState extends State<ExploreTab> with SingleTickerProviderStateM
     final isDarkMode = themeProvider.isDarkMode;
     final contentProvider = Provider.of<ContentProvider>(context); // Get content provider
 
-    // Check loading state for content
-    if (contentProvider.isLoading) {
+    // Check central loading state FIRST
+    if (_isLoading) {
        return const Center(child: CircularProgressIndicator());
+    }
+
+    // Optional: Add check for content provider errors after loading is done
+    if (contentProvider.errorMessage != null) {
+       return Center(child: Text('Error loading content: ${contentProvider.errorMessage}'));
     }
 
     return Scaffold(
