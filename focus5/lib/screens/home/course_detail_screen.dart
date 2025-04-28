@@ -31,7 +31,7 @@ class CourseDetailScreen extends StatefulWidget {
 
 class _CourseDetailScreenState extends State<CourseDetailScreen> {
   int _selectedTabIndex = 0;
-  final List<String> _tabs = ['LESSONS', 'OVERVIEW', 'RESOURCES'];
+  final List<String> _tabs = ['LESSONS', 'OVERVIEW'/*, 'RESOURCES'*/];
   bool _showDownloadButton = false;
   Course? _course;
   bool _isLoading = true;
@@ -283,7 +283,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     // <<< End Logging >>>
 
     return DefaultTabController(
-      length: _tabs.length,
+      length: 2,
       child: Scaffold(
         backgroundColor: backgroundColor,
         body: Stack(
@@ -515,7 +515,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 children: [
                   _buildScrollableTab(_buildLessonsTab()),
                   _buildScrollableTab(_buildOverviewTab(context, textColor, secondaryTextColor)),
-                  _buildScrollableTab(_buildResourcesTab()),
+                  // Comment out the Resources tab content
+                  // _buildScrollableTab(_buildResourcesTab()),
                 ],
               ),
             ),

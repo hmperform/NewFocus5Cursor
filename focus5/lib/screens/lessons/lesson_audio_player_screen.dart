@@ -309,167 +309,169 @@ class _LessonAudioPlayerScreenState extends State<LessonAudioPlayerScreen> with 
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      // Custom AppBar (Title + Back Button)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8.0), // Add margin below app bar
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
-                              onPressed: _handleBackButton,
-                            ),
-                            Expanded(
-                              child: Text(
-                                displayTitle, // Use lesson title
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18, // Slightly smaller than daily
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 50.0),
+                    child: Column(
+                      children: [
+                        // Custom AppBar (Title + Back Button)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                spreadRadius: 1,
                               ),
-                            ),
-                            const SizedBox(width: 48), // To balance the IconButton
-                          ],
-                        ),
-                      ),
-
-                       // Time Display
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 16.0),
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min, // Fit content
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _formatDuration(Duration(seconds: currentPosition.toInt())),
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
-                            ),
-                            const Text(
-                              ' / ',
-                              style: TextStyle(color: Colors.white, fontSize: 14),
-                            ),
-                            Text(
-                              _formatDuration(Duration(seconds: totalDuration.toInt())),
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const Spacer(), // Pushes controls to the bottom half
-
-                      // Waveform Display
-                      Container(
-                        height: 60, // Define a height for the waveform area
-                        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            // Use placeholder as Lesson model doesn't have waveform data
-                            return _buildPlaceholderWaveform(constraints.maxWidth);
-                            // return _buildActualWaveform(constraints.maxWidth);
-                          },
-                        ),
-                      ),
-
-                      // Glassmorphic Controls
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(25.0),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(25.0),
-                              border: Border.all(color: Colors.white.withOpacity(0.2)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.replay_10, color: Colors.white, size: 35),
-                                  onPressed: isCurrentAudio ? () => audioProvider.audioPlayer.seek(audioProvider.position - const Duration(seconds: 10)) : null,
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-                                    color: Colors.white,
-                                    size: 65,
-                                  ),
-                                  onPressed: isCurrentAudio
-                                    ? () {
-                                        if (isPlaying) {
-                                          audioProvider.audioPlayer.pause();
-                                        } else {
-                                          audioProvider.audioPlayer.play();
-                                        }
-                                      }
-                                    : null,
-                                ),
-                                IconButton(
-                                  // Match daily audio - forward 10 seconds
-                                  icon: const Icon(Icons.forward_10, color: Colors.white, size: 35),
-                                  onPressed: isCurrentAudio ? () => audioProvider.audioPlayer.seek(audioProvider.position + const Duration(seconds: 10)) : null,
-                                ),
-                              ],
-                            ),
+                            ],
                           ),
-                        ),
-                      ),
-
-                      // Description Area (Optional - check if lesson description exists)
-                      if (widget.lesson.description != null && widget.lesson.description!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 20.0, left: 16, right: 16, bottom: 10), // Add padding
-                          child: ClipRRect(
-                             borderRadius: BorderRadius.circular(15.0),
-                             child: BackdropFilter(
-                               filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                               child: Container(
-                                padding: const EdgeInsets.all(16.0),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.4),
-                                  borderRadius: BorderRadius.circular(15.0),
-                                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                                ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                onPressed: _handleBackButton,
+                              ),
+                              Expanded(
                                 child: Text(
-                                  widget.lesson.description!,
-                                  style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                                  displayTitle, // Use lesson title
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18, // Slightly smaller than daily
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   textAlign: TextAlign.center,
-                                  maxLines: 3, // Limit lines if needed
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              const SizedBox(width: 48), // To balance the IconButton
+                            ],
+                          ),
+                        ),
+
+                         // Time Display
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min, // Fit content
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _formatDuration(Duration(seconds: currentPosition.toInt())),
+                                style: const TextStyle(color: Colors.white, fontSize: 14),
+                              ),
+                              const Text(
+                                ' / ',
+                                style: TextStyle(color: Colors.white, fontSize: 14),
+                              ),
+                              Text(
+                                _formatDuration(Duration(seconds: totalDuration.toInt())),
+                                style: const TextStyle(color: Colors.white, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const Spacer(), // Pushes controls to the bottom half
+
+                        // Waveform Display
+                        Container(
+                          height: 60, // Define a height for the waveform area
+                          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Use placeholder as Lesson model doesn't have waveform data
+                              return _buildPlaceholderWaveform(constraints.maxWidth);
+                              // return _buildActualWaveform(constraints.maxWidth);
+                            },
+                          ),
+                        ),
+
+                        // Glassmorphic Controls
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(25.0),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(25.0),
+                                border: Border.all(color: Colors.white.withOpacity(0.2)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.replay_10, color: Colors.white, size: 35),
+                                    onPressed: isCurrentAudio ? () => audioProvider.audioPlayer.seek(audioProvider.position - const Duration(seconds: 10)) : null,
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                      color: Colors.white,
+                                      size: 65,
+                                    ),
+                                    onPressed: isCurrentAudio
+                                      ? () {
+                                          if (isPlaying) {
+                                            audioProvider.audioPlayer.pause();
+                                          } else {
+                                            audioProvider.audioPlayer.play();
+                                          }
+                                        }
+                                      : null,
+                                  ),
+                                  IconButton(
+                                    // Match daily audio - forward 10 seconds
+                                    icon: const Icon(Icons.forward_10, color: Colors.white, size: 35),
+                                    onPressed: isCurrentAudio ? () => audioProvider.audioPlayer.seek(audioProvider.position + const Duration(seconds: 10)) : null,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        )
-                      else
-                         const SizedBox(height: 50), // Add some space at the bottom if no description
+                        ),
 
-                    ],
+                        // Description Area (Optional - check if lesson description exists)
+                        if (widget.lesson.description != null && widget.lesson.description!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 20.0, left: 16, right: 16, bottom: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(15.0),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16.0),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.4),
+                                    borderRadius: BorderRadius.circular(15.0),
+                                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                  ),
+                                  child: Text(
+                                    widget.lesson.description!,
+                                    style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          const SizedBox(height: 50),
+                      ],
+                    ),
                   ),
                 ),
               ),
