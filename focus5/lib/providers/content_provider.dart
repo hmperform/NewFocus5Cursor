@@ -79,18 +79,49 @@ class ContentProvider with ChangeNotifier {
 
   Future<void> loadCourses() async {
     try {
-      // Loading state is managed by initContent now
+      // Loading state managed by initContent
+      List<Course> baseCourses = await _contentService.getCourses() ?? [];
       
-      final courses = await _contentService.getCourses();
-      if (courses != null) {
-        _courses = courses;
-      } else {
-        _courses = [];
+      List<Course> coursesWithCoachImages = [];
+      for (var course in baseCourses) {
+        String? coachImageUrl;
+        debugPrint("[Provider LoadCourses] Processing Course ID: ${course.id}, Creator ID: ${course.creatorId}");
+        if (course.creatorId.isNotEmpty && course.creatorId != 'unknown_creator') {
+          try {
+            final coachDoc = await FirebaseFirestore.instance
+                .collection('coaches')
+                .doc(course.creatorId)
+                .get();
+            
+            if (coachDoc.exists && coachDoc.data() != null) {
+              final coachData = coachDoc.data() as Map<String, dynamic>; 
+              // Look for 'profileImageUrl' or fallback to 'imageUrl'
+              String? fetchedProfileUrl = coachData['profileImageUrl'] as String?;
+              String? fetchedImageUrl = coachData['imageUrl'] as String?;
+              coachImageUrl = fetchedProfileUrl ?? fetchedImageUrl;
+              debugPrint("[Provider LoadCourses]   Fetched Coach ${course.creatorId}. profileImageUrl: $fetchedProfileUrl, imageUrl: $fetchedImageUrl. Assigned coachImageUrl: $coachImageUrl");
+            } else {
+               debugPrint("[Provider LoadCourses]   Coach document not found for creator ID: ${course.creatorId}");
+               coachImageUrl = null;
+            }
+          } catch (e) {
+            debugPrint("[Provider LoadCourses]   Error fetching coach profile for creator ${course.creatorId}: $e");
+            coachImageUrl = null;
+          }
+        } else {
+           debugPrint("[Provider LoadCourses]   Invalid or empty creatorId for course ${course.id}: \"${course.creatorId}\"");
+           coachImageUrl = null;
+        }
+        // Use copyWith to add the fetched image URL (or null if fetch failed/invalid ID)
+        coursesWithCoachImages.add(course.copyWith(coachProfileImageUrl: coachImageUrl));
       }
-      debugPrint("ContentProvider: Loaded ${_courses.length} courses.");
+      
+      _courses = coursesWithCoachImages;
+      debugPrint("ContentProvider: Loaded ${_courses.length} courses with coach images attempted.");
+      
     } catch (e) {
       debugPrint('Error loading courses: $e');
-      _courses = [];
+      _courses = []; // Reset courses on error
       throw Exception('Failed to load courses: $e'); // Re-throw to be caught by initContent
     }
   }

@@ -441,9 +441,7 @@ class _DashboardTabState extends State<DashboardTab> {
       body: RefreshIndicator(
         color: accentColor,
         backgroundColor: surfaceColor,
-        onRefresh: () {
-          return _safeLoadContent();
-        },
+        onRefresh: _safeLoadContent,
         child: Stack(
           children: [
             // Main content

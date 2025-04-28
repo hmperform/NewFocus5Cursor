@@ -155,6 +155,7 @@ class Course {
   final bool premium;
   final List<String> learningPoints;
   final int focusPointsCost;
+  final String? coachProfileImageUrl;
 
   // Getter for modules to maintain backward compatibility
   List<Lesson> get modules => lessonsList;
@@ -181,6 +182,7 @@ class Course {
     this.premium = false,
     this.learningPoints = const [],
     required this.focusPointsCost,
+    this.coachProfileImageUrl,
   });
 
   // Empty constructor for Course
@@ -205,7 +207,8 @@ class Course {
     featured = false,
     premium = false,
     learningPoints = [],
-    focusPointsCost = 0;
+    focusPointsCost = 0,
+    coachProfileImageUrl = null;
 
   factory Course.fromJson(Map<String, dynamic> json) {
     // This list will hold the parsed Lesson objects
@@ -263,18 +266,32 @@ class Course {
 
     // Helper function to safely parse creatorId (Now handles Map too)
     String _parseCreatorId(dynamic value) {
+      debugPrint("[Course.fromJson ParseHelper] Received value for creatorId: $value, Type: ${value?.runtimeType}"); // <<< Log Input
       if (value is String) {
+        debugPrint("[Course.fromJson ParseHelper] Parsed String: $value");
         return value;
       } else if (value is DocumentReference) {
+        debugPrint("[Course.fromJson ParseHelper] Parsed DocumentReference ID: ${value.id}");
         return value.id;
-      } else if (value is Map && value.containsKey('id') && value['id'] is String) {
-        return value['id'];
+      } else if (value is Map) {
+         final Map<String, dynamic> creatorMap = Map<String, dynamic>.from(value);
+         if (creatorMap.containsKey('id') && creatorMap['id'] is String) {
+           String extractedId = creatorMap['id'];
+           debugPrint("[Course.fromJson ParseHelper] Parsed ID from Map: $extractedId");
+           return extractedId;
+         }
       }
+      debugPrint("[Course.fromJson ParseHelper] Unknown type or null, returning empty string.");
       return ''; 
     }
 
     // debugPrint(">>> Course.fromJson: Input json['lessons'] type: ${json['lessons']?.runtimeType}, Length: ${(json['lessons'] as List?)?.length}");
     // debugPrint(">>> Course.fromJson: Parsed lessons list length before return: ${parsedLessons.length}");
+
+    // Call the helper for creatorId
+    String parsedCreatorId = _parseCreatorId(json['creatorId']);
+    // <<< Log the final parsed ID >>>
+    debugPrint("[Course.fromJson] Final parsedCreatorId: $parsedCreatorId"); 
 
     return Course(
       id: json['id'] as String? ?? '', 
@@ -282,7 +299,7 @@ class Course {
       description: json['description'] as String? ?? '',
       imageUrl: json['imageUrl'] as String? ?? '',
       courseThumbnail: json['courseThumbnail'] as String? ?? json['imageUrl'] as String? ?? '',
-      creatorId: _parseCreatorId(json),
+      creatorId: parsedCreatorId, // Use the parsed ID
       creatorName: json['creatorName'] as String? ?? 'Unknown Creator',
       creatorImageUrl: json['creatorImageUrl'] as String? ?? '',
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
@@ -302,6 +319,7 @@ class Course {
       premium: json['premium'] as bool? ?? false,
       learningPoints: (json['learningPoints'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
       focusPointsCost: (json['focusPointsCost'] as num?)?.toInt() ?? (json['focusPointCost'] as num?)?.toInt() ?? 0,
+      coachProfileImageUrl: null,
     );
   }
 
@@ -330,6 +348,56 @@ class Course {
       'learningPoints': learningPoints,
       'focusPointsCost': focusPointsCost,
     };
+  }
+
+  Course copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? imageUrl,
+    String? courseThumbnail,
+    String? creatorId,
+    String? creatorName,
+    String? creatorImageUrl,
+    List<String>? tags,
+    List<String>? focusAreas,
+    int? durationMinutes,
+    int? duration,
+    int? xpReward,
+    List<Lesson>? lessonsList,
+    DateTime? createdAt,
+    bool? universityExclusive,
+    List<String>? universityAccess,
+    bool? featured,
+    bool? premium,
+    List<String>? learningPoints,
+    int? focusPointsCost,
+    String? coachProfileImageUrl,
+  }) {
+    return Course(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      courseThumbnail: courseThumbnail ?? this.courseThumbnail,
+      creatorId: creatorId ?? this.creatorId,
+      creatorName: creatorName ?? this.creatorName,
+      creatorImageUrl: creatorImageUrl ?? this.creatorImageUrl,
+      tags: tags ?? this.tags,
+      focusAreas: focusAreas ?? this.focusAreas,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      duration: duration ?? this.duration,
+      xpReward: xpReward ?? this.xpReward,
+      lessonsList: lessonsList ?? this.lessonsList,
+      createdAt: createdAt ?? this.createdAt,
+      universityExclusive: universityExclusive ?? this.universityExclusive,
+      universityAccess: universityAccess ?? this.universityAccess,
+      featured: featured ?? this.featured,
+      premium: premium ?? this.premium,
+      learningPoints: learningPoints ?? this.learningPoints,
+      focusPointsCost: focusPointsCost ?? this.focusPointsCost,
+      coachProfileImageUrl: coachProfileImageUrl ?? this.coachProfileImageUrl,
+    );
   }
 }
 

@@ -224,6 +224,28 @@ Future<List<Course>> getCourses({String? universityCode}) async {
           }
         }
         
+        // Helper function to parse creatorId (handles map or string)
+        String parseCreatorIdFromData(dynamic creatorIdData) {
+          debugPrint("[Service ParseHelper] Received creatorIdData: $creatorIdData, Type: ${creatorIdData?.runtimeType}");
+          if (creatorIdData is Map) {
+             // Explicitly cast to Map<String, dynamic> for safety
+             final Map<String, dynamic> creatorMap = Map<String, dynamic>.from(creatorIdData);
+             if (creatorMap.containsKey('id') && creatorMap['id'] is String) {
+                String extractedId = creatorMap['id'];
+                debugPrint("[Service ParseHelper] Parsed ID from Map: $extractedId");
+                return extractedId;
+             }
+          } else if (creatorIdData is String) {
+             debugPrint("[Service ParseHelper] Received String ID: $creatorIdData");
+             return creatorIdData;
+          } else if (creatorIdData is DocumentReference) {
+             debugPrint("[Service ParseHelper] Received DocumentReference ID: ${creatorIdData.id}");
+             return creatorIdData.id;
+          }
+          debugPrint("[Service ParseHelper] Unknown type or null, returning empty string.");
+          return ''; // Fallback
+        }
+
         // Create course with lessons
         courses.add(Course(
           id: doc.id,
@@ -231,7 +253,7 @@ Future<List<Course>> getCourses({String? universityCode}) async {
           description: data['description'] ?? 'No description available',
           imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/400',
           courseThumbnail: data['courseThumbnail'] ?? data['imageUrl'] ?? 'https://via.placeholder.com/400',
-          creatorId: data['creatorId'] ?? '',
+          creatorId: parseCreatorIdFromData(data['creatorId']),
           creatorName: data['creatorName'] ?? 'Unknown Creator',
           creatorImageUrl: data['creatorImageUrl'] ?? '',
           tags: List<String>.from(data['tags'] ?? []),

@@ -33,14 +33,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   int _selectedTabIndex = 0;
   final List<String> _tabs = ['LESSONS', 'OVERVIEW', 'RESOURCES'];
   bool _showDownloadButton = false;
-  late Course _course;
+  Course? _course;
   bool _isLoading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    // Refresh user data to ensure we have latest from Firestore
     Provider.of<UserProvider>(context, listen: false).refreshUser();
     _loadCourse();
   }
@@ -51,19 +50,41 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
   
   Future<void> _loadCourse() async {
-    if (widget.course != null) {
-      setState(() {
-        _course = widget.course!;
-        _isLoading = false;
-      });
-      return;
-    }
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      final course = await FirebaseContentService().getCourseById(widget.courseId);
-      if (course != null) {
+      Course? courseData;
+      // 1. Check if course was passed directly
+      if (widget.course != null) {
+        debugPrint("CourseDetailScreen: Using course passed via widget.");
+        courseData = widget.course!;
+      } else {
+        // 2. Try fetching from ContentProvider (which should have coach image)
+        debugPrint("CourseDetailScreen: Attempting to fetch course from ContentProvider...");
+        final contentProvider = Provider.of<ContentProvider>(context, listen: false);
+        courseData = await contentProvider.getCourseById(widget.courseId);
+        if (courseData != null) {
+          debugPrint("CourseDetailScreen: Found course in ContentProvider.");
+        } else {
+           debugPrint("CourseDetailScreen: Course not found in ContentProvider, trying direct fetch...");
+           // 3. Fallback: Fetch directly using FirebaseContentService()
+           courseData = await FirebaseContentService().getCourseById(widget.courseId);
+           if (courseData != null) {
+              debugPrint("CourseDetailScreen: Found course via direct fetch (may lack coach image).");
+           } else {
+              debugPrint("CourseDetailScreen: Course not found via direct fetch either.");
+           }
+        }
+      }
+
+      if (!mounted) return;
+
+      if (courseData != null) {
         setState(() {
-          _course = course;
+          _course = courseData;
           _isLoading = false;
         });
       } else {
@@ -73,8 +94,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
+      debugPrint("CourseDetailScreen: Error loading course: $e");
       setState(() {
-        _error = 'Failed to load course: $e';
+        _error = 'Failed to load course: ${e.toString()}';
         _isLoading = false;
       });
     }
@@ -193,7 +216,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
     }
 
-    if (_error != null) {
+    if (_error != null || _course == null) {
       return Scaffold(
         backgroundColor: backgroundColor,
         appBar: AppBar(
@@ -237,6 +260,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
     }
 
+    // Ensure _course is not null before proceeding (already handled by above check)
+    // Determine the image URL to use for the coach profile
+    // Use null-safe access (?.) for creatorImageUrl
+    String? coachProfileImageUrlFromCourse = _course!.coachProfileImageUrl;
+    String? creatorImageUrlFromCourse = _course!.creatorImageUrl;
+    
+    String? coachImageToShow = coachProfileImageUrlFromCourse?.isNotEmpty ?? false
+        ? coachProfileImageUrlFromCourse // Use fetched coach image if available
+        : (creatorImageUrlFromCourse?.isNotEmpty ?? false // Check null before accessing isNotEmpty 
+            ? creatorImageUrlFromCourse // Fallback to creatorImageUrl stored in course
+            : null); // No image available
+            
+    // <<< Add Logging Here >>>
+    debugPrint("CourseDetailScreen Image Logic for Course ID: ${_course!.id}");
+    debugPrint("  - Fetched Coach Image URL (coachProfileImageUrl): $coachProfileImageUrlFromCourse");
+    debugPrint("  - Stored Creator Image URL (creatorImageUrl): $creatorImageUrlFromCourse");
+    debugPrint("  - Final Image URL Chosen (coachImageToShow): $coachImageToShow");
+    // <<< End Logging >>>
+
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
@@ -254,7 +296,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     stretch: true,
                     actions: [
                       // Debug button for forcing course purchase
-                      if (_course.id == 'course-001')
+                      if (_course!.id == 'course-001')
                         IconButton(
                           icon: Icon(
                             Icons.build,
@@ -301,9 +343,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                         children: [
                           // Course image
                           Hero(
-                            tag: 'course-image-${_course.id}',
+                            tag: 'course-image-${_course!.id}',
                             child: ImageUtils.networkImageWithFallback(
-                              imageUrl: _course.courseThumbnail ?? '',
+                              imageUrl: _course!.courseThumbnail ?? '',
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
@@ -337,7 +379,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                 // Course tags
                                 Wrap(
                                   spacing: 8,
-                                  children: _course.tags.take(3).map((tag) {
+                                  children: _course!.tags.take(3).map((tag) {
                                     return Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
@@ -360,7 +402,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                 
                                 // Course title
                                 Text(
-                                  _course.title,
+                                  _course!.title,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 28,
@@ -371,21 +413,45 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                 
                                 const SizedBox(height: 8),
                                 
-                                // Creator info
+                                // Coach Info Section
                                 Row(
                                   children: [
-                                    ImageUtils.avatarWithFallback(
-                                      imageUrl: _course.creatorImageUrl,
-                                      radius: 14,
-                                      name: _course.creatorName,
+                                    CircleAvatar(
+                                      radius: 20, // Slightly smaller in app bar
+                                      backgroundColor: Colors.grey[800], // Darker placeholder bg
+                                      backgroundImage: coachImageToShow != null
+                                          ? NetworkImage(coachImageToShow)
+                                          : null, 
+                                      child: coachImageToShow == null
+                                          ? const Icon(
+                                              Icons.person,
+                                              size: 24,
+                                              color: Colors.white70,
+                                            )
+                                          : null,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _course.creatorName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _course!.creatorName,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          // Optional: Add Coach Title if available?
+                                          // Text(
+                                          //   'Course Creator', 
+                                          //   style: TextStyle(
+                                          //     color: Colors.white70,
+                                          //     fontSize: 14,
+                                          //   ),
+                                          // ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -416,10 +482,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildStatItem(Icons.access_time, '${_course.durationMinutes ~/ 60}h ${_course.durationMinutes % 60}m', 'Duration'),
-                          _buildStatItem(Icons.menu_book, '${_course.lessonsList.length}', 'Lessons'),
-                          _buildStatItem(Icons.bolt, '${_course.xpReward}', 'XP'),
-                          _buildStatItem(Icons.diamond, '${_course.focusPointsCost}', 'Focus Points'),
+                          _buildStatItem(Icons.access_time, '${_course!.durationMinutes ~/ 60}h ${_course!.durationMinutes % 60}m', 'Duration'),
+                          _buildStatItem(Icons.menu_book, '${_course!.lessonsList.length}', 'Lessons'),
+                          _buildStatItem(Icons.bolt, '${_course!.xpReward}', 'XP'),
+                          _buildStatItem(Icons.diamond, '${_course!.focusPointsCost}', 'Focus Points'),
                         ],
                       ),
                     ),
@@ -574,9 +640,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         padding: EdgeInsets.zero, // No bottom padding needed here
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(), // Disable scrolling since parent handles it
-        itemCount: _course.lessonsList.length,
+        itemCount: _course!.lessonsList.length,
         itemBuilder: (context, index) {
-          final lesson = _course.lessonsList[index];
+          final lesson = _course!.lessonsList[index];
           // Check if the lesson is completed using the user provider
           final bool isCompleted = userProvider.completedLessonIds.contains(lesson.id);
           
@@ -607,7 +673,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           builder: (context) => VideoPlayerScreen(
                             lesson: lesson,
                             courseId: widget.courseId,
-                            courseTitle: _course.title,
+                            courseTitle: _course!.title,
                           ),
                         ),
                       );
@@ -623,7 +689,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                         MaterialPageRoute(
                           builder: (context) => LessonAudioPlayerScreen(
                             lesson: lesson,
-                            courseTitle: _course.title,
+                            courseTitle: _course!.title,
                           ),
                         ),
                       );
@@ -1196,12 +1262,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final accentColor = themeProvider.accentColor;
     final userFocusPoints = userProvider.focusPoints;
-    final hasEnoughPoints = userFocusPoints >= _course.focusPointsCost;
-    final isPremium = _course.premium;
-    final hasLessons = _course.modules.isNotEmpty;
-    final alreadyPurchased = userProvider.isCoursePurchased(_course.id);
+    final hasEnoughPoints = userFocusPoints >= _course!.focusPointsCost;
+    final isPremium = _course!.premium;
+    final hasLessons = _course!.modules.isNotEmpty;
+    final alreadyPurchased = userProvider.isCoursePurchased(_course!.id);
     final allLessonsCompleted = _isCourseCompleted();
-    final courseCompleted = userProvider.completedCourses.contains(_course.id);
+    final courseCompleted = userProvider.completedCourses.contains(_course!.id);
     
     Widget button;
 
@@ -1243,7 +1309,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         child: ElevatedButton(
           onPressed: () async {
             // Mark course as completed
-            await userProvider.trackCourseCompletion(userProvider.user!.id, _course.id);
+            await userProvider.trackCourseCompletion(userProvider.user!.id, _course!.id);
             _showCourseCompletionDialog();
           },
           style: ElevatedButton.styleFrom(
@@ -1282,9 +1348,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
-                    lesson: _course.modules[0],
+                    lesson: _course!.modules[0],
                     courseId: widget.courseId,
-                    courseTitle: _course.title,
+                    courseTitle: _course!.title,
                   ),
                 ),
               );
@@ -1342,7 +1408,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Redeem for ${_course.focusPointsCost} Points',
+                'Redeem for ${_course!.focusPointsCost} Points',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -1363,7 +1429,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             // Navigate to focus points store or show info dialog
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('You need ${_course.focusPointsCost} Focus Points to unlock this course'),
+                content: Text('You need ${_course!.focusPointsCost} Focus Points to unlock this course'),
                 duration: const Duration(seconds: 2),
               ),
             );
@@ -1425,7 +1491,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Are you sure you want to redeem this course for ${_course.focusPointsCost} Focus Points?'),
+            Text('Are you sure you want to redeem this course for ${_course!.focusPointsCost} Focus Points?'),
             const SizedBox(height: 16),
             Text('Your balance: ${userProvider.focusPoints} Points'),
           ],
@@ -1448,9 +1514,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               // Attempt to spend focus points
               final success = await userProvider.spendFocusPoints(
                 userProvider.user!.id,
-                _course.focusPointsCost,
-                'Course redemption: ${_course.title}',
-                courseId: _course.id
+                _course!.focusPointsCost,
+                'Course redemption: ${_course!.title}',
+                courseId: _course!.id
               );
               
               if (success) {
@@ -1499,7 +1565,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Text(
-                'You have successfully redeemed "${_course.title}"',
+                'You have successfully redeemed "${_course!.title}"',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
@@ -1514,7 +1580,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 image: DecorationImage(
-                  image: NetworkImage(_course.courseThumbnail ?? ''),
+                  image: NetworkImage(_course!.courseThumbnail ?? ''),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -1532,14 +1598,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               onPressed: () {
                 Navigator.of(context).pop();
                 // Start the course
-                if (_course.modules.isNotEmpty) {
+                if (_course!.modules.isNotEmpty) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => VideoPlayerScreen(
-                        lesson: _course.modules[0],
+                        lesson: _course!.modules[0],
                         courseId: widget.courseId,
-                        courseTitle: _course.title,
+                        courseTitle: _course!.title,
                       ),
                     ),
                   );
