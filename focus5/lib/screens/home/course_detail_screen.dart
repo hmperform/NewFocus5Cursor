@@ -638,6 +638,11 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final accentColor = themeProvider.accentColor;
     final userProvider = Provider.of<UserProvider>(context, listen: true);
 
+    // Determine overall course access
+    final bool alreadyPurchased = userProvider.isCoursePurchased(_course!.id);
+    final bool isPremium = _course!.focusPointsCost > 0;
+    final bool canAccessCourse = alreadyPurchased || !isPremium;
+
     return Container(
       color: backgroundColor,
       child: ListView.builder(
@@ -647,200 +652,264 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         itemCount: _course!.lessonsList.length,
         itemBuilder: (context, index) {
           final lesson = _course!.lessonsList[index];
-          // Check if the lesson is completed using the user provider
           final bool isCompleted = userProvider.completedLessonIds.contains(lesson.id);
           
+          // Determine if the prerequisite for this lesson is met
+          final bool isFirstLesson = index == 0;
+          final bool previousLessonCompleted = isFirstLesson || 
+              (index > 0 && userProvider.completedLessonIds.contains(_course!.lessonsList[index - 1].id));
+              
+          final bool canAccessLesson = canAccessCourse && previousLessonCompleted;
+          final bool canToggleCompletion = canAccessCourse && previousLessonCompleted; // Can only mark complete if accessible
+
+          // Determine lesson item opacity (dim if inaccessible)
+          final double itemOpacity = canAccessLesson ? 1.0 : 0.6;
+
+          // <<< Add Logging >>>
+          debugPrint('Lesson $index (${lesson.id}):');
+          debugPrint('  isPremium (cost > 0): $isPremium');
+          debugPrint('  focusPointsCost: ${_course!.focusPointsCost}');
+          debugPrint('  alreadyPurchased: $alreadyPurchased');
+          debugPrint('  canAccessCourse: $canAccessCourse');
+          debugPrint('  previousLessonCompleted: $previousLessonCompleted');
+          debugPrint('  canAccessLesson: $canAccessLesson');
+          // <<< End Logging >>>
+
           // Enhanced lesson item
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
+          return Opacity(
+            opacity: itemOpacity,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  if (lesson.type == LessonType.video) {
-                    if (lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty) {
-                       Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => VideoPlayerScreen(
-                            lesson: lesson,
-                            courseId: widget.courseId,
-                            courseTitle: _course!.title,
-                          ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    if (!canAccessCourse) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isPremium 
+                              ? 'Redeem this course to access lessons.' 
+                              : 'Course not accessible.'), // Fallback message
+                          duration: const Duration(seconds: 2),
                         ),
                       );
+                      return; // Block tap if course not accessible
+                    }
+                    
+                    if (!previousLessonCompleted) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Complete the previous lesson first.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return; // Block tap if previous lesson not completed
+                    }
+
+                    // Original navigation logic (only runs if checks pass)
+                    if (lesson.type == LessonType.video) {
+                      if (lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty) {
+                         Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => VideoPlayerScreen(
+                              lesson: lesson,
+                              courseId: widget.courseId,
+                              courseTitle: _course!.title,
+                            ),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Video not available for this lesson.')),
+                        );
+                      }
+                    } else if (lesson.type == LessonType.audio) {
+                      if (lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LessonAudioPlayerScreen(
+                              lesson: lesson,
+                              courseTitle: _course!.title,
+                            ),
+                          ),
+                        );
+                      } else {
+                         ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Audio not available for this lesson.')),
+                        );
+                      }
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Video not available for this lesson.')),
+                        SnackBar(content: Text('This lesson type (${lesson.type.name}) cannot be played directly.')),
                       );
                     }
-                  } else if (lesson.type == LessonType.audio) {
-                    if (lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LessonAudioPlayerScreen(
-                            lesson: lesson,
-                            courseTitle: _course!.title,
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Lesson number, lock, or completion indicator
+                        Container(
+                          width: 42,
+                          height: 42,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            // Use grey if locked, green if completed, accent if accessible but not done
+                            color: !canAccessCourse || !previousLessonCompleted 
+                                ? Colors.grey.shade400
+                                : isCompleted 
+                                    ? Colors.green 
+                                    : accentColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: !canAccessCourse || !previousLessonCompleted
+                            ? Icon(Icons.lock, color: Colors.grey.shade700, size: 20)
+                            : isCompleted
+                                ? const Icon(Icons.check, color: Colors.white)
+                                : Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      color: themeProvider.accentTextColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Lesson details (adjust text color if locked?)
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                lesson.title,
+                                style: TextStyle(
+                                  color: textColor.withOpacity(itemOpacity), // Dim text if locked
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                lesson.description ?? 'No description available',
+                                style: TextStyle(
+                                  color: secondaryTextColor.withOpacity(itemOpacity), // Dim text if locked
+                                  fontSize: 14,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              // Lesson duration/type row (dim if locked)
+                              Opacity(
+                                opacity: itemOpacity,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _getLessonTypeIcon(lesson.type),
+                                      color: secondaryTextColor,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _getLessonTypeText(lesson.type),
+                                      style: TextStyle(
+                                        color: secondaryTextColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Icon(
+                                      Icons.access_time,
+                                      color: secondaryTextColor,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${lesson.durationMinutes} min',
+                                      style: TextStyle(
+                                        color: secondaryTextColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    } else {
-                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Audio not available for this lesson.')),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('This lesson type (${lesson.type.name}) cannot be played directly.')),
-                    );
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      // Lesson number or completion indicator
-                      Container(
-                        width: 42,
-                        height: 42,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isCompleted ? Colors.green : accentColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: isCompleted
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : Text(
-                              '${index + 1}',
-                              style: TextStyle(
-                                color: themeProvider.accentTextColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Lesson details
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              lesson.title,
-                              style: TextStyle(
-                                color: textColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              lesson.description ?? 'No description available',
-                              style: TextStyle(
-                                color: secondaryTextColor,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            // Lesson duration
-                            Row(
-                              children: [
-                                Icon(
-                                  _getLessonTypeIcon(lesson.type),
-                                  color: secondaryTextColor,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _getLessonTypeText(lesson.type),
-                                  style: TextStyle(
-                                    color: secondaryTextColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Icon(
-                                  Icons.access_time,
-                                  color: secondaryTextColor,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${lesson.durationMinutes} min',
-                                  style: TextStyle(
-                                    color: secondaryTextColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Mark as complete or play button
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            if (isCompleted) {
-                              // Lesson is already completed, do nothing
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('This lesson is already completed!'),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            } else {
-                              // Mark as complete
-                              bool success = await userProvider.toggleLessonCompletion(lesson.id, true, context: context);
-                              // Only show success message if toggle was successful
-                              if (success && mounted) {
+                        // Mark as complete or lock icon
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            // Only allow tapping the checkbox if the lesson can be toggled
+                            onTap: canToggleCompletion ? () async {
+                              // Logic to toggle completion (only if accessible and prerequisite met)
+                              if (isCompleted) {
+                                // If already completed, maybe show a message or allow un-completing?
+                                // Current logic: Show snackbar if already complete
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Lesson marked as completed!'),
+                                    content: Text('This lesson is already completed!'),
                                     backgroundColor: Colors.green,
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
+                              } else {
+                                // Mark as complete
+                                bool success = await userProvider.toggleLessonCompletion(lesson.id, true, context: context);
+                                if (success && mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Lesson marked as completed!'),
+                                      backgroundColor: Colors.green,
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
                               }
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: isCompleted
-                              ? Icon(
-                                  Icons.check_box,
-                                  color: Colors.green,
-                                  size: 28,
-                                )
-                              : Icon(
-                                  Icons.check_box_outline_blank,
-                                  color: accentColor,
-                                  size: 28,
-                                ),
+                            } : null, // Disable onTap if cannot toggle completion
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: !canToggleCompletion // Show lock if cannot toggle completion
+                                ? Icon(
+                                    Icons.lock,
+                                    color: Colors.grey.shade500,
+                                    size: 28,
+                                  )
+                                : isCompleted // Otherwise, show appropriate checkmark
+                                    ? Icon(
+                                        Icons.check_box,
+                                        color: Colors.green,
+                                        size: 28,
+                                      )
+                                    : Icon(
+                                        Icons.check_box_outline_blank,
+                                        color: accentColor,
+                                        size: 28,
+                                      ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1267,7 +1336,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final accentColor = themeProvider.accentColor;
     final userFocusPoints = userProvider.focusPoints;
     final hasEnoughPoints = userFocusPoints >= _course!.focusPointsCost;
-    final isPremium = _course!.premium;
+    final bool isPremium = _course!.focusPointsCost > 0;
     final hasLessons = _course!.modules.isNotEmpty;
     final alreadyPurchased = userProvider.isCoursePurchased(_course!.id);
     final allLessonsCompleted = _isCourseCompleted();
@@ -1342,7 +1411,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       );
     }
     // Start Course button
-    else if (alreadyPurchased || isPremium) {
+    else if (alreadyPurchased || !isPremium) {
       if (hasLessons) {
         button = Container(
           width: double.infinity,
@@ -1408,13 +1477,12 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               AppIcons.getFocusPointIcon(
                 width: 24,
                 height: 24,
-                color: Colors.white,
               ),
               const SizedBox(width: 8),
               Text(
                 'Redeem for ${_course!.focusPointsCost} Points',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.black,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1451,7 +1519,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               AppIcons.getFocusPointIcon(
                 width: 24,
                 height: 24,
-                color: Colors.white,
               ),
               const SizedBox(width: 8),
               const Text(
