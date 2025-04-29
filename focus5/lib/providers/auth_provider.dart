@@ -180,6 +180,8 @@ class AuthProvider extends ChangeNotifier {
       if (_userProvider != null) {
         print('AuthProvider: register successful for $userId. Triggering UserProvider.loadUserData...');
         await _userProvider!.loadUserData(userId);
+        print('AuthProvider: register - Calling updateUserLoginInfo for $userId...');
+        await _userProvider!.updateUserLoginInfo();
       } else {
         print('AuthProvider: register - UserProvider is null.');
       }

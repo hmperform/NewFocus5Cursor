@@ -665,6 +665,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const Divider(),
+        // --- New Debug Button ---
+        ListTile(
+          leading: const Icon(Icons.bug_report, color: Colors.orange), // Add an icon
+          title: const Text('Set Last Active to Yesterday'),
+          subtitle: const Text('For testing totalLoginDays increment'),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+          onTap: () async { // Make onTap async
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            final userId = authProvider.currentUser?.id;
+        
+            if (userId == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('User not logged in'), backgroundColor: Colors.orange),
+              );
+              return;
+            }
+        
+            setState(() {
+              _isLoading = true; // Show loading indicator
+              _statusMessage = 'Setting lastActive...';
+            });
+        
+            try {
+              final yesterday = DateTime.now().subtract(const Duration(days: 1));
+              final yesterdayTimestamp = Timestamp.fromDate(yesterday);
+        
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userId)
+                  .update({'lastActive': yesterdayTimestamp});
+        
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Successfully set lastActive to yesterday.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+              // Trigger user data refresh to reflect change locally if needed
+              await Provider.of<UserProvider>(context, listen: false).loadUserData(userId);
+              
+              // Optionally, trigger the login info update check immediately after changing the date
+              await Provider.of<UserProvider>(context, listen: false).updateUserLoginInfo();
+              
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error setting lastActive: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            } finally {
+               setState(() {
+                 _isLoading = false; // Hide loading indicator
+                 _statusMessage = '';
+               });
+            }
+          },
+        ),
+         // --- End New Debug Button ---
       ],
     );
   }

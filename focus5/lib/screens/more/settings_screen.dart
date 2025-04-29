@@ -8,6 +8,7 @@ import '../settings/data_migration_screen.dart';
 import '../settings/admin_management_screen.dart';
 import '../../utils/migrate_modules_to_lessons.dart';
 import '../../providers/user_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -249,16 +250,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('No user logged in'),
+                            content: Text('User not logged in'),
                             backgroundColor: Colors.orange,
                           ),
                         );
                       }
                     },
                   ),
+                  const SizedBox(height: 8),
+                  _buildSettingCard(
+                    context: context,
+                    cardColor: cardColor,
+                    textColor: textColor,
+                    icon: Icons.calendar_month_outlined,
+                    title: 'Set Last Active to Yesterday',
+                    subtitle: 'For testing totalLoginDays increment',
+                    trailing: const Icon(Icons.bug_report),
+                    onTap: () async {
+                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                      final userId = authProvider.currentUser?.id;
+                  
+                      if (userId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User not logged in'), backgroundColor: Colors.orange),
+                        );
+                        return;
+                      }
+                  
+                      try {
+                        final yesterday = DateTime.now().subtract(const Duration(days: 1));
+                        final yesterdayTimestamp = Timestamp.fromDate(yesterday);
+                  
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(userId)
+                            .update({'lastActive': yesterdayTimestamp});
+                  
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Successfully set lastActive to yesterday.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error setting lastActive: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  
+                  const SizedBox(height: 24),
                   
                   // Admin Management (only visible to users with admin privileges)
                   if (_isAdmin) ...[
+                    _buildSectionHeader(context, 'Admin Tools'),
                     const SizedBox(height: 8),
                     _buildSettingCard(
                       context: context,
@@ -266,12 +315,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       textColor: textColor,
                       icon: Icons.admin_panel_settings,
                       title: 'Admin Management',
-                      subtitle: 'Manage app and university admins',
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        Navigator.pushNamed(context, '/admin-management');
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const AdminManagementScreen(),
+                          ),
+                        );
                       },
                     ),
+                    const SizedBox(height: 8),
+                    _buildSettingCard(
+                      context: context,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                      icon: Icons.build_circle,
+                      title: 'Developer Tools',
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        // Navigate to other admin/dev tools if needed
+                      },
+                    ),
+                    const SizedBox(height: 24),
                   ],
                   
                   const SizedBox(height: 24),
