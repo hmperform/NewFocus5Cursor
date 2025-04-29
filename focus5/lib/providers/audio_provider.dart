@@ -586,26 +586,19 @@ class AudioProvider extends ChangeNotifier {
     bool needsNotify = _isFullScreenPlayerOpen != isOpen; // Only notify if value changes
     _isFullScreenPlayerOpen = isOpen;
     
-    // <<< ADDED: Logic to handle mini-player visibility based on source >>>
+    // --- MODIFIED LOGIC --- 
     if (!isOpen) {
-      // Closing full screen
-      if (_audioSource == AudioSource.lesson) {
-        // For lessons, closing full screen stops audio and hides mini-player
-        debugPrint('[AudioProvider] Full screen closed for LESSON. Stopping audio and hiding mini-player.');
-        stop(); // Stop also resets state and hides mini-player
-        needsNotify = false; // Stop() already notifies
-      } else {
-        // For other types (daily), just update flag, mini-player remains if conditions met
-        debugPrint('[AudioProvider] Full screen closed for NON-LESSON. Mini-player visibility determined by showMiniPlayer getter.');
-        _showMiniPlayer = _currentAudio != null; // Show mini player if audio is still active
-        needsNotify = true; // Ensure notification if mini-player state changes
-      }
+      // Closing full screen - ALWAYS stop audio and hide mini-player now
+      debugPrint('[AudioProvider] Full screen closed. Stopping audio and hiding mini-player (mini-player disabled).');
+      stop(); // Stop also resets state and hides mini-player
+      needsNotify = false; // Stop() already notifies
     } else {
       // When opening full screen, hide the mini player immediately
       debugPrint('[AudioProvider] Full screen opened. Hiding mini-player.');
       _showMiniPlayer = false;
       needsNotify = true;
     }
+    // --- END MODIFIED LOGIC ---
     
     if (needsNotify) {
       notifyListeners();
