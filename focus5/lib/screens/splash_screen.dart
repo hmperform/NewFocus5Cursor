@@ -132,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Colors.black,
                     letterSpacing: 2,
                     shadows: [
                       Shadow(
@@ -148,13 +148,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   'Mental Performance App',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.black.withOpacity(0.9),
                     letterSpacing: 1,
                   ),
                 ),
                 const SizedBox(height: 48),
                 const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
               ],
             ),

@@ -799,10 +799,11 @@ class UserProvider extends ChangeNotifier {
         }
       } else {
         // Not consecutive (gap of 1+ days OR first completion handled above)
-        // Reset streak to 1 because the chain is broken.
-        newStreak = 1;
-        newLongestStreak = newStreak > currentLongestStreak ? newStreak : currentLongestStreak; // Longest streak might be 1 now
-        debugPrint('[UserProvider UpdateStreak] Not a consecutive day. Resetting streak to 1.');
+        // Reset streak to 0 because the chain is broken.
+        newStreak = 0; // Changed from 1 to 0
+        // Longest streak doesn't need update when resetting to 0 unless it was 0 before
+        // newLongestStreak = newStreak > currentLongestStreak ? newStreak : currentLongestStreak;
+        debugPrint('[UserProvider UpdateStreak] Not a consecutive day. Resetting streak to 0.'); // Updated log message
         streakUpdated = true;
       }
       
