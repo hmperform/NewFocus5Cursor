@@ -80,9 +80,10 @@ class AppTheme {
   static final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    primaryColor: AppColors.primaryLight,
+    fontFamily: 'Poppins',
+    primaryColor: AppColors.accentLight,
     colorScheme: const ColorScheme.light(
-      primary: AppColors.primaryLight,
+      primary: AppColors.accentLight,
       secondary: AppColors.secondaryLight,
       background: AppColors.backgroundLight,
       surface: AppColors.surfaceLight,
@@ -116,7 +117,7 @@ class AppTheme {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         foregroundColor: Colors.white,
-        backgroundColor: AppColors.primaryLight,
+        backgroundColor: AppColors.accentLight,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -125,17 +126,17 @@ class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accentLight,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        side: const BorderSide(color: AppColors.primaryLight),
+        side: const BorderSide(color: AppColors.accentLight),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accentLight,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
     ),
@@ -164,7 +165,7 @@ class AppTheme {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primaryLight, width: 2),
+        borderSide: const BorderSide(color: AppColors.accentLight, width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -176,15 +177,16 @@ class AppTheme {
   static final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    primaryColor: AppColors.primaryDark,
+    fontFamily: 'Poppins',
+    primaryColor: AppColors.accentDark,
     colorScheme: const ColorScheme.dark(
-      primary: AppColors.primaryDark,
+      primary: AppColors.accentDark,
       secondary: AppColors.secondaryDark,
       background: AppColors.backgroundDark,
       surface: AppColors.surfaceDark,
       error: AppColors.error,
-      onPrimary: Colors.white,
-      onSecondary: Colors.white,
+      onPrimary: Colors.black,
+      onSecondary: Colors.black,
       onBackground: AppColors.textPrimaryDark,
       onSurface: AppColors.textPrimaryDark,
       onError: Colors.white,
@@ -211,8 +213,8 @@ class AppTheme {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.white,
-        backgroundColor: AppColors.primaryDark,
+        foregroundColor: Colors.black,
+        backgroundColor: AppColors.accentDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -221,7 +223,7 @@ class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primaryDark,
+        foregroundColor: AppColors.accentDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),

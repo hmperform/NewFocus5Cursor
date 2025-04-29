@@ -164,74 +164,10 @@ class _Focus5AppState extends State<Focus5App> {
       navigatorKey: navigatorKey,
       title: 'Focus 5',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        primarySwatch: AppColors.accentLightSwatch,
-        primaryColor: AppColors.accentLight,
-        colorScheme: ColorScheme.light(
-          primary: AppColors.accentLight,
-          secondary: AppColors.accentLight,
-          background: AppColors.backgroundLight,
-          surface: AppColors.surfaceLight,
-          error: AppColors.error,
-          onPrimary: Colors.white,
-          onSecondary: Colors.white,
-          onBackground: AppColors.textPrimaryLight,
-          onSurface: AppColors.textPrimaryLight,
-          onError: Colors.white,
-        ),
-        scaffoldBackgroundColor: AppColors.backgroundLight,
-        textTheme: AppTheme.lightTheme.textTheme,
-        cardTheme: AppTheme.lightTheme.cardTheme,
-        appBarTheme: AppTheme.lightTheme.appBarTheme,
-        iconTheme: AppTheme.lightTheme.iconTheme,
-        inputDecorationTheme: AppTheme.lightTheme.inputDecorationTheme,
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentLight,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        primarySwatch: AppColors.accentDarkSwatch,
-        primaryColor: AppColors.accentDark,
-        colorScheme: ColorScheme.dark(
-          primary: AppColors.accentDark,
-          secondary: AppColors.accentDark,
-          background: AppColors.backgroundDark,
-          surface: AppColors.surfaceDark,
-          error: AppColors.error,
-          onPrimary: Colors.black,
-          onSecondary: Colors.black,
-          onBackground: AppColors.textPrimaryDark,
-          onSurface: AppColors.textPrimaryDark,
-          onError: Colors.white,
-        ),
-        scaffoldBackgroundColor: AppColors.backgroundDark,
-        textTheme: AppTheme.darkTheme.textTheme,
-        cardTheme: AppTheme.darkTheme.cardTheme,
-        appBarTheme: AppTheme.darkTheme.appBarTheme,
-        iconTheme: AppTheme.darkTheme.iconTheme,
-        inputDecorationTheme: AppTheme.darkTheme.inputDecorationTheme,
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentDark,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ),
+      // Use the predefined light theme directly
+      theme: AppTheme.lightTheme,
+      // Use the predefined dark theme directly
+      darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
       builder: (context, child) {
         return Stack(
