@@ -1,0 +1,2 @@
+OTHER_CFLAGS[sdk=iphoneos*] =
+
