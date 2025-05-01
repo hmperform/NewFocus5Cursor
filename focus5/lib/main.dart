@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
@@ -47,6 +48,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   final prefs = await SharedPreferences.getInstance();
   final bool isFirstLaunch = prefs.getBool('is_first_launch') ?? true;
   
@@ -54,9 +56,17 @@ void main() async {
   final themeProvider = ThemeProvider();
   await themeProvider.loadThemePreference();
   
-  // Initialize Firebase
+  // Initialize Firebase FIRST
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Activate App Check AFTER initializing Firebase
+  // Use deviceCheck for real iOS devices (TestFlight/Release)
+  await FirebaseAppCheck.instance.activate(
+    appleProvider: AppleProvider.deviceCheck,
+    // webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'), // Example for web if needed later
+    // androidProvider: AndroidProvider.playIntegrity, // Example for Android
   );
   
   // Initialize database with default data
